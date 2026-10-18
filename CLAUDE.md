@@ -60,5 +60,29 @@ Module-level detail lives in `docs/STRUCTURE.md`.
 - **Claude never opens or merges PRs** (no `gh pr create`, `gh pr merge` or `git merge`). When a branch is ready it only hands over: the PR title, the PR description (in one copyable block) and the next branch name. The user opens and merges.
 - Commit or push only when the user asks.
 
+## Claude Code workflow (ADR-0006)
+**Subagents** (`.claude/agents/`), each limited to its job:
+
+| Agent | Use it to | Writes to |
+|---|---|---|
+| `spec-writer` | Write or update a spec from FR/US | `specs/`, `docs/requirements.md` |
+| `test-writer` | Turn a spec's examples into failing tests | `tests/` |
+| `domain-implementer` | Make the tests pass; never edits tests | `src/`, task checkboxes |
+| `reviewer` | Review the branch diff; read-only | — |
+| `eval-curator` | Build golden cases from days 1–7 | `evals/golden/` |
+
+**Skills** (`.claude/skills/`):
+- `/new-spec [name] [FR...]`: scaffold a spec.
+- `/implement-spec [folder]`: full TDD loop, user-invoked only.
+- `/verify-criteria [target]`: rule-by-rule fidelity table.
+- `/new-adr [title]`: create the next ADR.
+- `/check`: everything CI runs, whole repo; run it before saying "done".
+- `/pr-handoff`: PR title, description and next branch, with no PR opened.
+
+**Guard hooks** (`.claude/hooks/guard.py`, tests in `tests/dev_hooks/`):
+- They block merges, PR creation, force pushes, reads of days 8–10, `.env` access and writes to `z_helps/`, and they format and lint edited `.py` files.
+- A block arrives as a tool error starting with "Blocked by repo hook"; adjust the action, never work around the hook.
+- Held-out days open only when the user sets `CLAUDE_ALLOW_HELDOUT=1` (week 5).
+
 ## Environment (Windows)
 - PowerShell 5.1: never edit source files with `Get-Content`/`Set-Content`; they break UTF-8 and add a BOM. Use the editing tools.

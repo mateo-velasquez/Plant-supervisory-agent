@@ -10,6 +10,11 @@ Target layout. Modules are created when their spec is implemented; this file is 
 ├── .env.example              # configuration template
 ├── .pre-commit-config.yaml   # local hooks: ruff, mypy, gitleaks, uv lock, .env guard
 ├── .gitattributes            # LF line endings on every OS
+├── .claude/                  # Claude Code config (ADR-0006)
+│   ├── agents/               # spec-writer, test-writer, domain-implementer, reviewer, eval-curator
+│   ├── skills/               # new-spec, implement-spec, verify-criteria, new-adr, check, pr-handoff
+│   ├── hooks/guard.py        # pre: guard rules · post: format edited .py
+│   └── settings.json         # hook wiring + permission rules (settings.local.json is personal, ignored)
 ├── .github/
 │   ├── workflows/ci.yml      # lint, format, types, tests + coverage (Ubuntu, Windows)
 │   ├── workflows/secrets.yml # gitleaks over full history
@@ -31,6 +36,7 @@ Target layout. Modules are created when their spec is implemented; this file is 
 ├── tests/
 │   ├── unit/                 # one module per domain rule; no I/O, no LLM
 │   ├── integration/          # runner + registry + MCP with a fake model
+│   ├── dev_hooks/            # tests for .claude/hooks/guard.py
 │   └── fixtures/             # small synthetic dataset (versioned)
 ├── evals/
 │   ├── golden/               # hand-verified expected notices per day (days 1–7)
