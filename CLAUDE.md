@@ -56,7 +56,7 @@ Module-level detail lives in `docs/STRUCTURE.md`.
 ## Git
 - Branches `type/description` (`feat/`, `fix/`, `chore/`, `docs/`, `ci/`, `refactor/`, `test/`) and Conventional Commits.
 - Never commit directly to `main`, never `push --force`.
-- **Claude never merges** (no `git merge`, no `gh pr merge`). It stops at the pushed branch or the PR; the user merges.
+- **Claude never opens or merges PRs** (no `gh pr create`, `gh pr merge` or `git merge`). When a branch is ready it only hands over: the PR title, the PR description (in one copyable block) and the next branch name. The user opens and merges.
 - Commit or push only when the user asks.
 
 ## Environment (Windows)
