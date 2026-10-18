@@ -10,12 +10,13 @@ Production monitor for the (fictional) Las Acacias automotive plant, final proje
 ## Commands
 ```powershell
 uv sync                      # install / sync the environment
-uv run pytest                # tests
+uv run pytest --cov          # tests + coverage (min 80%)
 uv run ruff check .          # lint
 uv run ruff format .         # format
 uv run mypy src tests        # types (strict)
+uv run pre-commit run --all-files   # every hook, including gitleaks
 ```
-All four checks must pass before a task is considered done.
+All checks must pass before a task is considered done. CI (`.github/workflows/ci.yml`) runs the same on Ubuntu and Windows and never calls the model.
 
 ## Architecture principles (non-negotiable)
 - **Code computes, the model judges.** Gap, delay, minimum severity and bottleneck stage are deterministic code. The model reads logbooks, extracts the cause, decides whether to raise severity, and writes the notice text.
