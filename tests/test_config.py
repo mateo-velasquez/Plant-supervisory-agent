@@ -7,38 +7,38 @@ from plant_monitor.config import Settings
 
 
 @pytest.fixture(autouse=True)
-def _aislar_entorno(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """Cada test corre sin el .env real ni variables del sistema."""
+def _isolate_environment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Each test runs without the real .env or system variables."""
     monkeypatch.chdir(tmp_path)
     for var in ("ANTHROPIC_API_KEY", "ANTHROPIC_MODEL", "ANTHROPIC_EFFORT", "DATA_DIR", "LOG_LEVEL"):
         monkeypatch.delenv(var, raising=False)
 
 
-def test_falla_sin_api_key() -> None:
+def test_fails_without_api_key() -> None:
     with pytest.raises(ValidationError):
         Settings()
 
 
-def test_lee_del_entorno_con_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_reads_environment_with_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
     settings = Settings()
     assert settings.anthropic_model == "claude-haiku-5-5"
     assert settings.data_dir == Path("data")
 
 
-def test_lee_de_archivo_env(tmp_path: Path) -> None:
-    (tmp_path / ".env").write_text("ANTHROPIC_API_KEY=sk-archivo\nLOG_LEVEL=DEBUG\n", encoding="utf-8")
+def test_reads_env_file(tmp_path: Path) -> None:
+    (tmp_path / ".env").write_text("ANTHROPIC_API_KEY=sk-file\nLOG_LEVEL=DEBUG\n", encoding="utf-8")
     settings = Settings()
-    assert settings.anthropic_api_key.get_secret_value() == "sk-archivo"
+    assert settings.anthropic_api_key.get_secret_value() == "sk-file"
     assert settings.log_level == "DEBUG"
 
 
-def test_api_key_no_se_filtra_en_repr(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-secreta")
-    assert "sk-secreta" not in repr(Settings())
+def test_api_key_not_leaked_in_repr(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-secret")
+    assert "sk-secret" not in repr(Settings())
 
 
-def test_rechaza_effort_invalido(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_rejects_invalid_effort(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
     monkeypatch.setenv("ANTHROPIC_EFFORT", "turbo")
     with pytest.raises(ValidationError):

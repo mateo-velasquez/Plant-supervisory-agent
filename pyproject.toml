@@ -1,7 +1,7 @@
 [project]
 name = "plant-supervisory-agent"
 version = "0.1.0"
-description = "Monitor de planta con agentes: detecta desvíos contra el plan, sigue casos y decide qué avisar y cuándo."
+description = "Agent-based plant monitor: detects deviations from plan, tracks cases and decides what to notify and when."
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [

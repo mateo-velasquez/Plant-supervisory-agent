@@ -1,8 +1,4 @@
-"""Configuración de la aplicación, leída de variables de entorno y de `.env`.
-
-Prioridad: argumentos explícitos > variables de entorno > `.env` > valores por defecto.
-Falla al arrancar si falta algo obligatorio (fail fast).
-"""
+"""Settings from environment variables (take precedence) and `.env`; fails fast if anything is missing."""
 
 from functools import lru_cache
 from pathlib import Path
@@ -31,5 +27,5 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    """Instancia única de la configuración para toda la aplicación."""
+    """Single settings instance for the whole application."""
     return Settings()

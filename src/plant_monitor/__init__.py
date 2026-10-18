@@ -1,1 +1,1 @@
-"""Monitor supervisor de planta: desvíos, casos y avisos sobre la serie de snapshots."""
+"""Plant supervisory monitor: deviations, cases and notices over the snapshot series."""

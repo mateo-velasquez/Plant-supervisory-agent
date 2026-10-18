@@ -1,12 +1,12 @@
-# --- Soporte local (enunciado, guías) ---
+# --- Local support material (brief, guides) ---
 /z_helps/
 
-# --- Datos y salidas (no se versionan; ver data/README.md) ---
+# --- Data and outputs (not versioned; see data/README.md) ---
 /data/*
 !/data/README.md
 /outputs/
 
-# --- Entorno y secretos ---
+# --- Environment and secrets ---
 .venv/
 .env
 .env.*
@@ -19,7 +19,7 @@ __pycache__/
 build/
 dist/
 
-# --- Herramientas ---
+# --- Tooling ---
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -27,10 +27,10 @@ dist/
 coverage.xml
 htmlcov/
 
-# --- Claude Code (configuración personal) ---
+# --- Claude Code (personal settings) ---
 .claude/settings.local.json
 
-# --- IDE / SO ---
+# --- IDE / OS ---
 .vscode/
 .idea/
 Thumbs.db
