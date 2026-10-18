@@ -9,5 +9,6 @@ One file per significant decision: `NNNN-short-title.md`, numbered in order, nev
 | [0003](0003-single-writer-sqlite-registry.md) | Case registry in SQLite with a single writer | Accepted |
 | [0004](0004-data-not-versioned.md) | Real data not versioned; synthetic fixtures for tests | Accepted |
 | [0005](0005-english-code-spanish-data-contract.md) | English code; Spanish data-contract values | Accepted |
+| [0006](0006-claude-code-dev-workflow.md) | Claude Code workflow: scoped subagents, skills and guard hooks | Accepted |
 
 Template: [template.md](template.md)
