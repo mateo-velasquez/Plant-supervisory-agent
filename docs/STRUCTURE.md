@@ -8,6 +8,13 @@ Target layout. Modules are created when their spec is implemented; this file is 
 ├── README.md                 # what it solves, how to run, design decisions (why)
 ├── pyproject.toml / uv.lock  # dependencies and tool config
 ├── .env.example              # configuration template
+├── .pre-commit-config.yaml   # local hooks: ruff, mypy, gitleaks, uv lock, .env guard
+├── .gitattributes            # LF line endings on every OS
+├── .github/
+│   ├── workflows/ci.yml      # lint, format, types, tests + coverage (Ubuntu, Windows)
+│   ├── workflows/secrets.yml # gitleaks over full history
+│   ├── dependabot.yml        # weekly uv + GitHub Actions updates
+│   └── pull_request_template.md
 ├── src/plant_monitor/
 │   ├── config.py             # Settings (pydantic-settings)
 │   ├── domain/               # pure types: Unit, Snapshot, Combination, Severity, CaseState, Cause, Notice, Report
