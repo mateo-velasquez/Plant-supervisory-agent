@@ -34,6 +34,7 @@ module-name = "plant_monitor"
 [tool.ruff]
 line-length = 110
 target-version = "py314"
+extend-exclude = ["**/*.md"]  # code blocks in docs are illustrative, not production code
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
