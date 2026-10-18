@@ -149,6 +149,9 @@ Stage order: `carroceria` → `pintura` → `montaje` → `calidad` → `patio` 
 | Q-04 | No reachable shipment in `embarques.csv` | Treat the delay as ≥ the critical threshold and flag it. |
 | Q-05 | Delay when the assigned shipment has already left | The same formula applies; the delay is relative to the assigned departure. |
 | Q-06 | Daily plan for % gap | "Current shift plan × 3", literally from §1, even if the other shifts of the day differ. |
+| Q-07 | Threshold boundaries | Inclusive: a value equal to a threshold reaches that level (e.g. exactly 10% behind is `media`). |
+| Q-08 | Case opening already critical | It opens and escalates in the same snapshot, and its single alert fires there. |
+| Q-09 | Unit can reach an earlier shipment than assigned | Delay is 0, never negative. |
 
 ## 6. Traceability by week
 
