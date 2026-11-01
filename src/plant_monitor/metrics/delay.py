@@ -18,7 +18,7 @@ def projected_yard_arrival(unit: Unit, at: datetime, standards: StandardsTable) 
     """
     if unit.etapa not in PRODUCTION_STAGES:
         raise ValueError(f"unit {unit.unidad_id} is in {unit.etapa}; only production stages are projected")
-    elapsed = at - unit.ingreso_etapa
+    elapsed = max(timedelta(0), at - unit.ingreso_etapa)  # Q-19: an entry after `at` counts as just entered
     remaining = max(timedelta(0), timedelta(minutes=standards.current_stage_minutes(unit)) - elapsed)
     later_stages = PRODUCTION_STAGES[PRODUCTION_STAGES.index(unit.etapa) + 1 :]
     later_minutes = sum(standards.minutes(unit.modelo, stage) for stage in later_stages)

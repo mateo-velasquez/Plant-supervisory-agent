@@ -42,14 +42,17 @@ select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["plant_monitor"]
+known-local-folder = ["builders"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["tests"]  # shared test builders: `from builders import ...`
 addopts = "-ra --strict-markers"
 
 [tool.mypy]
 strict = true
 plugins = ["pydantic.mypy"]
+mypy_path = "tests"
 
 [tool.coverage.run]
 source = ["plant_monitor"]

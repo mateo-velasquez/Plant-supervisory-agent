@@ -1,8 +1,11 @@
 """Frozen domain models; input fields keep the data contract's Spanish names (ADR-0005)."""
 
+from collections.abc import Mapping
+from dataclasses import dataclass
+
 from pydantic import BaseModel, ConfigDict, NaiveDatetime, NonNegativeInt
 
-from plant_monitor.domain.enums import Market, Model, Severity, Stage
+from plant_monitor.domain.enums import AnomalyKind, Market, Model, Severity, Stage
 
 
 class FrozenModel(BaseModel):
@@ -88,6 +91,24 @@ class Combination(FrozenModel):
 
     modelo: Model
     mercado: Market
+
+
+class Anomaly(FrozenModel):
+    """Non-fatal data anomaly found while processing a snapshot."""
+
+    kind: AnomalyKind
+    snapshot_id: str
+    detail: str
+
+
+@dataclass(frozen=True)
+class SnapshotCommit:
+    """Everything the store records atomically when a snapshot's unit of work succeeds."""
+
+    snapshot_id: str
+    content_hash: str
+    anomalies: tuple[Anomaly, ...]
+    new_units: Mapping[str, Combination]
 
 
 def all_combinations() -> tuple[Combination, ...]:

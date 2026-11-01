@@ -35,6 +35,22 @@ class Model(StrEnum):
     PICKUP = "Pickup"
 
 
+class ShiftPosition(StrEnum):
+    """Where a snapshot falls in its shift."""
+
+    MID = "mid"
+    CLOSING = "closing"
+
+
+class AnomalyKind(StrEnum):
+    """Non-fatal data anomalies detected while running the series."""
+
+    REPEATED_WITH_DIFFERENT_CONTENT = "repeated_with_different_content"
+    SHIFT_MISMATCH = "shift_mismatch"
+    STAGE_ENTRY_AFTER_SNAPSHOT = "stage_entry_after_snapshot"
+    UNIT_COMBINATION_CHANGED = "unit_combination_changed"
+
+
 class Severity(StrEnum):
     """Severity ordered by domain rank (NONE < MEDIUM < HIGH < CRITICAL), not alphabetically."""
 
