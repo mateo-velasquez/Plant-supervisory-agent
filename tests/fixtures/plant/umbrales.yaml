@@ -1,0 +1,18 @@
+# Synthetic copy of data/reglas/umbrales.yaml with the same structure and values.
+
+gap:
+  minimo_unidades: 3
+  media: 10
+  alta: 20
+  critica: 35
+
+retraso_dias:
+  Local:  {media: 1, alta: 2, critica: 3}
+  Brasil: {alta: 1, critica: 3}
+  Europa: {alta: 1, critica: 3}
+
+demora:
+  tolerancia_minutos: 60
+
+resolucion:
+  snapshots_sin_desvio: 2
