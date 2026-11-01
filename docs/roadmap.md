@@ -24,7 +24,7 @@ Spec Driven Development plan from today to Demo Day. Every spec traces to requir
 
 | Stage | Spec | Scope | FR | US | Open items | Priority | Target | Status |
 |---|---|---|---|---|---|---|---|---|
-| 1 · Deterministic core | [001 deviation-metrics](../specs/001-deviation-metrics/) | Plant and snapshot loaders; progress, plan, gap, delay, bottleneck, minimum severity | 03, 05–11 | 02 | — | Must | 11-07 | Ready |
+| 1 · Deterministic core | [001 deviation-metrics](../specs/001-deviation-metrics/) | Plant and snapshot loaders; progress, plan, gap, delay, bottleneck, minimum severity | 03–11 | 02 | — | Must | 11-07 | Implemented |
 | | [002 series-runner](../specs/002-series-runner/) | `llegadas.csv` replay, idempotency with content hash, snapshot → shift mapping | 01, 02, 04 | 01 | Q-10 | Must | 11-08 | Draft |
 | | [003 case-registry](../specs/003-case-registry/) | SQLite repository, lifecycle state machine, max severity since last report | 12–15 | 03 | — | Must | 11-09 | Draft |
 | | [004 notices-and-reports](../specs/004-notices-and-reports/) | Immediate alert, novelty rules, shift report, `motivo`, `sin_aviso` log, console and file notifier | 21–26 | 04, 05 | Q-13, Q-14 | Must | 11-11 | Draft |
