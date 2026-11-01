@@ -3,7 +3,7 @@ name: test-writer
 description: Turns a spec's worked examples and Gherkin criteria into failing pytest tests (TDD red step). Use before implementing a spec task.
 tools: Read, Grep, Glob, Edit, Write, Bash, PowerShell
 disallowedTools: Agent
-model: inherit
+model: opus
 color: yellow
 ---
 

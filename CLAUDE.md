@@ -64,13 +64,16 @@ Module-level detail lives in `docs/STRUCTURE.md`.
 ## Claude Code workflow (ADR-0006)
 **Subagents** (`.claude/agents/`), each limited to its job:
 
-| Agent | Use it to | Writes to |
-|---|---|---|
-| `spec-writer` | Write or update a spec from FR/US | `specs/`, `docs/requirements.md` |
-| `test-writer` | Turn a spec's examples into failing tests | `tests/` |
-| `domain-implementer` | Make the tests pass; never edits tests | `src/`, task checkboxes |
-| `reviewer` | Review the branch diff; read-only | — |
-| `eval-curator` | Build golden cases from days 1–7 | `evals/golden/` |
+| Agent | Use it to | Writes to | Model |
+|---|---|---|---|
+| `spec-writer` | Write or update a spec from FR/US | `specs/`, `docs/requirements.md` | Opus |
+| `test-writer` | Turn a spec's examples into failing tests | `tests/` | Opus |
+| `domain-implementer` | Make the tests pass; never edits tests | `src/`, task checkboxes | Sonnet |
+| `reviewer` | Review the branch diff; read-only | — | Opus |
+| `design-reviewer` | Review design patterns, coupling and testability of a diff or plan; read-only | — | Opus |
+| `eval-curator` | Build golden cases from days 1–7 | `evals/golden/` | Opus |
+
+Models are pinned in each agent's frontmatter. Only `domain-implementer` runs on Sonnet: tests, types and the reviewer catch its mistakes, while tests and specs are the source of truth and stay on Opus.
 
 **Skills** (`.claude/skills/`):
 - `/new-spec [name] [FR...]`: scaffold a spec.

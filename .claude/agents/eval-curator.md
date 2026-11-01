@@ -3,7 +3,7 @@ name: eval-curator
 description: Builds hand-verified golden cases for the evaluator (expected alerts, report news, causes) from days 1–7 only. Use when adding or extending evaluation coverage.
 tools: Read, Grep, Glob, Edit, Write, Bash, PowerShell
 disallowedTools: Agent
-model: inherit
+model: opus
 color: orange
 ---
 

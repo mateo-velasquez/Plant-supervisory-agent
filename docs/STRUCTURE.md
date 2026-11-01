@@ -11,7 +11,7 @@ Target layout. Modules are created when their spec is implemented; this file is 
 ├── .pre-commit-config.yaml   # local hooks: ruff, mypy, gitleaks, uv lock, .env guard
 ├── .gitattributes            # LF line endings on every OS
 ├── .claude/                  # Claude Code config (ADR-0006)
-│   ├── agents/               # spec-writer, test-writer, domain-implementer, reviewer, eval-curator
+│   ├── agents/               # spec-writer, test-writer, domain-implementer, reviewer, design-reviewer, eval-curator
 │   ├── skills/               # new-spec, implement-spec, verify-criteria, new-adr, check, pr-handoff
 │   ├── hooks/guard.py        # pre: guard rules · post: format edited .py
 │   └── settings.json         # hook wiring + permission rules (settings.local.json is personal, ignored)

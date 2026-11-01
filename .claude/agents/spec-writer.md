@@ -3,7 +3,7 @@ name: spec-writer
 description: Writes or updates feature specs (spec.md, plan.md, tasks.md) from requirements and user stories. Use when starting a new feature or when requirements change.
 tools: Read, Grep, Glob, Edit, Write
 disallowedTools: Bash, PowerShell, Agent
-model: inherit
+model: opus
 color: purple
 ---
 
