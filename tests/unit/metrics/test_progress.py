@@ -8,6 +8,7 @@ from plant_monitor.metrics.progress import count_progress
 
 SEDAN_LOCAL = Combination(modelo=Model.SEDAN, mercado=Market.LOCAL)
 SUV_BRAZIL = Combination(modelo=Model.SUV, mercado=Market.BRAZIL)
+SUV_LOCAL = Combination(modelo=Model.SUV, mercado=Market.LOCAL)
 ALL_COMBINATIONS = {Combination(modelo=m, mercado=k) for m in Model for k in Market}
 
 
@@ -41,6 +42,32 @@ def test_units_counted_only_in_their_own_combination() -> None:
 
 def test_every_combination_present_with_zero_when_nothing_released() -> None:
     assert count_progress([]) == dict.fromkeys(ALL_COMBINATIONS, 0)
+
+
+def test_e17b_unit_released_under_two_combinations_counts_once_in_the_first() -> None:
+    progress = count_progress([released("U7"), released("U7", Model.SUV, Market.LOCAL, hour=13)])
+    assert progress[SEDAN_LOCAL] == 1
+    assert progress[SUV_LOCAL] == 0
+    assert sum(progress.values()) == 1
+
+
+def test_q20_first_occurrence_in_input_order_decides_the_combination() -> None:
+    progress = count_progress([released("U7", Model.SUV, Market.LOCAL, hour=13), released("U7")])
+    assert progress[SUV_LOCAL] == 1
+    assert progress[SEDAN_LOCAL] == 0
+    assert sum(progress.values()) == 1
+
+
+def test_q20_later_release_in_new_combination_does_not_move_earlier_units() -> None:
+    s001 = [released("U1"), released("U2")]
+    s002 = [
+        released("U2", Model.SUV, Market.LOCAL, hour=13),
+        released("U3", Model.SUV, Market.LOCAL, hour=13),
+    ]
+    progress = count_progress([*s001, *s002])
+    assert progress[SEDAN_LOCAL] == 2
+    assert progress[SUV_LOCAL] == 1
+    assert sum(progress.values()) == 3
 
 
 def test_combinations_without_releases_are_zero() -> None:

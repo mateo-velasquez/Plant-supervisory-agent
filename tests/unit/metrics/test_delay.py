@@ -130,6 +130,56 @@ def test_rework_standard_applies_only_in_paint(standards: StandardsTable) -> Non
     assert projected_yard_arrival(assembly, dt(E4_AT), standards) == dt("2026-03-03T00:00")
 
 
+# Q-19 clamp (spec 002): S005 at 03-03 02:00; SUV/Brasil in calidad, BRA-0303 (cut-off 06:00).
+E16_AT = "2026-03-03T02:00"
+
+
+def e16_unit(since: str = "2026-03-03T03:00") -> Unit:
+    """U00051 in calidad since `since` (default one hour after the snapshot), assigned BRA-0303."""
+    return unit(Stage.QUALITY, since, unit_id="U00051")
+
+
+def test_e16_future_stage_entry_clamps_elapsed_to_zero(standards: StandardsTable) -> None:
+    assert projected_yard_arrival(e16_unit(), dt(E16_AT), standards) == dt("2026-03-03T05:00")
+
+
+def test_e16_future_stage_entry_reaches_assigned_brazil_truck(
+    standards: StandardsTable, shipments: ShipmentsTable
+) -> None:
+    projected = projected_yard_arrival(e16_unit(), dt(E16_AT), standards)
+    reachable = reachable_shipment(Market.BRAZIL, projected, shipments)
+    assert reachable is not None
+    assert reachable.embarque_id == "BRA-0303"
+    assert unit_delay_days(e16_unit(), dt(E16_AT), standards, shipments) == 0.0
+
+
+def test_e16_future_stage_entry_gives_zero_combination_delay(
+    standards: StandardsTable, shipments: ShipmentsTable
+) -> None:
+    assert combination_delay([e16_unit()], dt(E16_AT), standards, shipments) == (0.0, False)
+
+
+def test_e16_remaining_time_never_exceeds_stage_standard(standards: StandardsTable) -> None:
+    far_future = e16_unit(since="2026-03-03T23:00")
+    assert projected_yard_arrival(far_future, dt(E16_AT), standards) == dt("2026-03-03T05:00")
+
+
+def test_e16b_characterization_entry_equal_to_timestamp_leaves_full_standard(
+    standards: StandardsTable,
+) -> None:
+    """Characterization: passes before the clamp; remaining calidad time is the full 180."""
+    assert projected_yard_arrival(e16_unit(since=E16_AT), dt(E16_AT), standards) == dt("2026-03-03T05:00")
+
+
+# SUV pintura rework 360 + montaje 660 + calidad 180 = 1200 min = 20 h after 03-03 02:00 -> 22:00.
+def test_q19_characterization_future_entry_repainting_unit_projects_full_rework_standard(
+    standards: StandardsTable,
+) -> None:
+    """Characterization: passes with today's code; clamped elapsed keeps the full pintura rework time."""
+    repainting = unit(Stage.PAINT, "2026-03-03T03:00", rework=1, unit_id="U00052")
+    assert projected_yard_arrival(repainting, dt(E16_AT), standards) == dt("2026-03-03T22:00")
+
+
 # Reachable shipment
 
 

@@ -11,7 +11,7 @@ Target layout. Modules are created when their spec is implemented; this file is 
 ├── .pre-commit-config.yaml   # local hooks: ruff, mypy, gitleaks, uv lock, .env guard
 ├── .gitattributes            # LF line endings on every OS
 ├── .claude/                  # Claude Code config (ADR-0006)
-│   ├── agents/               # spec-writer, test-writer, domain-implementer, reviewer, eval-curator
+│   ├── agents/               # spec-writer, test-writer, domain-implementer, reviewer, design-reviewer, eval-curator
 │   ├── skills/               # new-spec, implement-spec, verify-criteria, new-adr, check, pr-handoff
 │   ├── hooks/guard.py        # pre: guard rules · post: format edited .py
 │   └── settings.json         # hook wiring + permission rules (settings.local.json is personal, ignored)
@@ -23,7 +23,7 @@ Target layout. Modules are created when their spec is implemented; this file is 
 ├── src/plant_monitor/
 │   ├── config.py             # Settings (pydantic-settings)
 │   ├── domain/               # pure types: Unit, Snapshot, Combination, Severity, CaseState, Cause, Notice, Report
-│   ├── ingestion/            # loaders (CSV with BOM, JSON), schema validation, arrival order + dedupe
+│   ├── ingestion/            # loaders (CSV with BOM, JSON), schema validation, arrivals, content hash
 │   ├── metrics/              # thresholds, lookup tables, progress, cumulative plan, gap, delay, bottleneck, min severity
 │   ├── cases/                # lifecycle state machine, novelty rules, registry (repository over SQLite)
 │   ├── logbooks/             # logbook store, availability by shift, verbatim citation check
@@ -32,12 +32,13 @@ Target layout. Modules are created when their spec is implemented; this file is 
 │   ├── hooks/                # pre-tool, post-tool and on-stop guards
 │   ├── notify/               # notifier port + adapters (console, file per shift)
 │   ├── telemetry/            # token/cost accounting, trace log
-│   └── runner/               # series runner and CLI entry point
+│   └── runner/               # series runner (order, dedupe, anomaly checks, unit of work) and CLI entry point
 ├── tests/
 │   ├── unit/                 # one module per domain rule; no I/O, no LLM
 │   ├── integration/          # runner + registry + MCP with a fake model
 │   ├── dev_hooks/            # tests for .claude/hooks/guard.py
-│   └── fixtures/             # small synthetic dataset (versioned)
+│   ├── fixtures/             # small synthetic dataset (versioned)
+│   └── builders.py           # shared snapshot builders (`from builders import ...`)
 ├── evals/
 │   ├── golden/               # hand-verified expected notices per day (days 1–7)
 │   └── run_eval.py           # notices, cause and noise metrics
@@ -59,16 +60,24 @@ Target layout. Modules are created when their spec is implemented; this file is 
 
 | Module | Spec | Contents |
 |---|---|---|
-| `domain/enums.py` | 001 | `Severity` (ordered), `Stage` (downstream `rank`), `Market`, `Model`, `PRODUCTION_STAGES` |
-| `domain/models.py` | 001 | Frozen input models, `Combination`, `CombinationMetrics`, `all_combinations()` |
+| `domain/enums.py` | 001, 002 | `Severity` (ordered), `Stage` (downstream `rank`), `Market`, `Model`, `PRODUCTION_STAGES`, `ShiftPosition`, `AnomalyKind` |
+| `domain/models.py` | 001, 002 | Frozen input models, `Combination`, `CombinationMetrics`, `all_combinations()`, `Anomaly`, `SnapshotCommit` |
+| `domain/calendar.py` | 002 | `snapshot_position` (shift row and `ShiftPosition`) |
 | `ingestion/errors.py` | 001 | `DataLoadError` and validation-message formatting |
 | `ingestion/plant.py` | 001 | `load_plan`, `load_standards`, `load_shipments`, `load_shifts` (BOM, row checks, plan completeness) |
-| `ingestion/snapshot.py` | 001 | `load_snapshot` |
+| `ingestion/rows.py` | 002 | `read_rows`: shared CSV row reader (BOM, physical-line errors) |
+| `ingestion/snapshot.py` | 001, 002 | `load_snapshot`, `parse_snapshot` (bytes, no filesystem) |
+| `ingestion/hashing.py` | 002 | `content_hash`: lowercase hex SHA-256 of raw bytes |
+| `ingestion/arrivals.py` | 002 | `Arrival`, `load_arrivals` (`llegadas.csv`, sorted by `orden`) |
+| `runner/ports.py` | 002 | `ProcessedStore` (unit of work over a `SnapshotCommit`) and `SnapshotPipeline` protocols |
+| `runner/memory_store.py` | 002 | `InMemoryProcessedStore` |
+| `runner/checks.py` | 002 | Pure anomaly checks: shift mismatch, future stage entry, unit identity |
+| `runner/series.py` | 002 | `RunSummary`, `RunAborted`, `run_series` (order, dedupe, checks, delegate) |
 | `metrics/thresholds.py` | 001 | `Thresholds` and `load_thresholds` for `umbrales.yaml` |
 | `metrics/tables.py` | 001 | `StandardsTable`, `ShipmentsTable` (bisect over cut-offs) |
-| `metrics/progress.py` | 001 | Distinct released units per combination |
-| `metrics/plan.py` | 001 | `snapshot_position`, `cumulative_plan`, `gap_pct` |
-| `metrics/delay.py` | 001 | Projected yard arrival, reachable shipment, delay in days |
+| `metrics/progress.py` | 001, 002 | Distinct released units per combination; first release wins (Q-20) |
+| `metrics/plan.py` | 001 | `cumulative_plan`, `gap_pct` |
+| `metrics/delay.py` | 001, 002 | Projected yard arrival (elapsed clamped at 0, Q-19), reachable shipment, delay in days |
 | `metrics/bottleneck.py` | 001 | Delayed units and bottleneck stage |
 | `metrics/severity.py` | 001 | Gap, delay and minimum severity |
 | `metrics/engine.py` | 001 | `PlantContext` and `compute_metrics` for one snapshot |
@@ -83,6 +92,7 @@ notify, telemetry, ingestion → domain
 ```
 
 - `domain` imports nothing from the project.
+- `ingestion` imports only `domain`. `runner` may import `ingestion` and `metrics`; `runner/checks.py` imports only `domain`.
 - `metrics` and `cases` never import `agents`, `mcp_server` or `anthropic`. The deterministic core is testable without the model.
 - Only `agents` imports `anthropic`, and only `mcp_server` imports `mcp`.
 

@@ -3,7 +3,7 @@ name: domain-implementer
 description: Implements a spec's tasks in src/ until its tests pass (TDD green and refactor). Use after test-writer has produced failing tests.
 tools: Read, Grep, Glob, Edit, Write, Bash, PowerShell
 disallowedTools: Agent
-model: inherit
+model: sonnet
 color: green
 ---
 

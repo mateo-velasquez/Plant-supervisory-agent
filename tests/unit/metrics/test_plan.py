@@ -1,4 +1,4 @@
-"""T6: snapshot position in turnos.csv, cumulative plan and gap % of the daily plan (FR-04, FR-06, FR-07)."""
+"""T6: cumulative plan and gap % of the daily plan (FR-06, FR-07); snapshot position is in test_calendar."""
 
 from pathlib import Path
 
@@ -7,7 +7,7 @@ import pytest
 from plant_monitor.domain.enums import Market, Model
 from plant_monitor.domain.models import Combination, PlanRow, Shift
 from plant_monitor.ingestion.plant import load_plan, load_shifts
-from plant_monitor.metrics.plan import cumulative_plan, gap_pct, snapshot_position
+from plant_monitor.metrics.plan import cumulative_plan, gap_pct
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "plant"
 SEDAN_LOCAL = Combination(modelo=Model.SEDAN, mercado=Market.LOCAL)
@@ -36,29 +36,6 @@ def with_plan(plan: list[PlanRow], shift_id: str, combo: Combination, units: int
         else row
         for row in plan
     ]
-
-
-def test_s001_is_t01_mid_snapshot(shifts: list[Shift]) -> None:
-    assert snapshot_position(shifts, "S001") == ("T01", False)
-
-
-def test_s002_is_t01_closing_snapshot(shifts: list[Shift]) -> None:
-    assert snapshot_position(shifts, "S002") == ("T01", True)
-
-
-@pytest.mark.parametrize(
-    ("snapshot_id", "expected"),
-    [("S003", ("T02", False)), ("S004", ("T02", True)), ("S005", ("T03", False)), ("S006", ("T03", True))],
-)
-def test_snapshot_position_for_every_fixture_snapshot(
-    shifts: list[Shift], snapshot_id: str, expected: tuple[str, bool]
-) -> None:
-    assert snapshot_position(shifts, snapshot_id) == expected
-
-
-def test_e17_unknown_snapshot_raises_naming_it(shifts: list[Shift]) -> None:
-    with pytest.raises(ValueError, match="S999"):
-        snapshot_position(shifts, "S999")
 
 
 def test_e1_mid_snapshot_takes_half_of_current_shift_plan(plan: list[PlanRow], shifts: list[Shift]) -> None:

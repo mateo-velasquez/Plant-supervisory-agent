@@ -18,8 +18,10 @@ We also want Spec Driven Development to be repeatable, not improvised per sessio
   - `test-writer` writes tests only;
   - `domain-implementer` never edits tests to make them pass;
   - `reviewer` is read-only;
+  - `design-reviewer` is read-only and reviews design patterns, coupling and testability (added 2026-11-01);
   - `eval-curator` builds golden cases from days 1–7 only.
   None can spawn other agents; the main conversation orchestrates.
+- **Models are pinned per agent** (added 2026-11-01, from spec 001 token usage): `domain-implementer` runs on Sonnet because tests, `mypy` and the reviewer catch its errors; every other agent is pinned to Opus, since a wrong test or spec is the error nobody downstream sees.
 - **Skills** (`.claude/skills/`) encode the workflow: `new-spec`, `implement-spec` (user-invoked only), `verify-criteria`, `new-adr`, `check` and `pr-handoff`.
 - **Guard hooks** (`.claude/hooks/guard.py`, wired in `.claude/settings.json`) enforce the costly rules in code:
   - `pre` blocks every git and GitHub write action (commit, push, branch, switch, stash, merge, PRs…), held-out data and `.env` access; the user runs those commands;

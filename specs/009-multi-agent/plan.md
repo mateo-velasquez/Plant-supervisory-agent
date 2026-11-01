@@ -14,7 +14,7 @@
 To be fixed when the spec moves to Ready.
 
 ## Design notes
-- Pattern to decide in ADR-0008 (orchestrator-workers is the working assumption, per Module 4).
+- Pattern to decide in ADR-0009 (orchestrator-workers is the working assumption, per Module 4).
 - Analysts return structured findings, not prose, so the coordinator merges them without re-reading data.
 
 ## Test strategy

@@ -77,6 +77,31 @@ def test_painting_unit_without_rework_and_zero_elapsed_is_not_delayed(
     assert not is_delayed(unit(Stage.PAINT, 0), AT, standards, tolerance)
 
 
+E16_AT = datetime(2026, 3, 3, 2, 0)
+E16_FUTURE_ENTRY = datetime(2026, 3, 3, 3, 0)
+
+
+def e16_unit(stage: Stage, *, rework: int = 0) -> Unit:
+    """SUV/Brasil unit whose `ingreso_etapa` is one hour after the S005 timestamp (Q-19)."""
+    return unit(stage, 0, rework=rework, unit_id="U00051").model_copy(
+        update={"ingreso_etapa": E16_FUTURE_ENTRY}
+    )
+
+
+def test_e16_characterization_future_stage_entry_is_not_delayed(
+    standards: StandardsTable, tolerance: int
+) -> None:
+    """Characterization: a negative elapsed already counts as not delayed."""
+    assert not is_delayed(e16_unit(Stage.QUALITY), E16_AT, standards, tolerance)
+
+
+def test_e16b_characterization_repainting_unit_with_future_entry_is_delayed(
+    standards: StandardsTable, tolerance: int
+) -> None:
+    """Characterization: repainting stays delayed regardless of elapsed time."""
+    assert is_delayed(e16_unit(Stage.PAINT, rework=1), E16_AT, standards, tolerance)
+
+
 @pytest.mark.parametrize("stage", [Stage.YARD, Stage.DISPATCH])
 def test_yard_and_dispatch_units_are_never_delayed(
     standards: StandardsTable, tolerance: int, stage: Stage

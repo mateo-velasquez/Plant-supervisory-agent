@@ -4,6 +4,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from itertools import chain
 
+from plant_monitor.domain.calendar import snapshot_position
+from plant_monitor.domain.enums import ShiftPosition
 from plant_monitor.domain.models import (
     Combination,
     CombinationMetrics,
@@ -16,7 +18,7 @@ from plant_monitor.domain.models import (
 )
 from plant_monitor.metrics.bottleneck import bottleneck_stage
 from plant_monitor.metrics.delay import combination_delay
-from plant_monitor.metrics.plan import cumulative_plan, gap_pct, snapshot_position
+from plant_monitor.metrics.plan import cumulative_plan, gap_pct
 from plant_monitor.metrics.progress import count_progress
 from plant_monitor.metrics.severity import delay_severity, gap_severity, minimum_severity
 from plant_monitor.metrics.tables import ShipmentsTable, StandardsTable
@@ -54,11 +56,11 @@ def _units_by_combination(units: Iterable[Unit]) -> dict[Combination, list[Unit]
 def compute_metrics(
     snapshot: Snapshot, released_so_far: Iterable[ReleasedUnit], ctx: PlantContext
 ) -> dict[Combination, CombinationMetrics]:
-    """Metrics of all 9 combinations; progress counts distinct ids of earlier plus current releases."""
-    shift_id, is_closing = snapshot_position(ctx.shifts, snapshot.snapshot_id)
+    """Metrics of all 9 combinations; progress counts first releases (Q-20)."""
+    shift, position = snapshot_position(ctx.shifts, snapshot.snapshot_id)
     progress = count_progress(chain(released_so_far, snapshot.liberadas))
-    planned = cumulative_plan(ctx.plan, ctx.shifts, shift_id, is_closing)
-    shift_plan = _shift_plan(ctx.plan, shift_id)
+    planned = cumulative_plan(ctx.plan, ctx.shifts, shift.turno_id, position is ShiftPosition.CLOSING)
+    shift_plan = _shift_plan(ctx.plan, shift.turno_id)
     units = _units_by_combination(snapshot.unidades)
     at = snapshot.timestamp
     tolerance = ctx.thresholds.demora.tolerancia_minutos

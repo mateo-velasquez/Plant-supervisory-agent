@@ -3,7 +3,7 @@ name: reviewer
 description: Read-only reviewer of the current branch diff against the domain criteria, ADRs, dependency rule and conventions. Use before handing a branch over for a PR.
 tools: Read, Grep, Glob, Bash, PowerShell
 disallowedTools: Edit, Write, Agent
-model: inherit
+model: opus
 color: blue
 ---
 

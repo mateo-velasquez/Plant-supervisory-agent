@@ -1,4 +1,4 @@
-"""Snapshot position in the shift calendar, cumulative plan and gap % (FR-04, FR-06, FR-07)."""
+"""Cumulative plan and gap % (FR-06, FR-07)."""
 
 from collections.abc import Iterable, Sequence
 
@@ -10,16 +10,6 @@ CLOSING_SHIFT_SHARE = 1.0
 SHIFTS_PER_DAY = 3
 """§1 and Q-06: the daily plan is literally the current shift plan times 3."""
 PERCENT = 100
-
-
-def snapshot_position(shifts: Iterable[Shift], snapshot_id: str) -> tuple[str, bool]:
-    """Shift id and whether `snapshot_id` is its closing snapshot, from `turnos.csv`."""
-    for shift in shifts:
-        if shift.snapshot_medio == snapshot_id:
-            return shift.turno_id, False
-        if shift.snapshot_cierre == snapshot_id:
-            return shift.turno_id, True
-    raise ValueError(f"snapshot {snapshot_id} is neither a mid nor a closing snapshot in turnos.csv")
 
 
 def cumulative_plan(

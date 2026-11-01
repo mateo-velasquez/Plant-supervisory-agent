@@ -281,6 +281,58 @@ def test_e14_beyond_horizon_combination_is_critica(ctx: PlantContext) -> None:
     assert m.minimum_severity is Severity.CRITICAL
 
 
+# Spec 002 E17 (Q-20): S001 releases U1, U2 as Sedán/Local; S002 (T01 closing) releases U2, U3 as SUV/Local.
+# U2 stays in Sedán/Local (first release): Sedán/Local 2, cum 12 -> gap -10; SUV/Local 1, cum 8 -> gap -7.
+E17_S001_RELEASES = (released("U1", "2026-03-02T07:10"), released("U2", "2026-03-02T08:40"))
+E17_S002_RELEASES = (
+    released("U2", "2026-03-02T12:00", Model.SUV, Market.LOCAL),
+    released("U3", "2026-03-02T13:00", Model.SUV, Market.LOCAL),
+)
+
+
+def test_spec002_e17_unit_released_again_in_new_combination_counts_in_its_first(ctx: PlantContext) -> None:
+    s002 = snapshot("S002", "2026-03-02T14:00", "T01", releases=E17_S002_RELEASES)
+    result = compute_metrics(s002, E17_S001_RELEASES, ctx)
+    suv_local = result[SUV_LOCAL]
+    assert suv_local.progress == 1
+    assert suv_local.cumulative_plan == 8.0
+    assert suv_local.gap_units == -7.0
+    sedan_local = result[SEDAN_LOCAL]
+    assert sedan_local.progress == 2
+    assert sedan_local.gap_units == -10.0
+
+
+# Spec 002 E21 (Q-20): U9 is in S001 unidades as Sedán/Local but only ever released, in S002, as SUV/Local.
+E21_S001 = snapshot(
+    "S001",
+    S001_AT,
+    "T01",
+    (unit("U9", Model.SEDAN, Market.LOCAL, Stage.QUALITY, "2026-03-02T09:00", "LOC-0302"),),
+)
+E21_S002_RELEASES = (released("U9", "2026-03-02T12:00", Model.SUV, Market.LOCAL),)
+
+
+def test_spec002_e21_characterization_progress_follows_first_release_not_first_sighting(
+    ctx: PlantContext,
+) -> None:
+    """Characterization: passes before Q-20; U9 counts under SUV/Local only."""
+    s002 = snapshot("S002", "2026-03-02T14:00", "T01", releases=E21_S002_RELEASES)
+    result = compute_metrics(s002, E21_S001.liberadas, ctx)
+    assert result[SUV_LOCAL].progress == 1
+    assert result[SEDAN_LOCAL].progress == 0
+
+
+# Spec 002 E16 (Q-19): S005 = T03 mid at 03-03 02:00; calidad entry at 03:00 clamps to 0 elapsed.
+# 180 min -> 05:00 < BRA-0303 cut-off 06:00 -> delay 0 (unclamped would be 06:00 -> BRA-0304, alta).
+def test_spec002_e16_characterization_future_stage_entry_has_no_delay_severity(ctx: PlantContext) -> None:
+    """Characterization: passes with today's code; the Q-19 clamp keeps SUV/Brasil on time."""
+    future = unit("U00051", Model.SUV, Market.BRAZIL, Stage.QUALITY, "2026-03-03T03:00", "BRA-0303")
+    m = compute_metrics(snapshot("S005", "2026-03-03T02:00", "T03", (future,)), [], ctx)[SUV_BRAZIL]
+    assert m.delay_days == 0.0
+    assert m.delay_beyond_horizon is False
+    assert m.delay_severity is Severity.NONE
+
+
 def test_e17_snapshot_absent_from_turnos_raises_naming_it(ctx: PlantContext) -> None:
     with pytest.raises(ValueError, match="S999"):
         compute_metrics(snapshot("S999", S001_AT, "T01", S001_UNITS, S001_RELEASES), [], ctx)

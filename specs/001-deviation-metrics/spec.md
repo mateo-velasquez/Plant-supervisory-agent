@@ -24,6 +24,7 @@ Compute, for every model × market combination at a given snapshot, the determin
 
 **Actual progress (FR-05, §1)**
 - Progress of a combination = the number of **distinct** `unidad_id` in `liberadas` of all snapshots processed so far, starting at S001.
+- *Amended by spec 002 (Q-20):* a unit counts once across all combinations, in the combination of its first release.
 
 **Cumulative plan (FR-04, FR-06, §1)**
 - The current shift, and whether the snapshot is its mid or closing one, come from matching `snapshot_id` against `turnos.csv.snapshot_medio` / `snapshot_cierre`.
@@ -39,7 +40,7 @@ Compute, for every model × market combination at a given snapshot, the determin
 
 **Projected yard arrival (FR-08, §1)**
 - Applies only to units whose `etapa` is in `carroceria`, `pintura`, `montaje` or `calidad`.
-- `elapsed = snapshot.timestamp − ingreso_etapa`.
+- `elapsed = snapshot.timestamp − ingreso_etapa`. *Amended by spec 002 (Q-19):* clamped at 0 when `ingreso_etapa` is after the snapshot.
 - `remaining_current = max(0, standard(current stage) − elapsed)`.
 - A unit in `pintura` with `retrabajos > 0` uses `minutos_retrabajo` as the standard of `pintura`.
 - `projected = snapshot.timestamp + remaining_current + Σ standard(next stages up to and including calidad)`.

@@ -9,13 +9,18 @@ from plant_monitor.domain.models import Snapshot
 from plant_monitor.ingestion.errors import DataLoadError, describe_validation_error
 
 
-def load_snapshot(path: Path) -> Snapshot:
-    """Load and validate a snapshot; errors name the file and the failing field."""
+def parse_snapshot(data: bytes, source: Path) -> Snapshot:
+    """Validate raw snapshot bytes; `source` only labels errors and the filesystem is never touched."""
     try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
+        raw = json.loads(data.decode("utf-8"))
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-        raise DataLoadError(f"{path}: invalid JSON: {exc}") from exc
+        raise DataLoadError(f"{source}: invalid JSON: {exc}") from exc
     try:
         return Snapshot.model_validate(raw)
     except ValidationError as exc:
-        raise DataLoadError(f"{path}: {describe_validation_error(exc)}") from exc
+        raise DataLoadError(f"{source}: {describe_validation_error(exc)}") from exc
+
+
+def load_snapshot(path: Path) -> Snapshot:
+    """Load and validate a snapshot file; errors name the file and the failing field."""
+    return parse_snapshot(path.read_bytes(), path)
