@@ -4,9 +4,9 @@ description: Hand a finished branch over to the user for a PR, giving only the P
 allowed-tools: Bash(git *) PowerShell(git *)
 ---
 
-Claude never runs `gh pr create`, `gh pr merge` or `git merge`. This skill only produces text.
+Claude never runs git or GitHub write actions (commit, push, `gh pr create`, `gh pr merge`, `git merge`…). This skill only produces text.
 
-1. Gather context: `git branch --show-current`, `git log --oneline main..HEAD`, `git diff --stat main...HEAD` and `git status -sb`. If the branch is not pushed or has uncommitted changes, say so first and give the push command.
+1. Gather context: `git branch --show-current`, `git log --oneline main..HEAD`, `git diff --stat main...HEAD` and `git status -sb`. If the branch is not pushed or has uncommitted changes, say so first and give the user the exact `git add`, `git commit` and `git push` commands to run.
 2. If the `check` skill has not passed in this session for the current state, run it; report failures instead of handing over.
 3. Output exactly three items, in Spanish framing with English content:
 

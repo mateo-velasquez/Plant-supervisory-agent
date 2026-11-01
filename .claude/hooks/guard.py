@@ -17,17 +17,26 @@ HELD_OUT_FILE_RE = re.compile(r"\b(?:T2[2-9]|T30)\.txt\b|\b(?:S04[3-9]|S05\d|S06
 HELD_OUT_ID_RE = re.compile(r"\b(?:T2[2-9]|T30|S04[3-9]|S05\d|S060)\b")
 SERIES_DIR_RE = re.compile(r"data[\\/]+(?:bitacoras|snapshots)", re.IGNORECASE)
 ENV_TOKEN_RE = re.compile(r"(?<![\w-])\.env(?:\.[\w-]+)*")
-WRITE_CMD_RE = re.compile(
-    r">|\b(?:Set-Content|Add-Content|Out-File|Copy-Item|Move-Item|New-Item|Remove-Item|rm|mv|cp|del|touch)\b",
-    re.IGNORECASE,
+GIT_CMD_RE = re.compile(r"\bgit(?:\s+(?:-[Cc]\s+\S+|--[\w-]+(?:=\S+)?))*\s+([a-z][\w-]*)([^;&|\n]*)")
+GIT_WRITE_SUBCOMMANDS = frozenset(
+    {
+        "add", "am", "apply", "branch", "checkout", "cherry-pick", "clean", "commit", "init", "merge", "mv",
+        "pull", "push", "rebase", "reset", "restore", "revert", "rm", "stash", "switch", "tag", "worktree",
+    }
+)  # fmt: skip
+BRANCH_WRITE_FLAGS = frozenset(
+    {
+        "-d", "-D", "--delete", "-m", "-M", "--move", "-c", "-C", "--copy", "-f", "--force",
+        "-u", "--set-upstream-to", "--unset-upstream", "-t", "--track", "--edit-description",
+    }
+)  # fmt: skip
+GIT_WRITE_REASON = (
+    "Git write actions belong to the user: give them the exact commands instead of running them."
 )
-GIT_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
-    (re.compile(r"\bgit\s+merge(?:\s|$)"), "Claude never merges; hand the branch over with /pr-handoff."),
-    (re.compile(r"\bgh\s+pr\s+(?:create|merge)\b"), "Claude never opens or merges PRs; use /pr-handoff."),
-    (
-        re.compile(r"\bgit\s+push\b[^;&|\n]*\s(?:--force(?:-with-lease)?|-f)(?:\s|$)"),
-        "Claude never force-pushes; ask the user.",
-    ),
+GITHUB_WRITE_RE = re.compile(
+    r"\bgh\s+(?:pr\s+(?:create|merge|close|reopen|edit|ready|review|comment)"
+    r"|release\s+(?:create|delete|edit|upload)|repo\s+(?:create|delete|fork|rename|edit|sync)"
+    r"|issue\s+(?:create|close|reopen|edit|comment|delete))\b"
 )
 HELD_OUT_REASON = (
     "Days 8-10 are held out (FR-40): shifts T22-T30 and snapshots S043-S060 cannot be read before week 5. "
@@ -80,14 +89,33 @@ def _glob_hits_held_out(glob: str) -> bool:
     return any(fnmatch.fnmatchcase(name, p) for p in patterns for name in HELD_OUT_FILES)
 
 
+def _git_read_only(subcommand: str, args: list[str]) -> bool:
+    """Return True for the read-only forms of otherwise mutating git subcommands."""
+    first = args[0] if args else ""
+    if subcommand == "branch":
+        return not BRANCH_WRITE_FLAGS.intersection(args) and (not args or first.startswith("-"))
+    if subcommand in {"stash", "worktree"}:
+        return first in {"list", "show"}
+    if subcommand == "tag":
+        return first in {"", "-l", "--list"}
+    return False
+
+
+def check_git_writes(command: str) -> str | None:
+    if GITHUB_WRITE_RE.search(command):
+        return "GitHub write actions belong to the user: give them the command, or use /pr-handoff for PRs."
+    for match in GIT_CMD_RE.finditer(command):
+        subcommand, args = match.group(1), match.group(2).split()
+        if subcommand in GIT_WRITE_SUBCOMMANDS and not _git_read_only(subcommand, args):
+            return f"{GIT_WRITE_REASON} Blocked: git {subcommand}."
+    return None
+
+
 def check_shell(command: str) -> str | None:
-    for pattern, reason in GIT_RULES:
-        if pattern.search(command):
-            return reason
+    if reason := check_git_writes(command):
+        return reason
     if any(_is_env_file(token) for token in ENV_TOKEN_RE.findall(command)):
         return "Access to .env is blocked (secrets). Use .env.example or settings."
-    if "z_helps" in command and WRITE_CMD_RE.search(command):
-        return "z_helps/ is read-only support material; never write there."
     if not _held_out_allowed():
         if HELD_OUT_FILE_RE.search(command):
             return HELD_OUT_REASON
@@ -98,11 +126,9 @@ def check_shell(command: str) -> str | None:
     return None
 
 
-def check_path(tool: str, path: str) -> str | None:
+def check_path(path: str) -> str | None:
     if _is_env_file(path):
         return "Access to .env is blocked (secrets). Use .env.example or settings."
-    if tool in {"Edit", "Write", "NotebookEdit"} and _in_z_helps(path):
-        return "z_helps/ is read-only support material; never write there."
     if not _held_out_allowed() and _is_held_out_path(path):
         return HELD_OUT_REASON
     return None
@@ -131,7 +157,7 @@ def evaluate_pre(payload: dict[str, Any]) -> str | None:
         return check_shell(str(tool_input.get("command", "")))
     if tool in {"Read", "Edit", "Write", "NotebookEdit"}:
         path = str(tool_input.get("file_path") or tool_input.get("notebook_path") or "")
-        return check_path(tool, path)
+        return check_path(path)
     if tool == "Grep":
         glob = tool_input.get("glob")
         return check_grep(str(tool_input.get("path", "")), str(glob) if glob else None)

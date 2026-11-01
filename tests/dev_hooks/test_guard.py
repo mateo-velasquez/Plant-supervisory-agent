@@ -41,22 +41,59 @@ def _pre(tool: str, **tool_input: Any) -> str | None:
         "git switch main; git merge feat/x",
         "gh pr create --fill",
         "gh pr merge 3 --squash",
+        "gh pr close 3",
+        "gh release create v1",
+        "gh repo delete x",
         "git push --force",
-        "git push -f origin chore/x",
-        "git push --force-with-lease",
+        "git push -u origin chore/x",
+        "git commit -m 'docs: x'",
+        "git -C repo commit -am x",
+        "git status --short; git commit -am x",
+        "git add .",
+        "git switch -c feat/y",
+        "git checkout -b feat/y",
+        "git checkout -- README.md",
+        "git branch feat/y",
+        "git branch -D old",
+        "git stash",
+        "git stash pop",
+        "git reset --hard",
+        "git rebase main",
+        "git restore README.md",
+        "git tag v1",
+        "git pull",
     ],
 )
-def test_git_rules_block(command: str) -> None:
+def test_git_writes_block(command: str) -> None:
     assert _pre("Bash", command=command)
     assert _pre("PowerShell", command=command)
 
 
 @pytest.mark.parametrize(
     "command",
-    ["git merge-base main HEAD", "gh pr view 3", "git push -u origin chore/x", "git log --merges"],
+    [
+        "git merge-base main HEAD",
+        "gh pr view 3",
+        "git log --merges",
+        "git log --oneline main..HEAD",
+        "git status --short",
+        "git diff main...HEAD",
+        "git show HEAD",
+        "git fetch origin",
+        "git -C repo status",
+        "git branch",
+        "git branch -a",
+        "git branch --show-current",
+        "git stash list",
+        "git stash show -p",
+        "git tag",
+        "git tag --list",
+        "git worktree list",
+    ],
 )
-def test_git_rules_allow(command: str) -> None:
+def test_git_read_only_allowed(command: str) -> None:
     assert _pre("Bash", command=command) is None
+    assert _pre("PowerShell", command=command) is None
 
 
 @pytest.mark.parametrize(
@@ -146,10 +183,10 @@ def test_env_lookalikes_allowed(tool: str, tool_input: dict[str, Any]) -> None:
     assert _pre(tool, **tool_input) is None
 
 
-def test_z_helps_is_read_only() -> None:
-    assert _pre("Write", file_path="z_helps/notes.md")
-    assert _pre("Edit", file_path=r"C:\repo\z_helps\x.md")
-    assert _pre("PowerShell", command=r"Set-Content z_helps\a.txt 'x'")
+def test_z_helps_is_read_write() -> None:
+    assert _pre("Write", file_path="z_helps/notes.md") is None
+    assert _pre("Edit", file_path=r"C:\repo\z_helps\x.md") is None
+    assert _pre("PowerShell", command=r"Copy-Item notes.md z_helps\notes.md") is None
     assert _pre("Read", file_path="z_helps/Proyecto_Final_Monitoreo_en_planta.md") is None
     assert _pre("PowerShell", command=r"Get-Content z_helps\a.md") is None
 
@@ -172,7 +209,7 @@ def _run_script(mode: str, payload: dict[str, Any]) -> subprocess.CompletedProce
 def test_script_blocks_with_exit_2_and_reason() -> None:
     result = _run_script("pre", {"tool_name": "Bash", "tool_input": {"command": "git merge main"}})
     assert result.returncode == 2
-    assert "never merges" in result.stderr
+    assert "belong to the user" in result.stderr
 
 
 def test_script_allows_with_exit_0() -> None:

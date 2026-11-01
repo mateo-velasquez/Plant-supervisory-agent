@@ -33,7 +33,7 @@ All checks must pass before a task is considered done. CI (`.github/workflows/ci
 src/plant_monitor/   # main package
 tests/               # tests; synthetic fixtures in tests/fixtures/
 data/                # real data, NOT versioned (see data/README.md)
-z_helps/             # local support material, NOT versioned; never write there
+z_helps/             # local support material, NOT versioned; Claude may read and write here
 ```
 Module-level detail lives in `docs/STRUCTURE.md`.
 
@@ -57,8 +57,9 @@ Module-level detail lives in `docs/STRUCTURE.md`.
 ## Git
 - Branches `type/description` (`feat/`, `fix/`, `chore/`, `docs/`, `ci/`, `refactor/`, `test/`) and Conventional Commits.
 - Never commit directly to `main`, never `push --force`.
-- **Claude never opens or merges PRs** (no `gh pr create`, `gh pr merge` or `git merge`). When a branch is ready it only hands over: the PR title, the PR description (in one copyable block) and the next branch name. The user opens and merges.
-- Commit or push only when the user asks.
+- **Claude never runs git or GitHub write actions**: no commit, push, pull, add, branch creation or deletion, switch/checkout, stash, merge, rebase, reset, restore, tag, nor `gh` PR/release/repo/issue changes. Read-only git (`status`, `diff`, `log`, `show`, `fetch`, `branch -a`, `stash list`) is fine.
+- **"Make a commit" means: give the user the exact commands** (`git add <files>`, `git commit -m "..."`, and `git switch`/`git push` if needed) in one copyable block. The user runs them.
+- **Claude never opens or merges PRs.** When a branch is ready it only hands over: the PR title, the PR description (in one copyable block) and the next branch name. The user opens and merges.
 
 ## Claude Code workflow (ADR-0006)
 **Subagents** (`.claude/agents/`), each limited to its job:
@@ -80,7 +81,7 @@ Module-level detail lives in `docs/STRUCTURE.md`.
 - `/pr-handoff`: PR title, description and next branch, with no PR opened.
 
 **Guard hooks** (`.claude/hooks/guard.py`, tests in `tests/dev_hooks/`):
-- They block merges, PR creation, force pushes, reads of days 8–10, `.env` access and writes to `z_helps/`, and they format and lint edited `.py` files.
+- They block every git and GitHub write action, reads of days 8–10 and `.env` access, and they format and lint edited `.py` files.
 - A block arrives as a tool error starting with "Blocked by repo hook"; adjust the action, never work around the hook.
 - Held-out days open only when the user sets `CLAUDE_ALLOW_HELDOUT=1` (week 5).
 

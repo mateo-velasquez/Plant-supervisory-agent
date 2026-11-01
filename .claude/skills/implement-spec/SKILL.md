@@ -14,4 +14,4 @@ Implement the spec at: $ARGUMENTS
    3. If either reports a spec ambiguity, stop and ask the user; do not let a subagent decide a domain rule.
 3. **Review.** Delegate to `reviewer`. If the verdict is "changes needed", send the findings to `domain-implementer` (or `test-writer` for test issues) and review again, at most twice; then report remaining findings to the user.
 4. **Close.** Run the `check` skill. If everything passes, set `spec.md` to `Status: Implemented`.
-5. **Hand over.** Propose Conventional Commit messages grouped by task (do not commit unless the user asks), then summarize tasks done, coverage and open questions.
+5. **Hand over.** Give the `git add` / `git commit` commands grouped by task, with Conventional Commit messages, for the user to run (never run them), then summarize tasks done, coverage and open questions.
