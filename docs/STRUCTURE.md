@@ -47,6 +47,7 @@ Target layout. Modules are created when their spec is implemented; this file is 
 │   └── NNN-feature/          # one folder per feature (spec.md, plan.md, tasks.md)
 ├── docs/
 │   ├── requirements.md       # FR / NFR with IDs
+│   ├── roadmap.md            # specs in order, priorities, dates
 │   ├── STRUCTURE.md          # this file
 │   ├── adr/                  # architecture decision records
 │   └── diagrams/             # Mermaid diagrams

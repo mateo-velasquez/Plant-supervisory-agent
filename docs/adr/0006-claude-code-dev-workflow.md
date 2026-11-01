@@ -22,7 +22,7 @@ We also want Spec Driven Development to be repeatable, not improvised per sessio
   None can spawn other agents; the main conversation orchestrates.
 - **Skills** (`.claude/skills/`) encode the workflow: `new-spec`, `implement-spec` (user-invoked only), `verify-criteria`, `new-adr`, `check` and `pr-handoff`.
 - **Guard hooks** (`.claude/hooks/guard.py`, wired in `.claude/settings.json`) enforce the costly rules in code:
-  - `pre` blocks merges, PR creation, force pushes, held-out data, `.env` access and writes to `z_helps/`;
+  - `pre` blocks every git and GitHub write action (commit, push, branch, switch, stash, merge, PRs…), held-out data and `.env` access; the user runs those commands;
   - `post` formats and lints edited Python files.
   Native permission rules deny `.env` as a second layer.
 
