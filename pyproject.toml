@@ -19,6 +19,7 @@ dev = [
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
     "ruff>=0.17.1",
+    "types-pyyaml>=6.0.12.20261030",
 ]
 
 [build-system]
@@ -38,6 +39,9 @@ extend-exclude = ["**/*.md"]  # code blocks in docs are illustrative, not produc
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["plant_monitor"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

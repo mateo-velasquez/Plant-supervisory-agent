@@ -145,8 +145,8 @@ Stage order: `carroceria` → `pintura` → `montaje` → `calidad` → `patio` 
 |---|---|---|
 | Q-01 | When is a logbook readable? | Logbook `Txx` becomes available at its shift's closing snapshot. A mid snapshot only sees earlier logbooks, so the system cannot see the future. |
 | Q-02 | Linking a logbook cause to cases | The match uses the stage and/or model named in the logbook, compared with each case's bottleneck. US-07 points to model + stage (a Pickup assembly stop applies to every Pickup market). The rule is set in spec 008. |
-| Q-03 | Bottleneck tie-break | If two stages tie, pick the most downstream one (closest to yard). Pending confirmation. |
-| Q-04 | No reachable shipment in `embarques.csv` | Treat the delay as ≥ the critical threshold and flag it. |
+| Q-03 | Bottleneck tie-break | If two stages tie, pick the most downstream one (closest to yard). Confirmed; set in spec 001. |
+| Q-04 | No reachable shipment in `embarques.csv` | The unit's delay is `None`. If any eligible unit's delay is `None`, the combination's delay is `None` (the worst unit dominates), `delay_beyond_horizon` is True and the delay severity is `critica`. Defensive only: with consistent data it cannot happen, since the projection is bounded by the remaining standards and `embarques.csv` extends well beyond the series. Set in spec 001. |
 | Q-05 | Delay when the assigned shipment has already left | The same formula applies; the delay is relative to the assigned departure. |
 | Q-06 | Daily plan for % gap | "Current shift plan × 3", literally from §1, even if the other shifts of the day differ. |
 | Q-07 | Threshold boundaries | Inclusive: a value equal to a threshold reaches that level (e.g. exactly 10% behind is `media`). |
@@ -158,6 +158,7 @@ Stage order: `carroceria` → `pintura` → `montaje` → `calidad` → `patio` 
 | Q-13 | Where "why it escalated" lives (brief §1, FR-38) | A `motivo` field on each notice (`gap`, `retraso`, `bitacora`), in addition to the trace log, so the reason survives without the trace. Extends FR-25. Set in spec 004. |
 | Q-14 | How `sin_aviso` is recorded | Code records one `sin_aviso` decision per evaluated case and snapshot. It is not sent to output channels; the evaluator uses it to measure noise. Set in spec 004. |
 | Q-15 | A case that opens and resolves within one shift | **Resolved by analysis:** it cannot happen. Resolution needs 2 clean snapshots after the opening one and a shift has 2 snapshots, so every case crosses at least one closing snapshot and appears in a report. |
+| Q-16 | Zero shift plan (FR-07) | If the current shift plan is 0, `gap_pct = None` and there is no gap severity; `gap_units` and the delay severity are still computed. Known risk: a plan-0 shift gives 2 snapshots without gap severity, which can falsely resolve a case that still has a real accumulated shortfall (§3 resolves after 2 clean snapshots). It does not occur in T01–T21 (constant plan); revisit in W5 with the held-out days. Set in spec 001. |
 
 ## 6. Traceability by week
 

@@ -24,7 +24,7 @@ Target layout. Modules are created when their spec is implemented; this file is 
 │   ├── config.py             # Settings (pydantic-settings)
 │   ├── domain/               # pure types: Unit, Snapshot, Combination, Severity, CaseState, Cause, Notice, Report
 │   ├── ingestion/            # loaders (CSV with BOM, JSON), schema validation, arrival order + dedupe
-│   ├── metrics/              # progress, cumulative plan, gap, projected arrival, delay, bottleneck, min severity
+│   ├── metrics/              # thresholds, lookup tables, progress, cumulative plan, gap, delay, bottleneck, min severity
 │   ├── cases/                # lifecycle state machine, novelty rules, registry (repository over SQLite)
 │   ├── logbooks/             # logbook store, availability by shift, verbatim citation check
 │   ├── mcp_server/           # own MCP server: read tools, write tools, criteria prompt
@@ -54,6 +54,24 @@ Target layout. Modules are created when their spec is implemented; this file is 
 ├── data/                     # real data, NOT versioned (only README)
 └── z_helps/                  # local support material, NOT versioned
 ```
+
+## Implemented modules
+
+| Module | Spec | Contents |
+|---|---|---|
+| `domain/enums.py` | 001 | `Severity` (ordered), `Stage` (downstream `rank`), `Market`, `Model`, `PRODUCTION_STAGES` |
+| `domain/models.py` | 001 | Frozen input models, `Combination`, `CombinationMetrics`, `all_combinations()` |
+| `ingestion/errors.py` | 001 | `DataLoadError` and validation-message formatting |
+| `ingestion/plant.py` | 001 | `load_plan`, `load_standards`, `load_shipments`, `load_shifts` (BOM, row checks, plan completeness) |
+| `ingestion/snapshot.py` | 001 | `load_snapshot` |
+| `metrics/thresholds.py` | 001 | `Thresholds` and `load_thresholds` for `umbrales.yaml` |
+| `metrics/tables.py` | 001 | `StandardsTable`, `ShipmentsTable` (bisect over cut-offs) |
+| `metrics/progress.py` | 001 | Distinct released units per combination |
+| `metrics/plan.py` | 001 | `snapshot_position`, `cumulative_plan`, `gap_pct` |
+| `metrics/delay.py` | 001 | Projected yard arrival, reachable shipment, delay in days |
+| `metrics/bottleneck.py` | 001 | Delayed units and bottleneck stage |
+| `metrics/severity.py` | 001 | Gap, delay and minimum severity |
+| `metrics/engine.py` | 001 | `PlantContext` and `compute_metrics` for one snapshot |
 
 ## Dependency rule
 Dependencies point inward:

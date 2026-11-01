@@ -1,0 +1,4 @@
+﻿turno_id,fecha,turno,inicio,fin,snapshot_medio,snapshot_cierre
+T01,3/2/2026,mañana,2026-03-02T06:00,2026-03-02T14:00,S001,S002
+T02,3/2/2026,tarde,2026-03-02T14:00,2026-03-02T22:00,S003,S004
+T03,3/2/2026,noche,2026-03-02T22:00,2026-03-03T06:00,S005,S006
