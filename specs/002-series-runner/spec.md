@@ -1,6 +1,6 @@
 # 002 · Series runner — Spec
 
-- **Status:** Ready
+- **Status:** Implemented
 - **Requirements:** FR-01, FR-02, FR-03 (`llegadas.csv`, snapshot bytes), FR-04, FR-05 and FR-08 (amended by Q-20, Q-19), NFR-04, NFR-09, NFR-10
 - **Stories:** US-01 (US-02 for the two metric amendments)
 - **Decisions:** ADR-0008 (idempotency by content hash, store unit of work, non-fatal data anomalies)
@@ -27,7 +27,7 @@ Replay the series in the order of `llegadas.csv`, hand each new snapshot to the 
 **Arrivals file (FR-01, FR-03)**
 - `llegadas.csv` is read as `utf-8-sig`, which strips the BOM. Its columns are `orden`, `snapshot_id`, `archivo` and `recibido`.
 - `orden` is a positive integer and unique in the file. `recibido` must be an ISO 8601 naive datetime; it is validated but informative only.
-- `archivo` must be a bare file name, portable across Ubuntu and Windows. It may not contain `/`, `\` or `:` and may not be `.` or `..`.
+- `archivo` must be a bare file name, portable across Ubuntu and Windows. It may not be empty, contain `/`, `\`, `:`, `*`, `?`, `"`, `<`, `>` or `|`, end with a dot or a space (Windows drops them, so the same name would resolve differently per OS), or be `.` or `..`.
 - `archivo` is resolved against the directory that contains `llegadas.csv`, which by the data layout is the snapshots directory (`data/README.md`).
 - A `snapshot_id` may appear in more than one row; that is how `S034` arrives twice.
 - Every failure raises `DataLoadError` naming the file, the physical line (header = line 1) and the field, as the 001 loaders do.
@@ -110,7 +110,7 @@ Replay the series in the order of `llegadas.csv`, hand each new snapshot to the 
 
 **Logging (NFR-09)**
 - Logger `plant_monitor.runner.series`.
-- INFO `"<id> processed: <turno_id> <position>"` for each processed snapshot, and INFO for each skip.
+- INFO `"<id> processed: <turno_id> <position>"` for each processed snapshot, and INFO for each identical-hash skip. A different-hash repeat logs only its WARNING (Q-10).
 - WARNING for each anomaly.
 - The runner logs nothing extra on abort: it raises, and the caller (spec 012) logs.
 

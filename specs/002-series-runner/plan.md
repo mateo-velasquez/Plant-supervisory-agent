@@ -167,7 +167,7 @@ def run_series(
 
 ## Design notes
 - **ADR-0008** records the three decisions behind this spec: idempotency by content hash with first-wins (Q-10), the store unit of work over a `SnapshotCommit` (Q-23), and non-fatal data anomalies (Q-18, Q-19, Q-20).
-- **Pipeline pattern:** the runner only orders, deduplicates, checks and delegates. It never imports `metrics` or `cases`; in 002 it imports `domain` and `ingestion` only.
+- **Pipeline pattern:** the runner only orders, deduplicates, checks and delegates. `runner/series.py` never imports `metrics` or `cases`: it imports only `domain`, `ingestion` and `runner` (enforced by a layer test). The `runner` package as a whole may import `metrics` later, when the composition root wires the pipeline (STRUCTURE.md).
 - **Read once, hash, parse the same bytes:** dedupe works on bytes, so a byte-identical repeat costs one hash and no validation, and a corrupt re-send of a processed snapshot cannot abort the run (E9). Because the hashed bytes are the parsed bytes, the stored hash always matches the content the pipeline saw.
 - **The port seam carries everything spec 003 must persist:**
   - the hash, the snapshot's anomalies and its new units in the `SnapshotCommit`;
@@ -189,7 +189,7 @@ def run_series(
 ## Test strategy
 - **Domain:**
   - `tests/unit/domain/test_calendar.py`: E20, moved from `tests/unit/metrics/test_plan.py` (removed there).
-  - `tests/unit/domain/test_models.py`: `Anomaly`, `SnapshotCommit` and the `AnomalyKind`/`ShiftPosition` values.
+  - `tests/unit/domain/test_anomaly_types.py`: `Anomaly`, `SnapshotCommit` and the `AnomalyKind`/`ShiftPosition` values.
 - **Metrics:**
   - `test_delay.py` and `test_bottleneck.py`: E16 metrics part (new), and E16b plus the bottleneck parts (characterization).
   - `test_progress.py`: E17b. `test_engine.py`: E17 and E21 metrics parts (E21 is characterization).

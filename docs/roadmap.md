@@ -25,14 +25,14 @@ Spec Driven Development plan from today to Demo Day. Every spec traces to requir
 | Stage | Spec | Scope | FR | US | Open items | Priority | Target | Status |
 |---|---|---|---|---|---|---|---|---|
 | 1 · Deterministic core | [001 deviation-metrics](../specs/001-deviation-metrics/) | Plant and snapshot loaders; progress, plan, gap, delay, bottleneck, minimum severity | 03–11 | 02 | — | Must | 11-07 | Implemented |
-| | [002 series-runner](../specs/002-series-runner/) | `llegadas.csv` replay, idempotency with content hash, snapshot → shift mapping, non-fatal data anomalies | 01, 02, 04 | 01 | Q-10, Q-18–Q-23, ADR-0008 | Must | 11-08 | Ready |
+| | [002 series-runner](../specs/002-series-runner/) | `llegadas.csv` replay, idempotency with content hash, snapshot → shift mapping, non-fatal data anomalies | 01, 02, 04 | 01 | Q-10, Q-18–Q-23, ADR-0008 | Must | 11-08 | Implemented |
 | | [003 case-registry](../specs/003-case-registry/) | SQLite repository, lifecycle state machine, max severity since last report | 12–15 | 03 | — | Must | 11-09 | Draft |
 | | [004 notices-and-reports](../specs/004-notices-and-reports/) | Immediate alert, novelty rules, shift report, `motivo`, `sin_aviso` log, console and file notifier | 21–26 | 04, 05 | Q-13, Q-14, Q-17 | Must | 11-11 | Draft |
 | | [005 evaluator-v1](../specs/005-evaluator-v1/) | Golden-case format, alerts/news/noise metrics, incident catalog, real-data smoke run of days 1–7 | 39 | 12 | A1, A3, A4 | Must | 11-12 | Draft |
 | 2 · The agent | [006 logbooks-and-mcp](../specs/006-logbooks-and-mcp/) | Logbook store (availability at shift close, verbatim check), MCP server and read tools | 17, 27 | — | Q-01, Q-12, Q-24, ADR-0007 transport | Must | 11-14 | Draft |
 | | [007 coordinator-agent](../specs/007-coordinator-agent/) | Own agent loop, single coordinator over one day, `emit_alert`/`emit_shift_report`, trace log, token accounting | 27, 37, 38 | 10 | ADR-0007, D3 | Must | 11-15 | Draft |
 | | [008 cited-cause-and-escalation](../specs/008-cited-cause-and-escalation/) | `set_cause`, `raise_severity`, `lift_severity_raise`, active-cause entity, `no_declarada` | 16–19 | 06, 07 | Q-02, Q-11, Q-12 | Must | 11-16 | Draft |
-| 3 · Multi-agent and control | [009 multi-agent](../specs/009-multi-agent/) | Gap, shipment-risk and bottleneck analysts (read-only); coordinator as single writer; deltas only; injection defense; cost of days 1–7 | 20, 28, 29, 37 | 08 | ADR-0008 | Must | 11-18 | Draft |
+| 3 · Multi-agent and control | [009 multi-agent](../specs/009-multi-agent/) | Gap, shipment-risk and bottleneck analysts (read-only); coordinator as single writer; deltas only; injection defense; cost of days 1–7 | 20, 28, 29, 37 | 08 | ADR-0009 | Must | 11-18 | Draft |
 | | [010 guardrails-and-unattended](../specs/010-guardrails-and-unattended/) | Hooks before, after and on stop; per-agent allowlists; criteria as MCP prompt; unattended shift closing | 30–33 | 09, 11 | — | Must | 11-19 | Draft |
 | 4 · Production | [011 structured-output-and-cache](../specs/011-structured-output-and-cache/) | Validated output with retry, cached prefix, idempotency hardening, Batch API assessment | 02, 34, 35 | — | D3 | Should | 11-21 | Draft |
 | | *(process)* held-out run | Open days 8–10 (`CLAUDE_ALLOW_HELDOUT=1`), run once as-is, log failures before any change | 40 | 12 | — | Must | 11-21 | — |

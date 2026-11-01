@@ -2,7 +2,7 @@
 
 Ordered, test-first. Each task is small enough for one commit.
 
-- [ ] T1 · ADR-0008: orchestration pattern, how analysts are invoked, and why (`/new-adr`).
+- [ ] T1 · ADR-0009: orchestration pattern, how analysts are invoked, and why (`/new-adr`).
 - [ ] T2 · Role definitions with tool lists; test that no analyst list contains a write tool → `agents/roles.py`, `agents/factory.py`.
 - [ ] T3 · Delta-builder tests (FR-29): only new, escalated, resolved or changed cases and new logbooks appear → `agents/delta.py`.
 - [ ] T4 · Orchestrator test: the coordinator calls only the analysts the delta needs and merges their structured findings → `agents/orchestrator.py`.
