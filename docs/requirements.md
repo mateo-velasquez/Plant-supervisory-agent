@@ -144,7 +144,7 @@ Stage order: `carroceria` → `pintura` → `montaje` → `calidad` → `patio` 
 | ID | Topic | Working assumption (to confirm) |
 |---|---|---|
 | Q-01 | When is a logbook readable? | Logbook `Txx` becomes available at its shift's closing snapshot. A mid snapshot only sees earlier logbooks, so the system cannot see the future. |
-| Q-02 | Linking a logbook cause to cases | The match uses the stage and/or model named in the logbook, compared with each case's bottleneck. The rule is set in the W2 spec. |
+| Q-02 | Linking a logbook cause to cases | The match uses the stage and/or model named in the logbook, compared with each case's bottleneck. US-07 points to model + stage (a Pickup assembly stop applies to every Pickup market). The rule is set in spec 008. |
 | Q-03 | Bottleneck tie-break | If two stages tie, pick the most downstream one (closest to yard). Pending confirmation. |
 | Q-04 | No reachable shipment in `embarques.csv` | Treat the delay as ≥ the critical threshold and flag it. |
 | Q-05 | Delay when the assigned shipment has already left | The same formula applies; the delay is relative to the assigned departure. |
@@ -152,6 +152,12 @@ Stage order: `carroceria` → `pintura` → `montaje` → `calidad` → `patio` 
 | Q-07 | Threshold boundaries | Inclusive: a value equal to a threshold reaches that level (e.g. exactly 10% behind is `media`). |
 | Q-08 | Case opening already critical | It opens and escalates in the same snapshot, and its single alert fires there. |
 | Q-09 | Unit can reach an earlier shipment than assigned | Delay is 0, never negative. |
+| Q-10 | A repeated `snapshot_id` with different content | The first processed version wins. Each processed snapshot stores a content hash; a repeat with a different hash is logged and reported as an anomaly, never reprocessed. Set in spec 002. |
+| Q-11 | How a logbook escalation is lifted (FR-19) | A dedicated coordinator-only write tool, `lift_severity_raise`, citing the logbook that reports the resolution. From that snapshot the minimum severity applies again. Set in spec 008. |
+| Q-12 | Where a citation is verified (FR-17) | Inside every write tool that carries evidence (`set_cause`, `raise_severity`, `lift_severity_raise`), through the logbook store; a missing fragment returns a tool error. Set in specs 006 and 008. |
+| Q-13 | Where "why it escalated" lives (brief §1, FR-38) | A `motivo` field on each notice (`gap`, `retraso`, `bitacora`), in addition to the trace log, so the reason survives without the trace. Extends FR-25. Set in spec 004. |
+| Q-14 | How `sin_aviso` is recorded | Code records one `sin_aviso` decision per evaluated case and snapshot. It is not sent to output channels; the evaluator uses it to measure noise. Set in spec 004. |
+| Q-15 | A case that opens and resolves within one shift | **Resolved by analysis:** it cannot happen. Resolution needs 2 clean snapshots after the opening one and a shift has 2 snapshots, so every case crosses at least one closing snapshot and appears in a report. |
 
 ## 6. Traceability by week
 

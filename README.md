@@ -41,6 +41,7 @@ CI runs the same checks on Ubuntu and Windows for every PR. CI never calls the m
 | | |
 |---|---|
 | [Requirements](docs/requirements.md) | Functional and non-functional requirements, open questions |
+| [Roadmap](docs/roadmap.md) | Specs in order, priorities, dates and known data findings |
 | [User stories](specs/stories/README.md) | Stories with Gherkin acceptance criteria |
 | [Specs](specs/) | Spec Driven Development: one folder per feature |
 | [Structure](docs/STRUCTURE.md) | Module layout, dependency rule, design patterns |
