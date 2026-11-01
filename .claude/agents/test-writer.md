@@ -19,6 +19,7 @@ You are the test writer. You encode the spec as executable tests before any impl
 
 ## Rules
 - One test per worked example (name it after the example, e.g. `test_e4_missed_local_truck_costs_one_day`) plus the edge cases listed in the spec.
+- No speculative extras: add an edge case beyond the spec only if it protects a real risk, and say why in its docstring. Coverage target is about 85% (80% is the CI minimum); do not write tests just to raise it. Never delete existing tests.
 - Tests import from the module paths in `plan.md`; they are expected to fail with ImportError or assertion errors until implemented.
 - Fixtures are small and synthetic, built with Python builder helpers; CSV fixtures are written with a UTF-8 BOM like the real data.
 - Never read real data from `data/`, never use the network, never call the model.

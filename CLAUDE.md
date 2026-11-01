@@ -44,6 +44,7 @@ Module-level detail lives in `docs/STRUCTURE.md`.
 - **Comments and docstrings are one line max.** Longer ones only when explaining something complex (a non-obvious rule from the criteria, an algorithm).
 - No magic paths or numbers: thresholds come from `umbrales.yaml`, paths from settings.
 - Test-first for domain logic; every rule in `criterio.md` has at least one test.
+- Coverage: 80% is the CI minimum; aim for about 85%. One test per spec rule or worked example, plus only the edge cases that protect a real risk. Never delete existing tests to lower coverage.
 
 ## Configuration and secrets
 - All configuration is read through `plant_monitor.config.get_settings()`. Never `os.environ` directly.
