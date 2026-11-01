@@ -24,23 +24,23 @@ Spec Driven Development plan from today to Demo Day. Every spec traces to requir
 
 | Stage | Spec | Scope | FR | US | Open items | Priority | Target | Status |
 |---|---|---|---|---|---|---|---|---|
-| 1 · Deterministic core | 001 deviation-metrics | Plant and snapshot loaders; progress, plan, gap, delay, bottleneck, minimum severity | 03, 05–11 | 02 | — | Must | 11-07 | Ready |
-| | 002 series-runner | `llegadas.csv` replay, idempotency with content hash, snapshot → shift mapping | 01, 02, 04 | 01 | Q-10 | Must | 11-08 | — |
-| | 003 case-registry | SQLite repository, lifecycle state machine, max severity since last report | 12–15 | 03 | — | Must | 11-09 | — |
-| | 004 notices-and-reports | Immediate alert, novelty rules, shift report, `motivo`, `sin_aviso` log, console and file notifier | 21–26 | 04, 05 | Q-13, Q-14 | Must | 11-11 | — |
-| | 005 evaluator-v1 | Golden-case format, alerts/news/noise metrics, incident catalog, real-data smoke run of days 1–7 | 39 | 12 | A1, A3, A4 | Must | 11-12 | — |
-| 2 · The agent | 006 logbooks-and-mcp | Logbook store (availability at shift close, verbatim check), MCP server and read tools | 17, 27 | — | Q-01, Q-12, ADR-0007 transport | Must | 11-14 | — |
-| | 007 coordinator-agent | Own agent loop, single coordinator over one day, trace log, token accounting | 27, 37, 38 | 10 | ADR-0007, D3 | Must | 11-15 | — |
-| | 008 cited-cause-and-escalation | `set_cause`, `raise_severity`, `lift_severity_raise`, active-cause entity, `no_declarada` | 16–19 | 06, 07 | Q-02, Q-11, Q-12 | Must | 11-16 | — |
-| 3 · Multi-agent and control | 009 multi-agent | Gap, shipment-risk and bottleneck analysts (read-only); coordinator as single writer; deltas only; injection defense; cost of days 1–7 | 20, 28, 29, 37 | 08 | — | Must | 11-18 | — |
-| | 010 guardrails-and-unattended | Hooks before, after and on stop; per-agent allowlists; criteria as MCP prompt; unattended shift closing | 30–33 | 09, 11 | — | Must | 11-19 | — |
-| 4 · Production | 011 structured-output-and-cache | Validated output with retry, cached prefix, idempotency hardening | 02, 34, 35 | — | D3 | Should | 11-21 | — |
+| 1 · Deterministic core | [001 deviation-metrics](../specs/001-deviation-metrics/) | Plant and snapshot loaders; progress, plan, gap, delay, bottleneck, minimum severity | 03, 05–11 | 02 | — | Must | 11-07 | Ready |
+| | [002 series-runner](../specs/002-series-runner/) | `llegadas.csv` replay, idempotency with content hash, snapshot → shift mapping | 01, 02, 04 | 01 | Q-10 | Must | 11-08 | Draft |
+| | [003 case-registry](../specs/003-case-registry/) | SQLite repository, lifecycle state machine, max severity since last report | 12–15 | 03 | — | Must | 11-09 | Draft |
+| | [004 notices-and-reports](../specs/004-notices-and-reports/) | Immediate alert, novelty rules, shift report, `motivo`, `sin_aviso` log, console and file notifier | 21–26 | 04, 05 | Q-13, Q-14 | Must | 11-11 | Draft |
+| | [005 evaluator-v1](../specs/005-evaluator-v1/) | Golden-case format, alerts/news/noise metrics, incident catalog, real-data smoke run of days 1–7 | 39 | 12 | A1, A3, A4 | Must | 11-12 | Draft |
+| 2 · The agent | [006 logbooks-and-mcp](../specs/006-logbooks-and-mcp/) | Logbook store (availability at shift close, verbatim check), MCP server and read tools | 17, 27 | — | Q-01, Q-12, ADR-0007 transport | Must | 11-14 | Draft |
+| | [007 coordinator-agent](../specs/007-coordinator-agent/) | Own agent loop, single coordinator over one day, `emit_alert`/`emit_shift_report`, trace log, token accounting | 27, 37, 38 | 10 | ADR-0007, D3 | Must | 11-15 | Draft |
+| | [008 cited-cause-and-escalation](../specs/008-cited-cause-and-escalation/) | `set_cause`, `raise_severity`, `lift_severity_raise`, active-cause entity, `no_declarada` | 16–19 | 06, 07 | Q-02, Q-11, Q-12 | Must | 11-16 | Draft |
+| 3 · Multi-agent and control | [009 multi-agent](../specs/009-multi-agent/) | Gap, shipment-risk and bottleneck analysts (read-only); coordinator as single writer; deltas only; injection defense; cost of days 1–7 | 20, 28, 29, 37 | 08 | ADR-0008 | Must | 11-18 | Draft |
+| | [010 guardrails-and-unattended](../specs/010-guardrails-and-unattended/) | Hooks before, after and on stop; per-agent allowlists; criteria as MCP prompt; unattended shift closing | 30–33 | 09, 11 | — | Must | 11-19 | Draft |
+| 4 · Production | [011 structured-output-and-cache](../specs/011-structured-output-and-cache/) | Validated output with retry, cached prefix, idempotency hardening, Batch API assessment | 02, 34, 35 | — | D3 | Should | 11-21 | Draft |
 | | *(process)* held-out run | Open days 8–10 (`CLAUDE_ALLOW_HELDOUT=1`), run once as-is, log failures before any change | 40 | 12 | — | Must | 11-21 | — |
-| | 012 full-series-cli | One command for the 61 arrivals, with cost and duration | 36, 37 | 11 | — | Must | 11-22 | — |
-| 5 · Demo and stretch | 013 demo-trace | Navigable trace of one alert, snapshot to citation | 38 | 10 | — | Must | 11-23 | — |
-| | 014 visual-reports | HTML shift reports rendered from the validated JSON | 26 | 05 | — | Could | 11-24 | — |
-| | 015 analytics-dashboard | Accuracy, noise, cost and cache metrics read from SQLite | 37, 39 | — | — | Later | — | — |
-| | 016 early-warning | Gap trend forecast with estimated crossing time | 41 | — | — | Later | — | — |
+| | [012 full-series-cli](../specs/012-full-series-cli/) | One command for the 61 arrivals, with cost and duration | 36, 37 | 11 | — | Must | 11-22 | Draft |
+| 5 · Demo and stretch | [013 demo-trace](../specs/013-demo-trace/) | Navigable trace of one alert, snapshot to citation | 38 | 10 | — | Must | 11-23 | Draft |
+| | [014 visual-reports](../specs/014-visual-reports/) | HTML shift reports rendered from the validated JSON | 26 | 05 | — | Could | 11-24 | Draft |
+| | [015 analytics-dashboard](../specs/015-analytics-dashboard/) | Accuracy, noise, cost and cache metrics read from SQLite | 37, 39 | — | — | Later | — | Draft |
+| | [016 early-warning](../specs/016-early-warning/) | Gap trend forecast with estimated crossing time | 41 | — | — | Later | — | Draft |
 
 **Cut line:** if the plan slips, drop 014 first and keep 015–016 for after Demo Day. Stages 1–3 and specs 012–013 are never cut: they are what the demo shows.
 
