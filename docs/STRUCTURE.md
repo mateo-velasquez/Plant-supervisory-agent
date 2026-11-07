@@ -63,6 +63,11 @@ Target layout. Modules are created when their spec is implemented; this file is 
 | `domain/enums.py` | 001, 002 | `Severity` (ordered), `Stage` (downstream `rank`), `Market`, `Model`, `PRODUCTION_STAGES`, `ShiftPosition`, `AnomalyKind` |
 | `domain/models.py` | 001, 002 | Frozen input models, `Combination`, `CombinationMetrics`, `all_combinations()`, `Anomaly`, `SnapshotCommit` |
 | `domain/calendar.py` | 002 | `snapshot_position` (shift row and `ShiftPosition`) |
+| `domain/cases.py` | 003 | `CaseState`, `CaseEvent`, `effective_severity` (the only place it is computed), `case_id_for`, `Case`, `CaseHistoryRow` |
+| `cases/lifecycle.py` | 003 | Pure lifecycle: `next_state` transition table, `Observation`, `Step`, `step`, `mark_reported` |
+| `cases/registry.py` | 003 | `SqliteRegistry` (schema, `user_version`, the only unit of work `processing`, `ProcessedStore`), `SqliteCaseRepository` (`registry.cases`), `SqliteReleaseStore` (`registry.releases`), `CaseRepository` protocol |
+| `cases/tracker.py` | 003 | `CaseTracker.track` (lifecycle over the registry; re-runnable within a snapshot, Q-27) and `mark_reported`; `CaseDelta`, `TrackedEvent` |
+| `config.py` | 003 | `Settings.registry_path` = `output_dir / "registry.sqlite3"` |
 | `ingestion/errors.py` | 001 | `DataLoadError` and validation-message formatting |
 | `ingestion/plant.py` | 001 | `load_plan`, `load_standards`, `load_shipments`, `load_shifts` (BOM, row checks, plan completeness) |
 | `ingestion/rows.py` | 002 | `read_rows`: shared CSV row reader (BOM, physical-line errors) |
@@ -92,7 +97,8 @@ notify, telemetry, ingestion → domain
 ```
 
 - `domain` imports nothing from the project.
-- `ingestion` imports only `domain`. `runner` may import `ingestion` and `metrics`; `runner/checks.py` imports only `domain`.
+- `ingestion` imports only `domain`. `runner` may import `ingestion`, `metrics` and `cases` (spec 004's `runner/pipeline.py`); `runner/checks.py` imports only `domain`.
+- `cases` imports only `domain` and `metrics.thresholds` (checked per module). `SqliteRegistry` satisfies `runner`'s `ProcessedStore` structurally, without importing `runner`.
 - `metrics` and `cases` never import `agents`, `mcp_server` or `anthropic`. The deterministic core is testable without the model.
 - Only `agents` imports `anthropic`, and only `mcp_server` imports `mcp`.
 
@@ -100,9 +106,9 @@ notify, telemetry, ingestion → domain
 
 | Pattern | Where | Why |
 |---|---|---|
-| State | `cases/lifecycle.py` | Case transitions are explicit and testable per state. |
+| State machine (pure transition function) | `cases/lifecycle.py` | Every transition lives in one `next_state` table, tested row by row; four states don't justify a class per state. |
 | Strategy | `metrics/severity.py` | Delay thresholds differ per market (Local has `media`; Brazil and Europe do not). |
-| Repository | `cases/registry.py` | The registry is behind an interface, so SQLite can be swapped for in-memory in tests. |
+| Repository | `cases/registry.py` | The tracker depends on the small `CaseRepository` protocol; tests use SQLite `:memory:`, not a second in-memory implementation. |
 | Pipeline | `runner/` | ingest → metrics → lifecycle → agent → notify, each step pure where possible. |
 | Chain of Responsibility | `hooks/` | Guards run in order, and the first to block returns its reason. |
 | Factory | `agents/factory.py` | Builds each agent with its prompt and its tool allowlist. |
