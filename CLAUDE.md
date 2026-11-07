@@ -69,13 +69,13 @@ Module-level detail lives in `docs/STRUCTURE.md`.
 | Agent | Use it to | Writes to | Model |
 |---|---|---|---|
 | `spec-writer` | Write or update a spec from FR/US | `specs/`, `docs/requirements.md` | Opus |
-| `test-writer` | Turn a spec's examples into failing tests | `tests/` | Opus |
-| `domain-implementer` | Make the tests pass; never edits tests | `src/`, task checkboxes | Sonnet |
+| `test-writer` | Turn a spec's examples into failing tests | `tests/` | Sonnet |
+| `domain-implementer` | Make the tests pass; never edits tests | `src/`, task checkboxes | Haiku |
 | `reviewer` | Review the branch diff; read-only | — | Opus |
 | `design-reviewer` | Review design patterns, coupling and testability of a diff or plan; read-only | — | Opus |
-| `eval-curator` | Build golden cases from days 1–7 | `evals/golden/` | Opus |
+| `eval-curator` | Build golden cases from days 1–7 | `evals/golden/` | Sonnet |
 
-Models are pinned in each agent's frontmatter. Only `domain-implementer` runs on Sonnet: tests, types and the reviewer catch its mistakes, while tests and specs are the source of truth and stay on Opus.
+Models are pinned in each agent's frontmatter. Specs and both reviewers stay on Opus: they are the source of truth and the last check. `test-writer` and `eval-curator` run on Sonnet, with the reviewer and `/verify-criteria` checking their output; `domain-implementer` runs on Haiku, because tests, types and the reviewer catch its mistakes.
 
 **Skills** (`.claude/skills/`):
 - `/new-spec [name] [FR...]`: scaffold a spec.
