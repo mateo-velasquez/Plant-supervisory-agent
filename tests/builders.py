@@ -1,7 +1,37 @@
-"""Shared synthetic snapshot builders for tests; payloads mirror the `Sxxx.json` data contract."""
+"""Shared synthetic builders for tests; snapshot payloads mirror the `Sxxx.json` data contract."""
 
 import json
 from pathlib import Path
+
+from plant_monitor.domain.enums import Market, Model, Severity, Stage
+from plant_monitor.domain.models import Combination, CombinationMetrics
+
+PICKUP_BRAZIL = Combination(modelo=Model.PICKUP, mercado=Market.BRAZIL)
+
+
+def metrics_with(
+    minimum: Severity,
+    *,
+    combination: Combination = PICKUP_BRAZIL,
+    gap_units: float = 0.0,
+    gap_pct: float | None = None,
+    delay_days: float | None = None,
+    bottleneck: Stage | None = None,
+) -> CombinationMetrics:
+    """Synthetic metrics for one combination; only `minimum` drives the case lifecycle."""
+    return CombinationMetrics(
+        combination=combination,
+        progress=0,
+        cumulative_plan=0.0,
+        gap_units=gap_units,
+        gap_pct=gap_pct,
+        delay_days=delay_days,
+        delay_beyond_horizon=False,
+        bottleneck=bottleneck,
+        gap_severity=minimum,
+        delay_severity=Severity.NONE,
+        minimum_severity=minimum,
+    )
 
 
 def unit_payload(**overrides: object) -> dict[str, object]:
