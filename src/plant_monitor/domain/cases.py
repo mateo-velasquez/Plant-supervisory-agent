@@ -9,8 +9,9 @@ from plant_monitor.domain.enums import Severity, Stage
 from plant_monitor.domain.models import Combination, FrozenModel
 
 
+# A list with the posibble states
 class CaseState(StrEnum):
-    """Case lifecycle states (§3); values are the data contract's."""
+    """Case lifecycle states; values are the data contract's."""
 
     OPEN = "abierto"
     FOLLOW_UP = "en_seguimiento"
@@ -23,6 +24,7 @@ class CaseState(StrEnum):
         return self is not CaseState.RESOLVED
 
 
+# What happen to the event in this snapshot
 class CaseEvent(StrEnum):
     """What happened to a case at one snapshot; declaration order is emission order."""
 

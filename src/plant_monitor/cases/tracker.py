@@ -38,6 +38,8 @@ class _Memo:
     marked: set[str]
 
 
+# For each snapshot, you receive the metrics and—combination by combination—decide how to handle each case:
+# whether to open, advance, escalate, or resolve it. Afterward, you save it to the database.
 class CaseTracker:
     """Applies the case lifecycle to each snapshot and records report baselines."""
 
@@ -51,11 +53,16 @@ class CaseTracker:
         snapshot_id: str,
         metrics: Mapping[Combination, CombinationMetrics],
         raises: frozenset[Combination],
+        # The combinations that the AI ​​decided to upload
     ) -> CaseDelta:
         """Evaluate every combination at 'snapshot_id'; a re-run restarts from the pre-snapshot state."""
+        # A) verify that there is an open transaction
         self._require_open(snapshot_id)
+
+        # B) Is this the first call or a re-run?
         unit = self._repo.current_unit()
         memo = self._memo
+        # It's a re-run if there's already a memo for the same transaction and the same photo.
         rerun = memo is not None and memo.unit == unit and memo.snapshot_id == snapshot_id
         if memo is not None and rerun:
             if memo.marked:
@@ -66,7 +73,9 @@ class CaseTracker:
         else:
             active = self._repo.active_cases()
 
+        # C) Index and validate
         by_combo = {case.combination: case for case in active}
+
         for combo, case in by_combo.items():
             if combo not in metrics:
                 raise ValueError(f"active case {case.case_id} has no metrics at {snapshot_id}")
@@ -74,6 +83,7 @@ class CaseTracker:
             # Stored only after the input check, so a rejected first call does not pin bad metrics.
             self._memo = _Memo(unit, snapshot_id, dict(metrics), active, set())
 
+        # D) Evaluate each combination
         events: list[TrackedEvent] = []
         cases: list[Case] = []
         for combo in all_combinations():
@@ -88,6 +98,8 @@ class CaseTracker:
             events.extend(TrackedEvent(result.case.case_id, event) for event in result.events)
         return CaseDelta(snapshot_id=snapshot_id, events=tuple(events), cases=tuple(cases))
 
+    # Upon closing the shift, the report will be generated,
+    # and then this will be called for each reported case
     def mark_reported(self, case_id: str, snapshot_id: str) -> None:
         """Store the report baseline of a case; allowed on one resolved earlier in the shift.
 
