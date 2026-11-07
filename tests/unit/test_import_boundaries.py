@@ -1,4 +1,4 @@
-"""001 T11, 002 T15, 003 T2/T16: no model SDK in pure or service code; layers import only what they may."""
+"""001 T11, 002 T15, 003 T2/T16, 004 T9: no model SDK in pure or service code; layers import what they may."""
 
 import ast
 import json
@@ -10,7 +10,7 @@ import pytest
 
 PACKAGE = Path(__file__).resolve().parents[2] / "src" / "plant_monitor"
 PROJECT = "plant_monitor"
-SDK_FREE_PACKAGES = ("metrics", "domain", "ingestion", "runner", "cases")
+SDK_FREE_PACKAGES = ("metrics", "domain", "ingestion", "runner", "cases", "notify")
 FORBIDDEN = frozenset({"anthropic", "mcp"})
 ROOT = "<root>"
 CASES_ALLOWED = ("plant_monitor.domain", "plant_monitor.metrics.thresholds", "plant_monitor.cases")
@@ -213,3 +213,34 @@ def test_cases_imports_only_domain_and_metrics_thresholds() -> None:
         if (extra := disallowed_modules(path.read_text(encoding="utf-8"), package_of(path), CASES_ALLOWED))
     }
     assert offenders == {}
+
+
+def test_notify_imports_only_domain() -> None:
+    assert layer_offenders(modules_of("notify"), {"domain", "notify"}) == {}
+
+
+def test_cases_facts_and_templates_import_only_domain_and_the_pure_case_modules() -> None:
+    allowed = ("plant_monitor.domain", "plant_monitor.cases.facts", "plant_monitor.cases.novelty")
+    files = [PACKAGE / "cases" / "facts.py", PACKAGE / "cases" / "templates.py"]
+    offenders = {
+        str(path.relative_to(PACKAGE)): sorted(extra)
+        for path in files
+        if (extra := disallowed_modules(path.read_text(encoding="utf-8"), package_of(path), allowed))
+    }
+    assert offenders == {}
+
+
+def test_runner_pipeline_and_outbox_import_only_service_layers() -> None:
+    allowed = {"domain", "runner", "cases", "metrics", "notify"}
+    files = [PACKAGE / "runner" / "pipeline.py", PACKAGE / "runner" / "outbox.py"]
+    assert layer_offenders(files, allowed) == {}
+
+
+def test_runner_pipeline_does_not_import_notify() -> None:
+    allowed = {"domain", "runner", "cases", "metrics"}
+    assert layer_offenders([PACKAGE / "runner" / "pipeline.py"], allowed) == {}
+
+
+def test_runner_outbox_imports_only_domain_runner_and_notify() -> None:
+    allowed = {"domain", "runner", "notify"}
+    assert layer_offenders([PACKAGE / "runner" / "outbox.py"], allowed) == {}

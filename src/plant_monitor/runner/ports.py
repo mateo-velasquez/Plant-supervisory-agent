@@ -31,6 +31,12 @@ class ProcessedStore(Protocol):
         ...
 
 
+class PostCommit(Protocol):
+    """Work the runner triggers outside any unit of work: at run start and after each commit."""
+
+    def after_commit(self) -> None: ...
+
+
 class SnapshotPipeline(Protocol):
     """Processes one snapshot inside the store's unit of work."""
 

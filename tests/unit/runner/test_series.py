@@ -781,3 +781,105 @@ def test_anomalies_before_pipeline_failure_in_summary_but_not_stored(tmp_path: P
     assert info.value.summary.processed == ()
     assert store.inner.recorded_anomalies() == ()
     assert store.recorded == []
+
+
+# --- 004 T10 · Post-commit hook (E36) ---
+
+
+class RecordingPostCommit:
+    """Records what the run had done at each call: pipeline calls and stored hashes; fails on given calls."""
+
+    def __init__(
+        self,
+        store: InMemoryProcessedStore,
+        pipeline: FakePipeline,
+        *,
+        fail_on_call: int | None = None,
+        error: BaseException | None = None,
+    ) -> None:
+        self.store = store
+        self.pipeline = pipeline
+        self.fail_on_call = fail_on_call
+        self.error = error
+        self.seen: list[tuple[tuple[str, ...], tuple[str, ...]]] = []
+
+    def after_commit(self) -> None:
+        processed = tuple(call[0] for call in self.pipeline.calls)
+        stored = tuple(sid for sid in ("S001", "S002") if self.store.get_hash(sid) is not None)
+        self.seen.append((processed, stored))
+        if self.error is not None and len(self.seen) == self.fail_on_call:
+            raise self.error
+
+
+def e36_arrivals(tmp_path: Path) -> list[Arrival]:
+    """E36: S001, S002, then S001 again with the same bytes."""
+    write_series(tmp_path, "S001", "S002")
+    return arrivals_for(tmp_path, "S001", "S002", "S001")
+
+
+def test_e36a_post_commit_none_keeps_the_summary_of_a_run_without_it(tmp_path: Path) -> None:
+    arrivals = e36_arrivals(tmp_path)
+    plain = run_series(arrivals, shifts(), InMemoryProcessedStore(), FakePipeline())
+    explicit = run_series(arrivals, shifts(), InMemoryProcessedStore(), FakePipeline(), post_commit=None)
+    assert explicit == plain == RunSummary(processed=("S001", "S002"), skipped=("S001",), anomalies=())
+
+
+def test_e36b_post_commit_runs_at_start_and_after_each_commit_but_not_for_a_skip(tmp_path: Path) -> None:
+    store = InMemoryProcessedStore()
+    pipeline = FakePipeline()
+    recorder = RecordingPostCommit(store, pipeline)
+    run_series(e36_arrivals(tmp_path), shifts(), store, pipeline, post_commit=recorder)
+    assert recorder.seen == [
+        ((), ()),
+        (("S001",), ("S001",)),
+        (("S001", "S002"), ("S001", "S002")),
+    ]
+
+
+def test_e36c_an_exception_from_post_commit_is_logged_and_the_run_completes(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.INFO, logger=LOGGER)
+    store = InMemoryProcessedStore()
+    pipeline = FakePipeline()
+    recorder = RecordingPostCommit(store, pipeline, fail_on_call=2, error=RuntimeError("boom"))
+    summary = run_series(e36_arrivals(tmp_path), shifts(), store, pipeline, post_commit=recorder)
+    assert summary.processed == ("S001", "S002")
+    assert len(log_lines(caplog, logging.ERROR)) == 1
+    assert "boom" in caplog.text
+    assert len(recorder.seen) == 3
+
+
+def test_e36d_keyboard_interrupt_from_post_commit_propagates_and_the_snapshot_stays_processed(
+    tmp_path: Path,
+) -> None:
+    store = InMemoryProcessedStore()
+    pipeline = FakePipeline()
+    recorder = RecordingPostCommit(store, pipeline, fail_on_call=2, error=KeyboardInterrupt())
+    with pytest.raises(KeyboardInterrupt):
+        run_series(e36_arrivals(tmp_path), shifts(), store, pipeline, post_commit=recorder)
+    assert store.get_hash("S001") is not None
+    assert store.get_hash("S002") is None
+
+
+def test_e36e_a_run_with_a_missing_file_flushes_once_before_the_upfront_checks(tmp_path: Path) -> None:
+    write_series(tmp_path, "S001")
+    store = InMemoryProcessedStore()
+    pipeline = FakePipeline()
+    recorder = RecordingPostCommit(store, pipeline)
+    with pytest.raises(DataLoadError) as info:
+        run_series(arrivals_for(tmp_path, "S001", "S002"), shifts(), store, pipeline, post_commit=recorder)
+    assert not isinstance(info.value, RunAborted)
+    assert "S002.json" in str(info.value)
+    assert recorder.seen == [((), ())]
+    assert pipeline.calls == []
+
+
+def test_post_commit_is_not_called_for_a_snapshot_that_failed_to_commit(tmp_path: Path) -> None:
+    """Delivery after a rolled-back snapshot would send notices the registry never kept."""
+    store = InMemoryProcessedStore()
+    pipeline = FakePipeline("S002", RuntimeError("boom"))
+    recorder = RecordingPostCommit(store, pipeline)
+    with pytest.raises(RunAborted):
+        run_series(e36_arrivals(tmp_path), shifts(), store, pipeline, post_commit=recorder)
+    assert recorder.seen == [((), ()), (("S001",), ("S001",))]

@@ -44,6 +44,12 @@ def test_e28_registry_path_is_derived_from_output_dir_with_no_new_variable() -> 
     assert "registry_path" not in Settings.model_fields
 
 
+def test_e34_notices_dir_is_derived_from_output_dir_with_no_new_variable() -> None:
+    settings = Settings(anthropic_api_key="k", output_dir=Path("out"))
+    assert settings.notices_dir == Path("out") / "notices"
+    assert "notices_dir" not in Settings.model_fields
+
+
 def test_rejects_invalid_effort(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
     monkeypatch.setenv("ANTHROPIC_EFFORT", "turbo")

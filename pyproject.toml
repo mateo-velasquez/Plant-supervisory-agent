@@ -42,7 +42,7 @@ select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["plant_monitor"]
-known-local-folder = ["builders"]
+known-local-folder = ["builders", "notice_builders"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
