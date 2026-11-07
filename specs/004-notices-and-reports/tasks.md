@@ -2,6 +2,7 @@
 
 Ordered, test-first. Each task is small enough for one commit.
 
+- [ ] T0 · Refactor (no behavior change, before adding notice tables): split `cases/registry.py` into a `cases/registry/` package (`schema.py`, `session.py`, `sqlite.py`, `cases_repo.py`, `releases.py`), re-exported from `__init__.py` so imports stay the same; move the duplicated `current_snapshot`/`current_unit` into the session. Existing 003 tests pass unchanged.
 - [ ] T1 · `domain/notices.py` models with FR-25 fields plus `motivo`; validation tests (enum values, `origen` only `umbral` or `agente`).
 - [ ] T2 · Alert test (US-04): a case that becomes `escalado` at S020 yields one `alerta_inmediata` with `snapshot_id` S020 and the right `motivo` → `cases/novelty.py`.
 - [ ] T3 · Test: an already escalated case never alerts again.
