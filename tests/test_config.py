@@ -38,6 +38,12 @@ def test_api_key_not_leaked_in_repr(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "sk-secret" not in repr(Settings())
 
 
+def test_e28_registry_path_is_derived_from_output_dir_with_no_new_variable() -> None:
+    settings = Settings(anthropic_api_key="k", output_dir=Path("out"))
+    assert settings.registry_path == Path("out") / "registry.sqlite3"
+    assert "registry_path" not in Settings.model_fields
+
+
 def test_rejects_invalid_effort(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
     monkeypatch.setenv("ANTHROPIC_EFFORT", "turbo")
