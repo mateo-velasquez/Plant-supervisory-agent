@@ -26,7 +26,7 @@ Spec Driven Development plan from today to Demo Day. Every spec traces to requir
 |---|---|---|---|---|---|---|---|---|
 | 1 · Deterministic core | [001 deviation-metrics](../specs/001-deviation-metrics/) | Plant and snapshot loaders; progress, plan, gap, delay, bottleneck, minimum severity | 03–11 | 02 | — | Must | 11-07 | Implemented |
 | | [002 series-runner](../specs/002-series-runner/) | `llegadas.csv` replay, idempotency with content hash, snapshot → shift mapping, non-fatal data anomalies | 01, 02, 04 | 01 | Q-10, Q-18–Q-23, ADR-0008 | Must | 11-08 | Implemented |
-| | [003 case-registry](../specs/003-case-registry/) | SQLite repository, lifecycle state machine, max severity since last report | 12–15 | 03 | — | Must | 11-09 | Draft |
+| | [003 case-registry](../specs/003-case-registry/) | SQLite repository, lifecycle state machine, max severity since last report | 05, 12–15, 23 | 03 | Q-25–Q-28 | Must | 11-09 | Implemented |
 | | [004 notices-and-reports](../specs/004-notices-and-reports/) | Immediate alert, novelty rules, shift report, `motivo`, `sin_aviso` log, console and file notifier | 21–26 | 04, 05 | Q-13, Q-14, Q-17 | Must | 11-11 | Draft |
 | | [005 evaluator-v1](../specs/005-evaluator-v1/) | Golden-case format, alerts/news/noise metrics, incident catalog, real-data smoke run of days 1–7 | 39 | 12 | A1, A3, A4 | Must | 11-12 | Draft |
 | 2 · The agent | [006 logbooks-and-mcp](../specs/006-logbooks-and-mcp/) | Logbook store (availability at shift close, verbatim check), MCP server and read tools | 17, 27 | — | Q-01, Q-12, Q-24, ADR-0007 transport | Must | 11-14 | Draft |

@@ -1,10 +1,12 @@
 """002 T8: ProcessedStore unit-of-work contract (E19) and InMemoryProcessedStore specifics."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from datetime import datetime
+from typing import Protocol, runtime_checkable
 
 import pytest
 
+from plant_monitor.cases.registry import SqliteRegistry
 from plant_monitor.domain.enums import AnomalyKind, Market, Model, ShiftPosition
 from plant_monitor.domain.models import Anomaly, Combination, Shift, Snapshot, SnapshotCommit
 from plant_monitor.runner.memory_store import InMemoryProcessedStore
@@ -30,11 +32,30 @@ COMMIT_S002 = SnapshotCommit(
 )
 
 
-@pytest.fixture(params=[InMemoryProcessedStore], ids=["in_memory"])
-def store_factory(request: pytest.FixtureRequest) -> StoreFactory:
-    """Every ProcessedStore implementation; spec 003 adds its SQLite store here."""
-    factory: StoreFactory = request.param
-    return factory
+@runtime_checkable
+class _Closable(Protocol):
+    """A store holding a resource to release, such as a SQLite connection."""
+
+    def close(self) -> None: ...
+
+
+@pytest.fixture(
+    params=[InMemoryProcessedStore, lambda: SqliteRegistry(":memory:")], ids=["in_memory", "sqlite_memory"]
+)
+def store_factory(request: pytest.FixtureRequest) -> Iterator[StoreFactory]:
+    """Every ProcessedStore implementation (E19); stores with `close()` are closed after the test."""
+    make: StoreFactory = request.param
+    created: list[ProcessedStore] = []
+
+    def factory() -> ProcessedStore:
+        store = make()
+        created.append(store)
+        return store
+
+    yield factory
+    for store in created:
+        if isinstance(store, _Closable):
+            store.close()
 
 
 def commit_cleanly(store: ProcessedStore, commit: SnapshotCommit) -> None:
@@ -138,6 +159,28 @@ def test_record_anomaly_does_not_mark_any_snapshot(store_factory: StoreFactory) 
     assert dict(store.known_units()) == {}
 
 
+# --- Anomaly deduplication, both stores (the port has no read method) ---
+
+
+@pytest.fixture(params=["in_memory", "sqlite_memory"])
+def anomaly_store(request: pytest.FixtureRequest) -> Iterator[InMemoryProcessedStore | SqliteRegistry]:
+    """Each concrete store, so `recorded_anomalies()` can be read; SQLite is closed after the test."""
+    store = InMemoryProcessedStore() if request.param == "in_memory" else SqliteRegistry(":memory:")
+    yield store
+    if isinstance(store, SqliteRegistry):
+        store.close()
+
+
+def test_same_anomaly_recorded_twice_is_stored_once(
+    anomaly_store: InMemoryProcessedStore | SqliteRegistry,
+) -> None:
+    commit_cleanly(anomaly_store, COMMIT_S001)
+    anomaly_store.record_anomaly(S001_ANOMALY)
+    anomaly_store.record_anomaly(Q10_ANOMALY)
+    anomaly_store.record_anomaly(Q10_ANOMALY)
+    assert anomaly_store.recorded_anomalies() == (S001_ANOMALY, Q10_ANOMALY)
+
+
 # --- InMemoryProcessedStore specifics ---
 
 
@@ -219,6 +262,12 @@ class NoopPipeline:
 def test_in_memory_store_is_assignable_to_processed_store_port() -> None:
     store: ProcessedStore = InMemoryProcessedStore()
     assert store.get_hash("S001") is None
+
+
+def test_e19_sqlite_registry_is_assignable_to_processed_store_port() -> None:
+    with SqliteRegistry(":memory:") as registry:
+        store: ProcessedStore = registry
+        assert store.get_hash("S001") is None
 
 
 def test_class_with_process_is_assignable_to_snapshot_pipeline_port() -> None:

@@ -24,6 +24,11 @@ class Settings(BaseSettings):
 
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
 
+    @property
+    def registry_path(self) -> Path:
+        """Registry SQLite file, derived from output_dir."""
+        return self.output_dir / "registry.sqlite3"
+
 
 @lru_cache
 def get_settings() -> Settings:
