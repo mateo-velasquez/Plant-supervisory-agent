@@ -13,10 +13,10 @@ def read_rows[M: FrozenModel](path: Path, model: type[M]) -> list[tuple[int, M]]
     """Validate every CSV row into 'model', paired with its line number; empty cells become None."""
     with path.open(encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
-        columns = reader.fieldnames or []
+        columns = reader.fieldnames or []  # Read the fieldnames of the csv (1 line)
         missing = [
             name for name, info in model.model_fields.items() if info.is_required() and name not in columns
-        ]
+        ]  # For each field in the template, the question is: is it mandatory and missing from the CSV?
         if missing:
             raise DataLoadError(f"{path}: missing columns: {', '.join(missing)}")
         rows: list[tuple[int, M]] = []
