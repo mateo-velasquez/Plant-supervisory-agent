@@ -10,7 +10,8 @@ from plant_monitor.domain.models import Shipment, StandardTime, Unit
 
 
 def is_repainting(unit: Unit) -> bool:
-    """§1: a unit in `pintura` with `retrabajos > 0` is being repainted."""
+    """It is a criterion-based rule:
+    a vehicle in the paint stage with > 0 instances of rework is being repainted."""
     return unit.etapa is Stage.PAINT and unit.retrabajos > 0
 
 
@@ -23,7 +24,7 @@ class StandardsTable:
 
     @classmethod
     def from_rows(cls, rows: Iterable[StandardTime]) -> StandardsTable:
-        """Index `tiempos_estandar.csv` rows; rework minutes come from the `pintura` row."""
+        """Index 'tiempos_estandar.csv' rows; rework minutes come from the 'pintura' row."""
         minutes: dict[tuple[Model, Stage], int] = {}
         rework: dict[Model, int] = {}
         for row in rows:
@@ -33,14 +34,14 @@ class StandardsTable:
         return cls(minutes, rework)
 
     def minutes(self, model: Model, stage: Stage) -> int:
-        """Standard minutes of `stage` for `model`."""
+        """Standard minutes of 'stage' for 'model'."""
         try:
             return self._minutes[model, stage]
         except KeyError:
             raise ValueError(f"no standard time for {model}/{stage} in tiempos_estandar.csv") from None
 
     def rework_minutes(self, model: Model) -> int:
-        """Paint rework standard minutes for `model`."""
+        """Paint rework standard minutes for 'model'."""
         try:
             return self._rework[model]
         except KeyError:
@@ -55,7 +56,8 @@ class StandardsTable:
 
 @dataclass(frozen=True)
 class ShipmentsTable:
-    """Shipments indexed by id and, per market, sorted by `corte_en_patio`."""
+    """ShipmentsTable is the plant's schedule for ships and trucks,
+    organized to provide quick answers to the two questions required for calculating delays."""
 
     _by_market: Mapping[Market, tuple[Shipment, ...]]
     _cut_offs: Mapping[Market, tuple[datetime, ...]]
@@ -63,8 +65,8 @@ class ShipmentsTable:
 
     @classmethod
     def from_rows(cls, rows: Iterable[Shipment]) -> ShipmentsTable:
-        """Index `embarques.csv` rows."""
-        by_id = {row.embarque_id: row for row in rows}
+        """Index 'embarques.csv' rows. (Create the table with data)"""
+        by_id = {row.embarque_id: row for row in rows}  # Search an 'embarque' by id
         by_market = {
             market: tuple(
                 sorted(
@@ -78,15 +80,15 @@ class ShipmentsTable:
         return cls(by_market, cut_offs, by_id)
 
     def for_market(self, market: Market) -> tuple[Shipment, ...]:
-        """Shipments of `market` sorted by cut-off."""
+        """list the markets for an embarque"""
         return self._by_market[market]
 
     def by_id(self, embarque_id: str) -> Shipment:
-        """Shipment with `embarque_id`; raises KeyError if unknown."""
+        """Shipment with 'embarque_id'; raises KeyError if unknown."""
         return self._by_id[embarque_id]
 
     def first_cut_off_after(self, market: Market, moment: datetime) -> Shipment | None:
-        """First shipment of `market` whose cut-off is strictly after `moment`; None past the last."""
+        """First shipment of 'market' whose cut-off is strictly after 'moment'; None past the last."""
         index = bisect_right(self._cut_offs[market], moment)
         group = self._by_market[market]
         return group[index] if index < len(group) else None

@@ -10,7 +10,7 @@ from plant_monitor.metrics.tables import StandardsTable, is_repainting
 
 
 def is_delayed(unit: Unit, at: datetime, standards: StandardsTable, tolerance: int) -> bool:
-    """Repainting, or longer in its production stage than standard plus `tolerance` minutes."""
+    """Repainting, or longer in its production stage than standard plus 'tolerance' minutes."""
     if unit.etapa not in PRODUCTION_STAGES:
         return False
     if is_repainting(unit):
