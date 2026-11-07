@@ -90,7 +90,7 @@ def plan_by_key(rows: list[PlanRow]) -> dict[tuple[str, Model, Market], int]:
 
 
 def names_row(message: str, line_no: int) -> bool:
-    """True if the message names the given row as `row N` or `line N`."""
+    """True if the message names the given row as 'row N' or 'line N'."""
     return re.search(rf"\b(?:row|line) {line_no}\b", message, flags=re.IGNORECASE) is not None
 
 

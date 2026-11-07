@@ -82,7 +82,7 @@ E16_FUTURE_ENTRY = datetime(2026, 3, 3, 3, 0)
 
 
 def e16_unit(stage: Stage, *, rework: int = 0) -> Unit:
-    """SUV/Brasil unit whose `ingreso_etapa` is one hour after the S005 timestamp (Q-19)."""
+    """SUV/Brasil unit whose 'ingreso_etapa' is one hour after the S005 timestamp (Q-19)."""
     return unit(stage, 0, rework=rework, unit_id="U00051").model_copy(
         update={"ingreso_etapa": E16_FUTURE_ENTRY}
     )

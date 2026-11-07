@@ -112,13 +112,13 @@ def stored_case_ids(path: Path) -> set[str]:
 
 
 def run_uninterrupted(path: Path, arrivals: list[Arrival], ctx: PlantContext) -> RunSummary:
-    """Run U on `path` with a healthy pipeline."""
+    """Run U on 'path' with a healthy pipeline."""
     with SqliteRegistry(path) as registry:
         return run_series(arrivals, shifts(), registry, TrackingPipeline(registry, ctx))
 
 
 def run_interrupted(path: Path, arrivals: list[Arrival], ctx: PlantContext) -> RunAborted:
-    """Run I1 on `path`: the pipeline raises after `track` on S004."""
+    """Run I1 on 'path': the pipeline raises after 'track' on S004."""
     with SqliteRegistry(path) as registry, pytest.raises(RunAborted) as info:
         run_series(arrivals, shifts(), registry, TrackingPipeline(registry, ctx, fail_after_track_on="S004"))
     return info.value

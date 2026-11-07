@@ -8,7 +8,7 @@ class DataLoadError(ValueError):
 
 
 def describe_validation_error(exc: ValidationError) -> str:
-    """One `field 'x': reason` entry per validation error, joined by `; `."""
+    """One "field 'x': reason" entry per validation error, joined by '; '."""
     parts: list[str] = []
     for error in exc.errors():
         field = ".".join(str(part) for part in error["loc"]) or "<root>"

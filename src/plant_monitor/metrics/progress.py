@@ -1,4 +1,4 @@
-"""Actual progress: distinct released units per combination (FR-05, criterio §1)."""
+"""Actual progress: distinct released units per combination (FR-05)."""
 
 from collections.abc import Iterable
 
@@ -6,7 +6,7 @@ from plant_monitor.domain.models import Combination, ReleasedUnit, all_combinati
 
 
 def count_progress(released: Iterable[ReleasedUnit]) -> dict[Combination, int]:
-    """Each `unidad_id` counts once, in the combination of its first occurrence (Q-20, order-dependent)."""
+    """Each 'unidad_id' counts once, in the combination of its first occurrence (Q-20, order-dependent)."""
     seen: dict[Combination, set[str]] = {combo: set() for combo in all_combinations()}
     counted: set[str] = set()
     for unit in released:

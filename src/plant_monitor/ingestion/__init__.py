@@ -1,4 +1,4 @@
-"""Loaders for the plant files and snapshots; every data failure raises `DataLoadError`."""
+"""Loaders for the plant files and snapshots; every data failure raises 'DataLoadError'."""
 
 from plant_monitor.ingestion.errors import DataLoadError
 

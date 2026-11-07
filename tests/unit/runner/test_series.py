@@ -62,7 +62,7 @@ def payload(
     released: list[dict[str, object]] | None = None,
     **overrides: object,
 ) -> dict[str, object]:
-    """Valid payload for `snapshot_id` whose timestamp and turno agree with the calendar."""
+    """Valid payload for 'snapshot_id' whose timestamp and turno agree with the calendar."""
     timestamp, turno = HEADERS[snapshot_id]
     data = snapshot_payload(units, released, snapshot_id=snapshot_id, timestamp=timestamp, turno=turno)
     data.update(overrides)
@@ -70,14 +70,14 @@ def payload(
 
 
 def arrival(orden: int, snapshot_id: str, archivo: Path, recibido: str = "2026-03-02T10:05") -> Arrival:
-    """Row of llegadas.csv with `archivo` already resolved."""
+    """Row of llegadas.csv with 'archivo' already resolved."""
     return Arrival(
         orden=orden, snapshot_id=snapshot_id, archivo=archivo, recibido=datetime.fromisoformat(recibido)
     )
 
 
 def arrivals_for(directory: Path, *snapshot_ids: str) -> list[Arrival]:
-    """Arrivals in orden 1..n pointing at `<id>.json`; no file is written."""
+    """Arrivals in orden 1..n pointing at '<id>.json'; no file is written."""
     return [arrival(i, sid, directory / f"{sid}.json") for i, sid in enumerate(snapshot_ids, start=1)]
 
 
@@ -89,7 +89,7 @@ def write_series(directory: Path, *snapshot_ids: str) -> list[Arrival]:
 
 
 class FakePipeline:
-    """Records `(snapshot_id, turno_id, position)` per call and raises `error` on `fail_on`."""
+    """Records '(snapshot_id, turno_id, position)' per call and raises 'error' on 'fail_on'."""
 
     def __init__(self, fail_on: str | None = None, error: BaseException | None = None) -> None:
         self.fail_on = fail_on
@@ -133,7 +133,7 @@ class SpyStore:
 
 
 class CommitFailingStore(SpyStore):
-    """Spy store whose unit of work fails on exit for `fail_on`, like a lost database write."""
+    """Spy store whose unit of work fails on exit for 'fail_on', like a lost database write."""
 
     def __init__(self, fail_on: str) -> None:
         super().__init__()
@@ -152,7 +152,7 @@ class CommitFailingStore(SpyStore):
 
 
 def log_lines(caplog: pytest.LogCaptureFixture, level: int) -> list[str]:
-    """Messages the runner logged at exactly `level`."""
+    """Messages the runner logged at exactly 'level'."""
     return [r.getMessage() for r in caplog.records if r.name == LOGGER and r.levelno == level]
 
 
@@ -247,7 +247,7 @@ def test_empty_series_returns_empty_summary() -> None:
 
 
 def s034_twice(tmp_path: Path, second_name: str = "S034.json") -> list[Arrival]:
-    """S034 arriving twice: orden 1 from `S034.json`, orden 2 from `second_name`."""
+    """S034 arriving twice: orden 1 from 'S034.json', orden 2 from 'second_name'."""
     write_snapshot(tmp_path, payload("S034"), "S034.json")
     return [arrival(1, "S034", tmp_path / "S034.json"), arrival(2, "S034", tmp_path / second_name)]
 
@@ -608,7 +608,7 @@ def test_e12_unknown_snapshot_and_missing_file_reported_in_one_error(tmp_path: P
 def run_s003_with_turno_t01(
     tmp_path: Path, store: SpyStore, pipeline: FakePipeline
 ) -> tuple[RunSummary, list[Arrival]]:
-    """E15 setup: S003.json says `turno` T01 while turnos.csv maps S003 to T02 mid."""
+    """E15 setup: S003.json says 'turno' T01 while turnos.csv maps S003 to T02 mid."""
     write_snapshot(tmp_path, payload("S003", turno="T01"), "S003.json")
     arrivals = arrivals_for(tmp_path, "S003")
     return run_series(arrivals, shifts(), store, pipeline), arrivals
@@ -669,17 +669,17 @@ def test_e16_future_stage_entry_is_an_anomaly_and_the_run_continues(tmp_path: Pa
 
 
 def sedan_local_release(unit_id: str) -> dict[str, object]:
-    """Release of `unit_id` as Sedán/Local."""
+    """Release of 'unit_id' as Sedán/Local."""
     return released_payload(unidad_id=unit_id, modelo="Sedán", mercado="Local")
 
 
 def suv_local_release(unit_id: str) -> dict[str, object]:
-    """Release of `unit_id` as SUV/Local."""
+    """Release of 'unit_id' as SUV/Local."""
     return released_payload(unidad_id=unit_id, modelo="SUV", mercado="Local")
 
 
 def assert_one_u_change(anomalies: tuple[Anomaly, ...], snapshot_id: str, unit_id: str) -> None:
-    """Exactly one unit_combination_changed anomaly: `unit_id` in `snapshot_id`, Sedán/Local to SUV/Local."""
+    """Exactly one unit_combination_changed anomaly: 'unit_id' in 'snapshot_id', Sedán/Local to SUV/Local."""
     changed = of_kind(anomalies, AnomalyKind.UNIT_COMBINATION_CHANGED)
     assert len(changed) == 1
     assert changed[0].snapshot_id == snapshot_id

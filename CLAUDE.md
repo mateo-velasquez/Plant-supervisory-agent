@@ -41,6 +41,7 @@ Module-level detail lives in `docs/STRUCTURE.md`.
 - Everything in English: identifiers, comments, docstrings, docs and commit messages.
 - Exception: values from the data contract keep the spec's Spanish spelling (case states `abierto`, cause categories `parada_de_linea`, notice types `alerta_inmediata`, input file/field names).
 - Python 3.14, type hints everywhere, zero `mypy --strict` errors.
+- **Quote code names in comments and docstrings with single quotes** ('snapshot_id', 'pintura'), never backticks. Markdown files keep backticks.
 - **Comments and docstrings are one line max.** Longer ones only when explaining something complex (a non-obvious rule from the criteria, an algorithm).
 - No magic paths or numbers: thresholds come from `umbrales.yaml`, paths from settings.
 - Test-first for domain logic; every rule in `criterio.md` has at least one test.

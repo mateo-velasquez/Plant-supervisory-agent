@@ -1,1 +1,1 @@
-"""Deterministic deviation metrics; never imports `anthropic` or `mcp`."""
+"""Deterministic deviation metrics; never imports 'anthropic' or 'mcp'."""

@@ -67,7 +67,7 @@ def shift(turno_id: str, start: str, end: str, mid: str, closing: str) -> Shift:
 
 
 def names_time(detail: str, value: datetime) -> bool:
-    """True if `detail` contains `value` in ISO (T) or space-separated form, at least to the minute."""
+    """True if 'detail' contains 'value' in ISO (T) or space-separated form, at least to the minute."""
     return value.isoformat(timespec="minutes") in detail or value.strftime("%Y-%m-%d %H:%M") in detail
 
 

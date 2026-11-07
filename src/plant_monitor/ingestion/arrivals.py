@@ -1,4 +1,4 @@
-"""Loader for `llegadas.csv`: the order in which snapshots reached the plant."""
+"""Loader for 'llegadas.csv': the order in which snapshots reached the plant."""
 
 from pathlib import Path
 
@@ -23,7 +23,7 @@ class Arrival(FrozenModel):
 
 
 class _ArrivalRow(FrozenModel):
-    """Raw `llegadas.csv` row; `archivo` must be a bare file name."""
+    """Raw 'llegadas.csv' row; 'archivo' must be a bare file name."""
 
     orden: PositiveInt
     snapshot_id: str
@@ -46,7 +46,7 @@ class _ArrivalRow(FrozenModel):
 
 
 def load_arrivals(path: Path) -> list[Arrival]:
-    """Load `llegadas.csv` sorted by `orden`; `archivo` is resolved against the CSV directory, not checked."""
+    """Load 'llegadas.csv' sorted by 'orden'; 'archivo' is resolved against the CSV directory, not checked."""
     first_line: dict[int, int] = {}
     rows = read_rows(path, _ArrivalRow)
     for line, row in rows:

@@ -1,4 +1,4 @@
-"""Settings from environment variables (take precedence) and `.env`; fails fast if anything is missing."""
+"""Settings from environment variables (take precedence) and '.env'; fails fast if anything is missing."""
 
 from functools import lru_cache
 from pathlib import Path

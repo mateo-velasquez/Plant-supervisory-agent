@@ -19,7 +19,7 @@ def shifts() -> list[Shift]:
 
 
 def shift_row(shifts: list[Shift], shift_id: str) -> Shift:
-    """The fixture row of `shift_id`."""
+    """The fixture row of 'shift_id'."""
     return next(shift for shift in shifts if shift.turno_id == shift_id)
 
 

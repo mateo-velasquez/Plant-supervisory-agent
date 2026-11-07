@@ -1,4 +1,5 @@
-"""Deterministic metrics of every combination at one snapshot, composing the metrics functions."""
+"""Deterministic metrics of every combination at one snapshot, composing the metrics functions.
+Its the orchestrator from metrics"""
 
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -25,6 +26,7 @@ from plant_monitor.metrics.tables import ShipmentsTable, StandardsTable
 from plant_monitor.metrics.thresholds import Thresholds
 
 
+# A package containing everything that does not change throughout the series.
 @dataclass(frozen=True)
 class PlantContext:
     """Static plant data for the whole series, loaded once."""
@@ -37,7 +39,7 @@ class PlantContext:
 
 
 def _shift_plan(plan: Iterable[PlanRow], shift_id: str) -> dict[Combination, int]:
-    """Plan units of `shift_id` per combination; all 9 combinations present."""
+    """Plan units of 'shift_id' per combination; all 9 combinations present."""
     totals = dict.fromkeys(all_combinations(), 0)
     for row in plan:
         if row.turno_id == shift_id:
@@ -57,6 +59,7 @@ def compute_metrics(
     snapshot: Snapshot, released_so_far: Iterable[ReleasedUnit], ctx: PlantContext
 ) -> dict[Combination, CombinationMetrics]:
     """Metrics of all 9 combinations; progress counts first releases (Q-20)."""
+
     shift, position = snapshot_position(ctx.shifts, snapshot.snapshot_id)
     progress = count_progress(chain(released_so_far, snapshot.liberadas))
     planned = cumulative_plan(ctx.plan, ctx.shifts, shift.turno_id, position is ShiftPosition.CLOSING)
@@ -66,6 +69,7 @@ def compute_metrics(
     tolerance = ctx.thresholds.demora.tolerancia_minutos
 
     result: dict[Combination, CombinationMetrics] = {}
+
     for combo in all_combinations():
         gap_units = progress[combo] - planned[combo]
         pct = gap_pct(gap_units, shift_plan[combo])

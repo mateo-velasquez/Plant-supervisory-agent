@@ -1,4 +1,4 @@
-"""Thresholds from `umbrales.yaml`; field names mirror the file's keys."""
+"""Read the umbrales.yaml file and convert it into a validated Python object."""
 
 from pathlib import Path
 
@@ -16,6 +16,7 @@ from pydantic import (
 from plant_monitor.domain.enums import Market
 
 
+# All the classes in this file inherit from this one.
 class _StrictFrozen(BaseModel):
     """Immutable and rejects unknown keys, so a typo never silently drops a level."""
 
@@ -32,7 +33,7 @@ class GapThresholds(_StrictFrozen):
 
 
 class DelayLevels(_StrictFrozen):
-    """Delay levels in days for one market; `media` is absent for some markets."""
+    """Delay levels in days for one market; 'media' is absent for some markets."""
 
     media: NonNegativeFloat | None = None
     alta: NonNegativeFloat
@@ -62,7 +63,7 @@ class Thresholds(_StrictFrozen):
 
 
 def load_thresholds(path: Path) -> Thresholds:
-    """Load and validate `umbrales.yaml`; errors name the file."""
+    """Load and validate 'umbrales.yaml'; errors name the file."""
     try:
         raw = yaml.safe_load(path.read_text(encoding="utf-8-sig"))
     except yaml.YAMLError as exc:

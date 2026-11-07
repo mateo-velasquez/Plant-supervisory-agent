@@ -43,14 +43,14 @@ def commit(snapshot_id: str) -> SnapshotCommit:
 
 
 def all_metrics(overrides: dict[Combination, CombinationMetrics] | None = None) -> Metrics:
-    """Metrics for all 9 combinations: `ninguna` unless overridden."""
+    """Metrics for all 9 combinations: 'ninguna' unless overridden."""
     metrics = {combo: metrics_with(Severity.NONE, combination=combo) for combo in all_combinations()}
     metrics.update(overrides or {})
     return metrics
 
 
 def pb(minimum: Severity) -> Metrics:
-    """All 9 combinations with PB at `minimum` and the rest `ninguna`."""
+    """All 9 combinations with PB at 'minimum' and the rest 'ninguna'."""
     return all_metrics({PICKUP_BRAZIL: metrics_with(minimum)})
 
 
@@ -67,7 +67,7 @@ def tracked(
 
 
 def events_of(delta: CaseDelta) -> tuple[tuple[str, CaseEvent], ...]:
-    """Delta events as `(case_id, event)` pairs."""
+    """Delta events as '(case_id, event)' pairs."""
     return tuple((e.case_id, e.event) for e in delta.events)
 
 
@@ -293,7 +293,7 @@ def test_e24c_mark_reported_outside_processing_or_for_unknown_case_raises(
 
 
 def test_q27_rerun_with_different_metrics_raises(registry: SqliteRegistry, tracker: CaseTracker) -> None:
-    """An equal but distinct `metrics` mapping is a valid re-run, so the check must compare by value."""
+    """An equal but distinct 'metrics' mapping is a valid re-run, so the check must compare by value."""
     with registry.processing(commit("S010")):
         tracker.track("S010", pb(Severity.HIGH), NO_RAISES)
         tracker.track("S010", pb(Severity.HIGH), frozenset({PICKUP_BRAZIL}))

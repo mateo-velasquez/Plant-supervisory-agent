@@ -128,7 +128,7 @@ class _Session:
         self.unit = None
 
     def require_open(self, snapshot_id: str) -> int:
-        """The single write guard: returns the open unit's seq for `snapshot_id`."""
+        """The single write guard: returns the open unit's seq for 'snapshot_id'."""
         if self.open is None:
             raise RuntimeError(f"write for {snapshot_id} outside a processing unit of work")
         open_id, seq = self.open

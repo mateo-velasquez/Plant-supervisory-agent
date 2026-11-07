@@ -11,14 +11,14 @@ ONE_DAY = timedelta(days=1)
 
 
 def projected_yard_arrival(unit: Unit, at: datetime, standards: StandardsTable) -> datetime:
-    """`at` + what is left of the current stage standard (floored at 0) + every later standard to calidad.
+    """'at' + what is left of the current stage standard (floored at 0) + every later standard to calidad.
 
-    Only the current `pintura` stage of a repainting unit uses the rework standard; later stages
-    always use their normal standard (literal reading of §1).
+    Only the current 'pintura' stage of a repainting unit uses the rework standard; later stages
+    always use their normal standard.
     """
     if unit.etapa not in PRODUCTION_STAGES:
         raise ValueError(f"unit {unit.unidad_id} is in {unit.etapa}; only production stages are projected")
-    elapsed = max(timedelta(0), at - unit.ingreso_etapa)  # Q-19: an entry after `at` counts as just entered
+    elapsed = max(timedelta(0), at - unit.ingreso_etapa)  # Q-19: an entry after 'at' counts as just entered
     remaining = max(timedelta(0), timedelta(minutes=standards.current_stage_minutes(unit)) - elapsed)
     later_stages = PRODUCTION_STAGES[PRODUCTION_STAGES.index(unit.etapa) + 1 :]
     later_minutes = sum(standards.minutes(unit.modelo, stage) for stage in later_stages)
@@ -26,7 +26,7 @@ def projected_yard_arrival(unit: Unit, at: datetime, standards: StandardsTable) 
 
 
 def reachable_shipment(market: Market, projected: datetime, shipments: ShipmentsTable) -> Shipment | None:
-    """First shipment of `market` with `corte_en_patio > projected`; None past the last cut-off."""
+    """First shipment of 'market' with 'corte_en_patio > projected'; None past the last cut-off."""
     return shipments.first_cut_off_after(market, projected)
 
 
@@ -50,7 +50,7 @@ def unit_delay_days(
 def combination_delay(
     units: Iterable[Unit], at: datetime, standards: StandardsTable, shipments: ShipmentsTable
 ) -> tuple[float | None, bool]:
-    """Max unit delay and whether it is beyond the horizon; units in `patio`/`despacho` are excluded.
+    """Max unit delay and whether it is beyond the horizon; units in 'patio'/'despacho' are excluded.
 
     Q-04: one unit with no reachable shipment makes the whole combination None (worst unit dominates).
     """

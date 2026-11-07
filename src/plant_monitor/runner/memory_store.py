@@ -1,4 +1,4 @@
-"""In-memory `ProcessedStore` for tests and for runs without persistence."""
+"""In-memory 'ProcessedStore' for tests and for runs without persistence."""
 
 from collections.abc import Iterable, Iterator, Mapping
 from contextlib import contextmanager
