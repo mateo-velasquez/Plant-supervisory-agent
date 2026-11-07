@@ -66,14 +66,14 @@ class Severity(StrEnum):
 
     @staticmethod
     def _coerce(other: object) -> Severity | None:
-        """Convert a plain `str` to `Severity` (ValueError if unknown); None for other types."""
+        """Convert a plain 'str' to 'Severity' (ValueError if unknown); None for other types."""
         if isinstance(other, Severity):
             return other
         if isinstance(other, str):
             return Severity(other)
         return None
 
-    # As a str subclass, these run reflected first for `"x" < Severity.Y`, so plain strings raise too.
+    # As a str subclass, these run reflected first for '"x" < Severity.Y', so plain strings raise too.
     def __lt__(self, other: str, /) -> bool:
         rhs = Severity._coerce(other)
         if rhs is None:

@@ -17,7 +17,7 @@ CASES_ALLOWED = ("plant_monitor.domain", "plant_monitor.metrics.thresholds", "pl
 
 
 def imported_roots(source: str) -> set[str]:
-    """Top-level names of every absolute import in `source`, including nested ones."""
+    """Top-level names of every absolute import in 'source', including nested ones."""
     roots: set[str] = set()
     for node in ast.walk(ast.parse(source)):
         if isinstance(node, ast.Import):
@@ -28,7 +28,7 @@ def imported_roots(source: str) -> set[str]:
 
 
 def project_subpackages(source: str, package: str) -> set[str]:
-    """`plant_monitor.<sub>` names imported by a module of dotted `package`, relative imports resolved."""
+    """'plant_monitor.<sub>' names imported by a module of dotted 'package', relative imports resolved."""
     found: set[str] = set()
     for node in ast.walk(ast.parse(source)):
         targets: list[list[str]] = []
@@ -45,7 +45,7 @@ def project_subpackages(source: str, package: str) -> set[str]:
 
 
 def project_modules(source: str, package: str) -> set[str]:
-    """Dotted `plant_monitor` names imported by a module of `package`; `from X import y` yields `X.y`."""
+    """Dotted 'plant_monitor' names imported by a module of 'package'; 'from X import y' yields 'X.y'."""
     found: set[str] = set()
     for node in ast.walk(ast.parse(source)):
         names: list[str] = []
@@ -69,19 +69,19 @@ def disallowed_modules(source: str, package: str, allowed: tuple[str, ...]) -> s
 
 
 def package_of(path: Path) -> str:
-    """Dotted package that contains the module at `path`."""
+    """Dotted package that contains the module at 'path'."""
     return ".".join((PROJECT, *path.relative_to(PACKAGE).parent.parts))
 
 
 def modules_of(subpackage: str) -> list[Path]:
-    """Every module file under a `plant_monitor` subpackage."""
+    """Every module file under a 'plant_monitor' subpackage."""
     files = sorted((PACKAGE / subpackage).rglob("*.py"))
     assert files, f"no modules found under {subpackage}"
     return files
 
 
 def layer_offenders(files: list[Path], allowed: set[str]) -> dict[str, list[str]]:
-    """Project subpackages each file imports beyond `allowed`."""
+    """Project subpackages each file imports beyond 'allowed'."""
     offenders: dict[str, list[str]] = {}
     for path in files:
         extra = project_subpackages(path.read_text(encoding="utf-8"), package_of(path)) - allowed
@@ -153,7 +153,7 @@ def test_project_scanner_reports_subpackages(source: str, expected: set[str]) ->
     ],
 )
 def test_module_scanner_reports_imports_outside_the_allowed_modules(source: str, expected: set[str]) -> None:
-    """The cases rule is module-level, so the scanner must tell `metrics.thresholds` from `metrics.*`."""
+    """The cases rule is module-level, so the scanner must tell 'metrics.thresholds' from 'metrics.*'."""
     assert disallowed_modules(source, "plant_monitor.cases", CASES_ALLOWED) == expected
 
 

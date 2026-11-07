@@ -11,7 +11,7 @@ def _label(combination: Combination) -> str:
 
 
 def check_shift(snapshot: Snapshot, shift: Shift) -> Anomaly | None:
-    """Anomaly when the snapshot's `turno` differs from the calendar's shift."""
+    """Anomaly when the snapshot's 'turno' differs from the calendar's shift."""
     if snapshot.turno == shift.turno_id:
         return None
     return Anomaly(
@@ -39,7 +39,7 @@ def check_stage_entries(snapshot: Snapshot) -> tuple[Anomaly, ...]:
 
 
 def _sightings(snapshot: Snapshot) -> Iterator[tuple[str, Combination]]:
-    """Unit identities in scan order: `unidades` first, then `liberadas`."""
+    """Unit identities in scan order: 'unidades' first, then 'liberadas'."""
     for unit in snapshot.unidades:
         yield unit.unidad_id, Combination(modelo=unit.modelo, mercado=unit.mercado)
     for released in snapshot.liberadas:

@@ -15,7 +15,7 @@ class FrozenModel(BaseModel):
 
 
 class Unit(FrozenModel):
-    """Unit in process, as listed in a snapshot's `unidades`."""
+    """Unit in process, as listed in a snapshot's 'unidades'."""
 
     unidad_id: str
     modelo: Model
@@ -28,7 +28,7 @@ class Unit(FrozenModel):
 
 
 class ReleasedUnit(FrozenModel):
-    """Unit released from quality, as listed in a snapshot's `liberadas`."""
+    """Unit released from quality, as listed in a snapshot's 'liberadas'."""
 
     unidad_id: str
     modelo: Model
@@ -45,7 +45,7 @@ class Snapshot(FrozenModel):
 
 
 class PlanRow(FrozenModel):
-    """Row of `plan_produccion.csv`."""
+    """Row of 'plan_produccion.csv'."""
 
     turno_id: str
     modelo: Model
@@ -56,7 +56,7 @@ class PlanRow(FrozenModel):
 
 
 class StandardTime(FrozenModel):
-    """Row of `tiempos_estandar.csv`; `minutos_retrabajo` only applies to `pintura`."""
+    """Row of 'tiempos_estandar.csv'; 'minutos_retrabajo' only applies to 'pintura'."""
 
     modelo: Model
     etapa: Stage
@@ -65,7 +65,7 @@ class StandardTime(FrozenModel):
 
 
 class Shipment(FrozenModel):
-    """Row of `embarques.csv`."""
+    """Row of 'embarques.csv'."""
 
     embarque_id: str
     mercado: Market
@@ -75,7 +75,7 @@ class Shipment(FrozenModel):
 
 
 class Shift(FrozenModel):
-    """Row of `turnos.csv`; `fecha` (M/D/YYYY) is kept raw and never used for time."""
+    """Row of 'turnos.csv'; 'fecha' (M/D/YYYY) is kept raw and never used for time."""
 
     turno_id: str
     inicio: NaiveDatetime
@@ -133,5 +133,5 @@ class CombinationMetrics(FrozenModel):
 
     @property
     def has_deviation(self) -> bool:
-        """A deviation exists when the minimum severity is at least `media`."""
+        """A deviation exists when the minimum severity is at least 'media'."""
         return self.minimum_severity >= Severity.MEDIUM

@@ -38,7 +38,7 @@ def advance(case: Case | None, observation: Observation, resolution: ResolutionT
 
 
 def walk(resolution: ResolutionThresholds, *observations: Observation) -> list[Step]:
-    """Step one case through `observations`, starting with no case."""
+    """Step one case through 'observations', starting with no case."""
     steps: list[Step] = []
     case: Case | None = None
     for observation in observations:

@@ -1,4 +1,4 @@
-"""Shared CSV row reader (`utf-8-sig`); rows are reported by physical line (header = 1)."""
+"""Shared CSV row reader ('utf-8-sig'); rows are reported by physical line (header = 1)."""
 
 import csv
 from pathlib import Path
@@ -10,7 +10,7 @@ from plant_monitor.ingestion.errors import DataLoadError, describe_validation_er
 
 
 def read_rows[M: FrozenModel](path: Path, model: type[M]) -> list[tuple[int, M]]:
-    """Validate every CSV row into `model`, paired with its line number; empty cells become None."""
+    """Validate every CSV row into 'model', paired with its line number; empty cells become None."""
     with path.open(encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
         columns = reader.fieldnames or []

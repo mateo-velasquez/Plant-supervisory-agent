@@ -37,7 +37,7 @@ class RunSummary:
 
 
 class RunAborted(Exception):
-    """Run stopped at `snapshot_id`; earlier snapshots stay processed, this one does not."""
+    """Run stopped at 'snapshot_id'; earlier snapshots stay processed, this one does not."""
 
     def __init__(self, snapshot_id: str, cause: Exception, summary: RunSummary) -> None:
         super().__init__(snapshot_id, cause, summary)
@@ -51,7 +51,7 @@ class RunAborted(Exception):
 
 @dataclass
 class _Progress:
-    """Mutable accumulator behind the frozen `RunSummary`."""
+    """Mutable accumulator behind the frozen 'RunSummary'."""
 
     processed: list[str] = field(default_factory=list)
     skipped: list[str] = field(default_factory=list)
@@ -155,7 +155,7 @@ def run_series(
     store: ProcessedStore,
     pipeline: SnapshotPipeline,
 ) -> RunSummary:
-    """Process the arrivals in `orden`; RunAborted on a per-snapshot failure, DataLoadError upfront."""
+    """Process the arrivals in 'orden'; RunAborted on a per-snapshot failure, DataLoadError upfront."""
     resolved = _resolve_upfront(sorted(arrivals, key=lambda a: a.orden), shifts)
     first_seen = dict(store.known_units())
     progress = _Progress()

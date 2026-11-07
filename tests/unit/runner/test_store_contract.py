@@ -43,7 +43,7 @@ class _Closable(Protocol):
     params=[InMemoryProcessedStore, lambda: SqliteRegistry(":memory:")], ids=["in_memory", "sqlite_memory"]
 )
 def store_factory(request: pytest.FixtureRequest) -> Iterator[StoreFactory]:
-    """Every ProcessedStore implementation (E19); stores with `close()` are closed after the test."""
+    """Every ProcessedStore implementation (E19); stores with 'close()' are closed after the test."""
     make: StoreFactory = request.param
     created: list[ProcessedStore] = []
 
@@ -164,7 +164,7 @@ def test_record_anomaly_does_not_mark_any_snapshot(store_factory: StoreFactory) 
 
 @pytest.fixture(params=["in_memory", "sqlite_memory"])
 def anomaly_store(request: pytest.FixtureRequest) -> Iterator[InMemoryProcessedStore | SqliteRegistry]:
-    """Each concrete store, so `recorded_anomalies()` can be read; SQLite is closed after the test."""
+    """Each concrete store, so 'recorded_anomalies()' can be read; SQLite is closed after the test."""
     store = InMemoryProcessedStore() if request.param == "in_memory" else SqliteRegistry(":memory:")
     yield store
     if isinstance(store, SqliteRegistry):

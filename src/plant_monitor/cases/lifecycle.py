@@ -126,7 +126,7 @@ def step(case: Case | None, obs: Observation, resolution: ResolutionThresholds) 
 
 
 def _validated_copy(case: Case, **update: Any) -> Case:
-    """A copy of `case` that goes through the Case validators (model_copy skips them)."""
+    """A copy of 'case' that goes through the Case validators (model_copy skips them)."""
     fields = {name: getattr(case, name) for name in Case.model_fields}
     return Case.model_validate({**fields, **update})
 

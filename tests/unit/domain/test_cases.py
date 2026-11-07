@@ -18,7 +18,7 @@ PICKUP_BRAZIL = Combination(modelo=Model.PICKUP, mercado=Market.BRAZIL)
 
 
 def case_payload(**overrides: object) -> dict[str, object]:
-    """A valid `abierto` case opened at S010, before any report."""
+    """A valid 'abierto' case opened at S010, before any report."""
     payload: dict[str, object] = {
         "case_id": "S010-Pickup-Brasil",
         "combination": PICKUP_BRAZIL,
@@ -35,7 +35,7 @@ def case_payload(**overrides: object) -> dict[str, object]:
 
 
 def row_payload(**overrides: object) -> dict[str, object]:
-    """A valid history row for the S010 opening of `S010-Pickup-Brasil`."""
+    """A valid history row for the S010 opening of 'S010-Pickup-Brasil'."""
     payload: dict[str, object] = {
         "case_id": "S010-Pickup-Brasil",
         "snapshot_id": "S010",

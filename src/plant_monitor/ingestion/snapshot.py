@@ -1,4 +1,4 @@
-"""Loader for one snapshot JSON (`Sxxx.json`), read as UTF-8 and validated into a `Snapshot`."""
+"""Loader for one snapshot JSON ('Sxxx.json'), read as UTF-8 and validated into a 'Snapshot'."""
 
 import json
 from pathlib import Path
@@ -10,7 +10,7 @@ from plant_monitor.ingestion.errors import DataLoadError, describe_validation_er
 
 
 def parse_snapshot(data: bytes, source: Path) -> Snapshot:
-    """Validate raw snapshot bytes; `source` only labels errors and the filesystem is never touched."""
+    """Validate raw snapshot bytes; 'source' only labels errors and the filesystem is never touched."""
     try:
         raw = json.loads(data.decode("utf-8"))
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:

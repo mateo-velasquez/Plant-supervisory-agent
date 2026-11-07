@@ -38,7 +38,7 @@ def effective_severity(minimum: Severity, raised: bool) -> Severity:
 
 
 def case_id_for(snapshot_id: str, combination: Combination) -> str:
-    """`<snapshot_id>-<modelo>-<mercado>`, e.g. `S012-Pickup-Brasil`."""
+    """'<snapshot_id>-<modelo>-<mercado>', e.g. 'S012-Pickup-Brasil'."""
     return f"{snapshot_id}-{combination.modelo}-{combination.mercado}"
 
 

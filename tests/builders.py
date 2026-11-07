@@ -1,4 +1,4 @@
-"""Shared synthetic builders for tests; snapshot payloads mirror the `Sxxx.json` data contract."""
+"""Shared synthetic builders for tests; snapshot payloads mirror the 'Sxxx.json' data contract."""
 
 import json
 from pathlib import Path
@@ -18,7 +18,7 @@ def metrics_with(
     delay_days: float | None = None,
     bottleneck: Stage | None = None,
 ) -> CombinationMetrics:
-    """Synthetic metrics for one combination; only `minimum` drives the case lifecycle."""
+    """Synthetic metrics for one combination; only 'minimum' drives the case lifecycle."""
     return CombinationMetrics(
         combination=combination,
         progress=0,

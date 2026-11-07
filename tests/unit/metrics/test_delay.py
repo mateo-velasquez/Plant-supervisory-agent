@@ -135,7 +135,7 @@ E16_AT = "2026-03-03T02:00"
 
 
 def e16_unit(since: str = "2026-03-03T03:00") -> Unit:
-    """U00051 in calidad since `since` (default one hour after the snapshot), assigned BRA-0303."""
+    """U00051 in calidad since 'since' (default one hour after the snapshot), assigned BRA-0303."""
     return unit(Stage.QUALITY, since, unit_id="U00051")
 
 

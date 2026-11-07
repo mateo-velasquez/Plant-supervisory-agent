@@ -68,7 +68,7 @@ def opened(
     raised: bool = False,
     combination: Combination = PICKUP_BRAZIL,
 ) -> Step:
-    """A case opened by `lifecycle.step` at `snapshot_id`."""
+    """A case opened by 'lifecycle.step' at 'snapshot_id'."""
     obs = Observation(snapshot_id, metrics_with(minimum, combination=combination), raised)
     result = step(None, obs, resolution)
     assert result is not None
@@ -78,7 +78,7 @@ def opened(
 def advanced(
     case: Case, snapshot_id: str, minimum: Severity, resolution: ResolutionThresholds, *, raised: bool = False
 ) -> Step:
-    """`case` stepped by `lifecycle.step` to `snapshot_id`."""
+    """'case' stepped by 'lifecycle.step' to 'snapshot_id'."""
     obs = Observation(snapshot_id, metrics_with(minimum, combination=case.combination), raised)
     result = step(case, obs, resolution)
     assert result is not None
@@ -452,7 +452,7 @@ def test_e26_reopened_registry_sees_everything_and_resumes(
 
 
 def released(unit_id: str, hour: str, combination: Combination) -> ReleasedUnit:
-    """Released unit at `hour` on 2026-03-02."""
+    """Released unit at 'hour' on 2026-03-02."""
     return ReleasedUnit(
         unidad_id=unit_id,
         modelo=combination.modelo,

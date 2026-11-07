@@ -1,4 +1,4 @@
-"""Ports the series runner depends on; implementations live outside `runner`."""
+"""Ports the series runner depends on; implementations live outside 'runner'."""
 
 from collections.abc import Mapping
 from contextlib import AbstractContextManager
@@ -26,7 +26,7 @@ class ProcessedStore(Protocol):
 
         Every registry write for this snapshot must use the same connection inside this block; the
         composition root passes one store instance to the runner and the pipeline. Raises ValueError
-        on entry if `commit.snapshot_id` is already marked.
+        on entry if 'commit.snapshot_id' is already marked.
         """
         ...
 

@@ -52,7 +52,7 @@ class CaseTracker:
         metrics: Mapping[Combination, CombinationMetrics],
         raises: frozenset[Combination],
     ) -> CaseDelta:
-        """Evaluate every combination at `snapshot_id`; a re-run restarts from the pre-snapshot state."""
+        """Evaluate every combination at 'snapshot_id'; a re-run restarts from the pre-snapshot state."""
         self._require_open(snapshot_id)
         unit = self._repo.current_unit()
         memo = self._memo
@@ -91,8 +91,8 @@ class CaseTracker:
     def mark_reported(self, case_id: str, snapshot_id: str) -> None:
         """Store the report baseline of a case; allowed on one resolved earlier in the shift.
 
-        A resolved case marked before any `track` is not recorded in `marked`; that is safe only
-        while `track` writes nothing but `active_before` cases and new openings (see Q-29).
+        A resolved case marked before any 'track' is not recorded in 'marked'; that is safe only
+        while 'track' writes nothing but 'active_before' cases and new openings (see Q-29).
         """
         self._require_open(snapshot_id)
         case = self._repo.get_case(case_id)

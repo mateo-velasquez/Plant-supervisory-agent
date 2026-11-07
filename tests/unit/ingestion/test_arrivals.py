@@ -22,7 +22,7 @@ def quoted(value: str) -> str:
 
 
 def row(orden: str, snapshot_id: str, archivo: str | None = None, recibido: str = "2026-03-02T10:05") -> str:
-    """One llegadas.csv data line; `archivo` defaults to `<snapshot_id>.json` and is always quoted."""
+    """One llegadas.csv data line; 'archivo' defaults to '<snapshot_id>.json' and is always quoted."""
     name = archivo if archivo is not None else snapshot_id + ".json"
     return f"{orden},{snapshot_id},{quoted(name)},{recibido}"
 
@@ -43,7 +43,7 @@ def load_error(path: Path) -> str:
 
 
 def names_row(message: str, line_no: int) -> bool:
-    """True if the message names the given row as `row N` or `line N`."""
+    """True if the message names the given row as 'row N' or 'line N'."""
     return re.search(rf"\b(?:row|line) {line_no}\b", message, flags=re.IGNORECASE) is not None
 
 
