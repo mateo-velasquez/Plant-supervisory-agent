@@ -97,3 +97,8 @@ class Severity(StrEnum):
         if rhs is None:
             return NotImplemented
         return self.rank >= rhs.rank
+
+
+def is_deviation(severity: Severity) -> bool:
+    """True iff 'severity' is at least 'media' (§2); the single deviation predicate."""
+    return severity >= Severity.MEDIUM

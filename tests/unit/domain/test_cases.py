@@ -10,6 +10,7 @@ from plant_monitor.domain.cases import (
     CaseState,
     case_id_for,
     effective_severity,
+    is_deviation,
 )
 from plant_monitor.domain.enums import Market, Model, Severity, Stage
 from plant_monitor.domain.models import Combination
@@ -180,3 +181,28 @@ def test_case_history_row_is_frozen() -> None:
     row = CaseHistoryRow.model_validate(row_payload())
     with pytest.raises(ValidationError):
         setattr(row, "clean_streak", 1)  # noqa: B010
+
+
+@pytest.mark.parametrize(
+    ("severity", "expected"),
+    [
+        (Severity.NONE, False),
+        (Severity.MEDIUM, True),
+        (Severity.HIGH, True),
+        (Severity.CRITICAL, True),
+    ],
+)
+def test_is_deviation_iff_severity_at_least_media(severity: Severity, expected: bool) -> None:
+    """The single deviation predicate of §2."""
+
+    assert is_deviation(severity) is expected
+
+
+@pytest.mark.parametrize("severity", list(Severity))
+def test_combination_metrics_has_deviation_agrees_with_is_deviation(severity: Severity) -> None:
+    """Guards against two copies of the deviation rule drifting apart."""
+
+    from builders import measured
+
+    current = measured(PICKUP_BRAZIL, -1.0, -1.0, 0.0, None, severity, Severity.NONE)
+    assert current.has_deviation is is_deviation(severity)

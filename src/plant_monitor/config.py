@@ -29,6 +29,11 @@ class Settings(BaseSettings):
         """Registry SQLite file, derived from output_dir."""
         return self.output_dir / "registry.sqlite3"
 
+    @property
+    def notices_dir(self) -> Path:
+        """Directory of the file notifier, derived from output_dir."""
+        return self.output_dir / "notices"
+
 
 @lru_cache
 def get_settings() -> Settings:

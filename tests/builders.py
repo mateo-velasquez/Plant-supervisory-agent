@@ -3,10 +3,97 @@
 import json
 from pathlib import Path
 
+from plant_monitor.domain.cases import Case, CaseHistoryRow, CaseState
 from plant_monitor.domain.enums import Market, Model, Severity, Stage
 from plant_monitor.domain.models import Combination, CombinationMetrics
 
 PICKUP_BRAZIL = Combination(modelo=Model.PICKUP, mercado=Market.BRAZIL)
+
+
+def combination_of(case_id: str) -> Combination:
+    """Combination encoded in a case id such as 'S015-Pickup-Brasil'."""
+    _, model, market = case_id.split("-")
+    return Combination(modelo=Model(model), mercado=Market(market))
+
+
+def case_with(
+    case_id: str,
+    state: CaseState,
+    minimum: Severity,
+    peak: Severity | None,
+    *,
+    at: str | None = None,
+    raised: bool = False,
+    reported: tuple[CaseState, Severity, str] | None = None,
+    clean_streak: int = 0,
+) -> Case:
+    """Case at snapshot 'at' (default: its opening); 'reported' is '(state, severity, snapshot)'."""
+    opened_at = case_id.split("-")[0]
+    last = at or opened_at
+    return Case(
+        case_id=case_id,
+        combination=combination_of(case_id),
+        opened_at=opened_at,
+        state=state,
+        minimum_severity=minimum,
+        raised=raised,
+        max_severity_since_report=peak,
+        clean_streak=clean_streak,
+        last_snapshot_id=last,
+        last_reported_at=None if reported is None else reported[2],
+        last_reported_state=None if reported is None else reported[0],
+        last_reported_severity=None if reported is None else reported[1],
+        resolved_at=last if state is CaseState.RESOLVED else None,
+    )
+
+
+def measured(
+    combination: Combination,
+    gap_units: float,
+    gap_pct: float | None,
+    delay_days: float | None,
+    bottleneck: Stage | None,
+    gap_severity: Severity,
+    delay_severity: Severity,
+) -> CombinationMetrics:
+    """Metrics from a spec facts tuple; the minimum is the max of gap and delay severity (§2)."""
+    return CombinationMetrics(
+        combination=combination,
+        progress=0,
+        cumulative_plan=0.0,
+        gap_units=gap_units,
+        gap_pct=gap_pct,
+        delay_days=delay_days,
+        delay_beyond_horizon=delay_days is None,
+        bottleneck=bottleneck,
+        gap_severity=gap_severity,
+        delay_severity=delay_severity,
+        minimum_severity=max(gap_severity, delay_severity),
+    )
+
+
+def history_row(
+    case_id: str,
+    snapshot_id: str,
+    bottleneck: Stage | None,
+    *,
+    minimum: Severity = Severity.MEDIUM,
+    raised: bool = False,
+    state: CaseState = CaseState.FOLLOW_UP,
+) -> CaseHistoryRow:
+    """History row of 'case_id' at 'snapshot_id'; the default minimum is a deviation (Q-32 cause row)."""
+    return CaseHistoryRow(
+        case_id=case_id,
+        snapshot_id=snapshot_id,
+        state=state,
+        minimum_severity=minimum,
+        raised=raised,
+        gap_units=0.0,
+        gap_pct=None,
+        delay_days=0.0,
+        bottleneck=bottleneck,
+        clean_streak=0,
+    )
 
 
 def metrics_with(

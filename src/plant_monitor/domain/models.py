@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel, ConfigDict, NaiveDatetime, NonNegativeInt
 
-from plant_monitor.domain.enums import AnomalyKind, Market, Model, Severity, Stage
+from plant_monitor.domain.enums import AnomalyKind, Market, Model, Severity, Stage, is_deviation
 
 
 class FrozenModel(BaseModel):
@@ -134,4 +134,4 @@ class CombinationMetrics(FrozenModel):
     @property
     def has_deviation(self) -> bool:
         """A deviation exists when the minimum severity is at least 'media'."""
-        return self.minimum_severity >= Severity.MEDIUM
+        return is_deviation(self.minimum_severity)

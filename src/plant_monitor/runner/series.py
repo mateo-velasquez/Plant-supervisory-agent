@@ -14,7 +14,7 @@ from plant_monitor.ingestion.arrivals import Arrival
 from plant_monitor.ingestion.hashing import content_hash
 from plant_monitor.ingestion.snapshot import parse_snapshot
 from plant_monitor.runner.checks import check_shift, check_stage_entries, check_unit_identity
-from plant_monitor.runner.ports import ProcessedStore, SnapshotPipeline
+from plant_monitor.runner.ports import PostCommit, ProcessedStore, SnapshotPipeline
 
 logger = logging.getLogger(__name__)
 
@@ -109,8 +109,8 @@ def _handle_arrival(
     pipeline: SnapshotPipeline,
     first_seen: dict[str, Combination],
     progress: _Progress,
-) -> None:
-    """Process or skip one arrival; any Exception is wrapped by the caller."""
+) -> bool:
+    """Process or skip one arrival; True when it committed. Any Exception is wrapped by the caller."""
     arrival, shift, position = resolved
     data = arrival.archivo.read_bytes()
     digest = content_hash(data)
@@ -118,10 +118,10 @@ def _handle_arrival(
     if stored == digest:
         logger.info("%s skipped: already processed", arrival.snapshot_id)
         progress.skipped.append(arrival.snapshot_id)
-        return
+        return False
     if stored is not None:
         _skip_repeat(arrival, digest, stored, store, progress)
-        return
+        return False
 
     snapshot = parse_snapshot(data, arrival.archivo)
     if snapshot.snapshot_id != arrival.snapshot_id:
@@ -147,6 +147,17 @@ def _handle_arrival(
     first_seen.update(new_units)
     progress.processed.append(arrival.snapshot_id)
     logger.info("%s processed: %s %s", arrival.snapshot_id, shift.turno_id, position)
+    return True
+
+
+def _after_commit(post_commit: PostCommit | None) -> None:
+    """Run the post-commit work; an Exception is logged and never stops the run."""
+    if post_commit is None:
+        return
+    try:
+        post_commit.after_commit()
+    except Exception:
+        logger.exception("post-commit work failed")
 
 
 def run_series(
@@ -154,14 +165,19 @@ def run_series(
     shifts: Sequence[Shift],
     store: ProcessedStore,
     pipeline: SnapshotPipeline,
+    *,
+    post_commit: PostCommit | None = None,
 ) -> RunSummary:
     """Process the arrivals in 'orden'; RunAborted on a per-snapshot failure, DataLoadError upfront."""
+    _after_commit(post_commit)
     resolved = _resolve_upfront(sorted(arrivals, key=lambda a: a.orden), shifts)
     first_seen = dict(store.known_units())
     progress = _Progress()
     for item in resolved:
         try:
-            _handle_arrival(item, store, pipeline, first_seen, progress)
+            committed = _handle_arrival(item, store, pipeline, first_seen, progress)
         except Exception as exc:
             raise RunAborted(item.arrival.snapshot_id, exc, progress.summary()) from exc
+        if committed:
+            _after_commit(post_commit)
     return progress.summary()

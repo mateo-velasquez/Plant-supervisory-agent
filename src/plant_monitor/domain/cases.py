@@ -6,6 +6,7 @@ from typing import Self
 from pydantic import NonNegativeInt, computed_field, model_validator
 
 from plant_monitor.domain.enums import Severity, Stage
+from plant_monitor.domain.enums import is_deviation as is_deviation
 from plant_monitor.domain.models import Combination, FrozenModel
 
 

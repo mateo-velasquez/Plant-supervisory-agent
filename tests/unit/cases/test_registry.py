@@ -11,7 +11,7 @@ import pytest
 
 from plant_monitor.cases.lifecycle import Observation, Step, mark_reported, step
 from plant_monitor.cases.registry import SCHEMA_VERSION, CaseRepository, SqliteRegistry
-from plant_monitor.domain.cases import Case, CaseState
+from plant_monitor.domain.cases import Case, CaseHistoryRow, CaseState
 from plant_monitor.domain.enums import AnomalyKind, Market, Model, Severity, Stage
 from plant_monitor.domain.models import Anomaly, Combination, ReleasedUnit, Snapshot, SnapshotCommit
 from plant_monitor.ingestion.plant import load_plan, load_shifts, load_shipments, load_standards
@@ -19,7 +19,7 @@ from plant_monitor.metrics.engine import PlantContext, compute_metrics
 from plant_monitor.metrics.tables import ShipmentsTable, StandardsTable
 from plant_monitor.metrics.thresholds import ResolutionThresholds, load_thresholds
 
-from builders import PICKUP_BRAZIL, metrics_with
+from builders import PICKUP_BRAZIL, case_with, history_row, metrics_with
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "plant"
 PB_CASE = "S010-Pickup-Brasil"
@@ -122,8 +122,8 @@ def user_version(path: Path) -> int:
 # --- T12 · Schema, session, ProcessedStore, anomalies ---
 
 
-def test_schema_version_is_one() -> None:
-    assert SCHEMA_VERSION == 1
+def test_schema_version_is_two() -> None:
+    assert SCHEMA_VERSION == 2
 
 
 def test_e20a_commit_anomaly_is_recorded(registry: SqliteRegistry) -> None:
@@ -166,7 +166,7 @@ def test_e21a_new_file_gets_schema_version_and_reopens(tmp_path: Path) -> None:
     path = tmp_path / "r.sqlite3"
     with SqliteRegistry(path):
         pass
-    assert user_version(path) == 1
+    assert user_version(path) == SCHEMA_VERSION
     with SqliteRegistry(path) as again:
         assert again.get_hash("S001") is None
 
@@ -181,7 +181,7 @@ def test_e21b_other_schema_version_raises_naming_file_and_versions_and_leaves_fi
     assert path.name in message, message
     versions = message.replace(str(path), "").replace(path.name, "")
     assert re.search(r"\b7\b", versions), message
-    assert re.search(r"\b1\b", versions), message
+    assert re.search(rf"\b{SCHEMA_VERSION}\b", versions), message
     assert user_version(path) == 7
     with closing(sqlite3.connect(path)) as conn:
         assert conn.execute("SELECT count(*) FROM sqlite_master").fetchone()[0] == 0
@@ -630,3 +630,170 @@ def test_save_case_rejects_an_unvalidated_inconsistent_case_before_writing(
             registry.cases.save_case(bad, s.history)
         assert registry.cases.get_case(PB_CASE) is None
         assert registry.cases.history(PB_CASE) == ()
+
+
+# --- 004 T8 · Schema version 2 (E24) and the notice step's case reads (E29) ---
+
+
+def table_names(path: Path) -> set[str]:
+    """Names of the tables of a SQLite file, read with a fresh connection."""
+    with closing(sqlite3.connect(path)) as conn:
+        return {str(r[0]) for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+
+
+def test_e24a_new_file_has_version_two_and_a_notices_table_and_reopens(tmp_path: Path) -> None:
+    path = tmp_path / "r.sqlite3"
+    with SqliteRegistry(path):
+        pass
+    assert user_version(path) == 2
+    assert "notices" in table_names(path)
+    with SqliteRegistry(path) as again:
+        assert again.get_hash("S001") is None
+
+
+def test_e24b_other_version_names_file_found_version_and_two(tmp_path: Path) -> None:
+    path = tmp_path / "r.sqlite3"
+    with closing(sqlite3.connect(path)) as conn:
+        conn.execute("PRAGMA user_version = 7")
+    with pytest.raises(ValueError) as error:
+        SqliteRegistry(path)
+    message = str(error.value)
+    assert path.name in message, message
+    versions = message.replace(str(path), "").replace(path.name, "")
+    assert re.search(r"\b7\b", versions), message
+    assert re.search(r"\b2\b", versions), message
+
+
+def test_e24c_version_one_file_is_rejected_and_left_untouched(tmp_path: Path) -> None:
+    path = tmp_path / "r.sqlite3"
+    with closing(sqlite3.connect(path)) as conn:
+        conn.execute("CREATE TABLE processed_snapshots (snapshot_id TEXT PRIMARY KEY)")
+        conn.execute("PRAGMA user_version = 1")
+    with pytest.raises(ValueError) as error:
+        SqliteRegistry(path)
+    message = str(error.value)
+    assert path.name in message, message
+    versions = message.replace(str(path), "").replace(path.name, "")
+    assert re.search(r"\b1\b", versions), message
+    assert re.search(r"\b2\b", versions), message
+    assert user_version(path) == 1
+    assert table_names(path) == {"processed_snapshots"}
+
+
+def seed_e29(registry: SqliteRegistry) -> None:
+    """E29 committed cases, one unit of work per snapshot; history of S007-PB follows the spec."""
+    pb, suv, sel_e, pl = "S007-Pickup-Brasil", "S001-SUV-Local", "S009-Sedán-Europa", "S010-Pickup-Local"
+    reported_follow_up = (CaseState.FOLLOW_UP, Severity.NONE, "S010")
+    steps: dict[str, list[tuple[Case, CaseHistoryRow]]] = {
+        "S001": [
+            (case_with(suv, CaseState.OPEN, Severity.MEDIUM, Severity.MEDIUM), history_row(suv, "S001", None))
+        ],
+        "S005": [
+            (
+                case_with(
+                    suv,
+                    CaseState.RESOLVED,
+                    Severity.NONE,
+                    None,
+                    at="S005",
+                    reported=(CaseState.RESOLVED, Severity.NONE, "S006"),
+                ),
+                history_row(suv, "S005", None, minimum=Severity.NONE, state=CaseState.RESOLVED),
+            )
+        ],
+        "S007": [
+            (
+                case_with(pb, CaseState.OPEN, Severity.MEDIUM, Severity.MEDIUM),
+                history_row(pb, "S007", Stage.PAINT, state=CaseState.OPEN),
+            )
+        ],
+        "S008": [
+            (
+                case_with(pb, CaseState.FOLLOW_UP, Severity.HIGH, Severity.HIGH, at="S008"),
+                history_row(pb, "S008", None, minimum=Severity.HIGH),
+            )
+        ],
+        "S009": [
+            (
+                case_with(pb, CaseState.FOLLOW_UP, Severity.MEDIUM, Severity.HIGH, at="S009"),
+                history_row(pb, "S009", Stage.ASSEMBLY),
+            ),
+            (
+                case_with(sel_e, CaseState.OPEN, Severity.MEDIUM, Severity.MEDIUM),
+                history_row(sel_e, "S009", None, state=CaseState.OPEN),
+            ),
+        ],
+        "S010": [
+            (
+                case_with(pb, CaseState.FOLLOW_UP, Severity.NONE, Severity.HIGH, at="S010"),
+                history_row(pb, "S010", Stage.BODY, minimum=Severity.NONE),
+            ),
+            (
+                case_with(pl, CaseState.OPEN, Severity.MEDIUM, Severity.MEDIUM),
+                history_row(pl, "S010", None, state=CaseState.OPEN),
+            ),
+        ],
+        "S011": [
+            (
+                case_with(
+                    pb, CaseState.RESOLVED, Severity.NONE, None, at="S011", reported=reported_follow_up
+                ),
+                history_row(pb, "S011", None, minimum=Severity.NONE, state=CaseState.RESOLVED),
+            ),
+            (
+                case_with(
+                    sel_e, CaseState.RESOLVED, Severity.NONE, None, at="S011", reported=reported_follow_up
+                ),
+                history_row(sel_e, "S011", None, minimum=Severity.NONE, state=CaseState.RESOLVED),
+            ),
+        ],
+    }
+    for snapshot_id in sorted(steps):
+        with registry.processing(commit(snapshot_id)):
+            for case, row in steps[snapshot_id]:
+                registry.cases.save_case(case, row)
+
+
+def test_e29a_resolved_unreported_is_unreported_resolved_cases_in_case_order(
+    registry: SqliteRegistry,
+) -> None:
+    seed_e29(registry)
+    found = registry.cases.resolved_unreported()
+    assert tuple(case.case_id for case in found) == ("S009-Sedán-Europa", "S007-Pickup-Brasil")
+    assert all(case.state is CaseState.RESOLVED for case in found)
+
+
+def test_e29b_last_deviation_row_is_the_latest_row_with_minimum_media_or_more(
+    registry: SqliteRegistry,
+) -> None:
+    """Text order is not severity order ('ninguna' sorts above 'media'), so clean rows must be skipped."""
+    seed_e29(registry)
+    row = registry.cases.last_deviation_row("S007-Pickup-Brasil")
+    assert row is not None
+    assert row.snapshot_id == "S009"
+    assert row.bottleneck is Stage.ASSEMBLY
+
+
+def test_e29c_last_deviation_row_of_an_unknown_case_is_none(registry: SqliteRegistry) -> None:
+    seed_e29(registry)
+    assert registry.cases.last_deviation_row("S999-Pickup-Brasil") is None
+
+
+def test_e29_last_deviation_row_sees_the_open_units_own_row_after_save(registry: SqliteRegistry) -> None:
+    """The pipeline reads it inside 'processing' after 'track', so the unit's own row must be visible."""
+    seed_e29(registry)
+    pl = "S010-Pickup-Local"
+    with registry.processing(commit("S012")):
+        registry.cases.save_case(
+            case_with(pl, CaseState.FOLLOW_UP, Severity.HIGH, Severity.HIGH, at="S012"),
+            history_row(pl, "S012", Stage.QUALITY, minimum=Severity.HIGH),
+        )
+        row = registry.cases.last_deviation_row(pl)
+    assert row is not None
+    assert (row.snapshot_id, row.bottleneck) == ("S012", Stage.QUALITY)
+
+
+def test_e29_the_trackers_port_does_not_gain_the_notice_reads() -> None:
+    """'CaseRepository' stays the tracker's port; the new reads sit behind 'NoticeCaseReader'."""
+    assert not hasattr(CaseRepository, "resolved_unreported")
+    assert not hasattr(CaseRepository, "last_deviation_row")
