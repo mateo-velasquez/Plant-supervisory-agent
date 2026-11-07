@@ -1,4 +1,4 @@
-"""001 T11, 002 T15: no model SDK in pure, ingestion or runner code; layers import only what they may."""
+"""001 T11, 002 T15, 003 T2/T16: no model SDK in pure or service code; layers import only what they may."""
 
 import ast
 import json
@@ -10,9 +10,10 @@ import pytest
 
 PACKAGE = Path(__file__).resolve().parents[2] / "src" / "plant_monitor"
 PROJECT = "plant_monitor"
-SDK_FREE_PACKAGES = ("metrics", "domain", "ingestion", "runner")
+SDK_FREE_PACKAGES = ("metrics", "domain", "ingestion", "runner", "cases")
 FORBIDDEN = frozenset({"anthropic", "mcp"})
 ROOT = "<root>"
+CASES_ALLOWED = ("plant_monitor.domain", "plant_monitor.metrics.thresholds", "plant_monitor.cases")
 
 
 def imported_roots(source: str) -> set[str]:
@@ -41,6 +42,30 @@ def project_subpackages(source: str, package: str) -> set[str]:
             if parts[0] == PROJECT:
                 found.add(parts[1] if len(parts) > 1 else ROOT)
     return found
+
+
+def project_modules(source: str, package: str) -> set[str]:
+    """Dotted `plant_monitor` names imported by a module of `package`; `from X import y` yields `X.y`."""
+    found: set[str] = set()
+    for node in ast.walk(ast.parse(source)):
+        names: list[str] = []
+        if isinstance(node, ast.Import):
+            names = [alias.name for alias in node.names]
+        elif isinstance(node, ast.ImportFrom):
+            base = package.split(".")[: len(package.split(".")) - node.level + 1] if node.level else []
+            module = ".".join([*base, *(node.module.split(".") if node.module else [])])
+            names = [f"{module}.{alias.name}" for alias in node.names]
+        found.update(name for name in names if name.split(".")[0] == PROJECT)
+    return found
+
+
+def disallowed_modules(source: str, package: str, allowed: tuple[str, ...]) -> set[str]:
+    """Project names imported by the module that are neither an allowed module nor inside one."""
+    return {
+        name
+        for name in project_modules(source, package)
+        if not any(name == prefix or name.startswith(f"{prefix}.") for prefix in allowed)
+    }
 
 
 def package_of(path: Path) -> str:
@@ -107,6 +132,31 @@ def test_project_scanner_reports_subpackages(source: str, expected: set[str]) ->
     assert project_subpackages(source, "plant_monitor.ingestion") == expected
 
 
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("from plant_monitor.metrics.thresholds import ResolutionThresholds", set()),
+        ("from plant_monitor.metrics import thresholds", set()),
+        ("from plant_monitor.domain.cases import Case\nimport plant_monitor.domain.enums", set()),
+        ("from .lifecycle import step\nfrom . import registry", set()),
+        ("from ..domain.models import Combination", set()),
+        ("import sqlite3\nfrom collections.abc import Mapping", set()),
+        (
+            "from plant_monitor.metrics.engine import compute_metrics",
+            {"plant_monitor.metrics.engine.compute_metrics"},
+        ),
+        ("from plant_monitor.metrics import engine", {"plant_monitor.metrics.engine"}),
+        ("from plant_monitor.metrics import compute_metrics", {"plant_monitor.metrics.compute_metrics"}),
+        ("from ..metrics.thresholdsx import y", {"plant_monitor.metrics.thresholdsx.y"}),
+        ("import plant_monitor.runner.ports", {"plant_monitor.runner.ports"}),
+        ("from plant_monitor import metrics", {"plant_monitor.metrics"}),
+    ],
+)
+def test_module_scanner_reports_imports_outside_the_allowed_modules(source: str, expected: set[str]) -> None:
+    """The cases rule is module-level, so the scanner must tell `metrics.thresholds` from `metrics.*`."""
+    assert disallowed_modules(source, "plant_monitor.cases", CASES_ALLOWED) == expected
+
+
 # --- No model SDK ---
 
 
@@ -120,7 +170,9 @@ def test_sdk_free_package_modules_never_import_model_sdks(package: str) -> None:
     assert offenders == {}
 
 
-@pytest.mark.parametrize("module", ["plant_monitor.metrics.engine", "plant_monitor.runner.series"])
+@pytest.mark.parametrize(
+    "module", ["plant_monitor.metrics.engine", "plant_monitor.runner.series", "plant_monitor.cases.tracker"]
+)
 def test_importing_module_loads_no_model_sdk(tmp_path: Path, module: str) -> None:
     probe = (
         "import json, sys\n"
@@ -152,3 +204,12 @@ def test_runner_checks_imports_only_domain() -> None:
 def test_runner_series_imports_only_domain_ingestion_and_runner() -> None:
     allowed = {"domain", "ingestion", "runner"}
     assert layer_offenders([PACKAGE / "runner" / "series.py"], allowed) == {}
+
+
+def test_cases_imports_only_domain_and_metrics_thresholds() -> None:
+    offenders = {
+        str(path.relative_to(PACKAGE)): sorted(extra)
+        for path in modules_of("cases")
+        if (extra := disallowed_modules(path.read_text(encoding="utf-8"), package_of(path), CASES_ALLOWED))
+    }
+    assert offenders == {}
