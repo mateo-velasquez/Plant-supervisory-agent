@@ -10,10 +10,11 @@ One file per significant decision: `NNNN-short-title.md`, numbered in order, nev
 | [0004](0004-data-not-versioned.md) | Real data not versioned; synthetic fixtures for tests | Accepted |
 | [0005](0005-english-code-spanish-data-contract.md) | English code; Spanish data-contract values | Accepted |
 | [0006](0006-claude-code-dev-workflow.md) | Claude Code workflow: scoped subagents, skills and guard hooks | Accepted |
-| [0007](0007-own-agent-loop-with-mcp-client.md) | Own agent loop on the Anthropic SDK, connected to our MCP server | Proposed |
+| [0007](0007-own-agent-loop-with-mcp-client.md) | Own agent loop on the Anthropic SDK, connected to our MCP server | Accepted (revised by 0013) |
 | [0008](0008-series-runner-resilience.md) | Series runner resilience: content-hash idempotency, unit of work, non-fatal anomalies | Accepted |
 | [0010](0010-notice-outbox-delivery-after-commit.md) | Deliver notices after commit through a registry outbox (at-least-once) | Accepted |
 | [0011](0011-evaluator-reads-outbox-independent-noise.md) | Evaluator reads the registry outbox, re-derives noise independently, and gates golden items by capability | Accepted |
 | [0012](0012-lean-spec-workflow.md) | Lean spec workflow: anchored reading, spec size budget, delta re-review and test budget | Accepted |
+| [0013](0013-in-process-mcp-transport-and-tool-client.md) | In-process MCP transport, ToolClient adapter and in-unit-of-work writes | Accepted |
 
 Template: [template.md](template.md)

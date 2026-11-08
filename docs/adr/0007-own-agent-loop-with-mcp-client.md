@@ -1,6 +1,6 @@
 # 0007 · Own agent loop on the Anthropic SDK, connected to our MCP server
 
-- **Status:** Proposed
+- **Status:** Accepted (transport and client location revised by [ADR-0013](0013-in-process-mcp-transport-and-tool-client.md))
 - **Date:** 2026-10-31
 - **Requirements:** FR-27, FR-31, FR-32, FR-33, NFR-07, NFR-10
 
@@ -8,7 +8,7 @@
 The agents need a loop that calls Claude Haiku 5.5, runs tools from our own MCP server (FR-27), and wraps every tool call with hooks before, after and on stop (FR-31). Allowlists must be enforced in code (FR-32). Module 5 of the course teaches these concepts "without Claude Code, in your own code", and the course requires `anthropic`, `mcp` and `pydantic`. CI must test the agent layer with a fake model (NFR-07).
 
 ## Decision
-We write the agent loop ourselves on the `anthropic` Messages API with tool use. The loop connects to our server through an MCP client, offers each agent only its allowlisted tools, and runs the hook chain around every tool call and at stop. Transport: stdio subprocess in real runs and in-process in tests (to confirm in spec 006).
+We write the agent loop ourselves on the `anthropic` Messages API with tool use. The loop connects to our server through an MCP client, offers each agent only its allowlisted tools, and runs the hook chain around every tool call and at stop. Transport: in-process in real runs and in tests, through the `mcp_server/client.py` adapter (decided in spec 006, [ADR-0013](0013-in-process-mcp-transport-and-tool-client.md)).
 
 ## Alternatives considered
 - **Claude Agent SDK:** has hooks and MCP built in, but it hides the loop the course asks us to build, couples runs to the Claude Code runtime, and makes fake-model tests harder.
@@ -19,6 +19,6 @@ We write the agent loop ourselves on the `anthropic` Messages API with tool use.
 - Positive: full control over hooks, allowlists, retries and token accounting; integration tests run against a fake model with no network.
 - Negative / risks: more code to own (loop, retries with backoff, stop conditions, cost accounting).
 - Follow-ups:
-  - The dependency rule in `docs/STRUCTURE.md` says only `mcp_server` imports `mcp`, but the client side also needs it. Decide in spec 006: either `agents` may import the `mcp` client, or a thin client adapter lives in `mcp_server/`.
+  - ~~Decide where the `mcp` client is imported~~: done in spec 006, a thin adapter in `mcp_server/client.py`, so only `mcp_server` imports `mcp` (ADR-0013).
   - Before spec 007, check Haiku 5.5 parameters (`effort`, thinking, minimum cacheable prefix, pricing) against the current API docs.
-  - Set this ADR to Accepted once spec 006 confirms the transport.
+  - ~~Set this ADR to Accepted once spec 006 confirms the transport~~: done (ADR-0013).
