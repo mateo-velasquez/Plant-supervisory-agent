@@ -1,3 +1,4 @@
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -5,23 +6,13 @@ from pydantic import ValidationError
 
 from plant_monitor.config import Settings
 
+from builders import AGENT_ENV_NAMES, isolate_settings_env
+
 
 @pytest.fixture(autouse=True)
 def _isolate_environment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Each test runs without the real .env or system variables."""
-    monkeypatch.chdir(tmp_path)
-    for var in (
-        "ANTHROPIC_API_KEY",
-        "ANTHROPIC_MODEL",
-        "ANTHROPIC_EFFORT",
-        "DATA_DIR",
-        "LOG_LEVEL",
-        "HELDOUT_OPEN",
-        "HELDOUT_FIRST_SHIFT",
-        "TOOL_OUTPUT_MAX_CHARS",
-        "LOGBOOK_MAX_CHARS",
-    ):
-        monkeypatch.delenv(var, raising=False)
+    isolate_settings_env(monkeypatch, tmp_path)
 
 
 def test_fails_without_api_key() -> None:
@@ -144,3 +135,57 @@ def test_e36_env_example_lists_every_settings_field() -> None:
     }
     assert {field.upper() for field in Settings.model_fields} <= names
     assert {"HELDOUT_OPEN", "HELDOUT_FIRST_SHIFT"} <= names
+
+
+def test_e19_agent_defaults_and_traces_dir() -> None:
+    """E19 (a) of spec 007: the R16 defaults and the derived 'traces_dir'."""
+    settings = Settings(anthropic_api_key="k", output_dir=Path("out"))
+    assert settings.anthropic_max_tokens == 16000
+    assert settings.anthropic_max_retries == 4
+    assert settings.anthropic_retry_base_seconds == 1.0
+    assert settings.anthropic_retry_cap_seconds == 30.0
+    assert settings.prompt_token_limit == 95000
+    assert settings.agent_max_turns == 8
+    assert settings.notice_text_max_chars == 1500
+    assert settings.price_input_per_mtok == Decimal("0.10")
+    assert settings.price_cache_write_5m_per_mtok == Decimal("0.125")
+    assert settings.price_cache_write_1h_per_mtok == Decimal("0.20")
+    assert settings.price_cache_read_per_mtok == Decimal("0.01")
+    assert settings.price_output_per_mtok == Decimal("0.50")
+    assert settings.long_context_threshold_tokens == 100000
+    assert settings.long_context_multiplier == 5
+    assert settings.traces_dir == Path("out") / "traces"
+    assert "traces_dir" not in Settings.model_fields
+
+
+def test_e19_prompt_token_limit_accepts_the_hard_ceiling(monkeypatch: pytest.MonkeyPatch) -> None:
+    """E19 (b) of spec 007: 100000 is accepted."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    monkeypatch.setenv("PROMPT_TOKEN_LIMIT", "100000")
+    assert Settings().prompt_token_limit == 100000
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("PROMPT_TOKEN_LIMIT", "100001"),
+        ("AGENT_MAX_TURNS", "0"),
+        ("ANTHROPIC_RETRY_CAP_SECONDS", "0.5"),
+    ],
+)
+def test_e19_agent_out_of_bounds_values_are_rejected(
+    monkeypatch: pytest.MonkeyPatch, name: str, value: str
+) -> None:
+    """E19 (c) of spec 007: each out-of-bounds value raises."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    monkeypatch.setenv(name, value)
+    with pytest.raises(ValidationError):
+        Settings()
+
+
+def test_e19_env_example_has_one_line_per_agent_env_name() -> None:
+    """E19 (d) of spec 007: '.env.example' has exactly one line per R16 name."""
+    example = Path(__file__).resolve().parents[1] / ".env.example"
+    lines = example.read_text(encoding="utf-8").splitlines()
+    for name in AGENT_ENV_NAMES:
+        assert sum(line.startswith(f"{name}=") for line in lines) == 1

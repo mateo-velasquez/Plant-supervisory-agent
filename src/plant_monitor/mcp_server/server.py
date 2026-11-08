@@ -1,6 +1,6 @@
 """MCP server: async tool wrappers over the sync read tools, refusals mapped to ToolError (R13)."""
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable, Collection
 from typing import Final
 
 from mcp.server.mcpserver import MCPServer
@@ -8,8 +8,9 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from plant_monitor.domain.enums import Market, Model
 from plant_monitor.domain.errors import RejectedRequest
-from plant_monitor.mcp_server import read_tools
+from plant_monitor.mcp_server import read_tools, write_tools
 from plant_monitor.mcp_server.context import FrameHolder, ToolContext
+from plant_monitor.mcp_server.write_tools import NewsText
 
 READ_TOOLS: Final[tuple[str, ...]] = (
     "list_available_logbooks",
@@ -19,6 +20,7 @@ READ_TOOLS: Final[tuple[str, ...]] = (
     "get_case",
     "get_delayed_units",
 )
+WRITE_TOOLS: Final[tuple[str, ...]] = ("emit_alert", "emit_shift_report")
 
 
 def _refusals(call: Callable[[], str]) -> str:
@@ -29,8 +31,11 @@ def _refusals(call: Callable[[], str]) -> str:
         raise ToolError(str(error)) from error
 
 
-def build_server(ctx: ToolContext, frames: FrameHolder) -> MCPServer:
-    """MCP server with the six read tools; none takes a snapshot argument (R7)."""
+def build_server(ctx: ToolContext, frames: FrameHolder, tools: Collection[str] = READ_TOOLS) -> MCPServer:
+    """MCP server with the named tools (default the six read tools); none takes a snapshot (R7)."""
+    unknown = sorted(set(tools) - {*READ_TOOLS, *WRITE_TOOLS})
+    if unknown:
+        raise ValueError(f"unknown tools: {', '.join(unknown)}")
     server = MCPServer("plant-monitor")
 
     async def list_available_logbooks() -> str:
@@ -57,10 +62,25 @@ def build_server(ctx: ToolContext, frames: FrameHolder) -> MCPServer:
         """Return the delayed units of one model and market at the current snapshot."""
         return _refusals(lambda: read_tools.get_delayed_units(ctx, frames, modelo, mercado))
 
-    server.add_tool(list_available_logbooks, name="list_available_logbooks")
-    server.add_tool(get_logbook, name="get_logbook")
-    server.add_tool(get_deviations, name="get_deviations")
-    server.add_tool(get_active_cases, name="get_active_cases")
-    server.add_tool(get_case, name="get_case")
-    server.add_tool(get_delayed_units, name="get_delayed_units")
+    async def emit_alert(case_id: str, texto: str) -> str:
+        """Write the text of this snapshot's immediate alert for one case."""
+        return _refusals(lambda: write_tools.emit_alert(ctx, frames, case_id, texto))
+
+    async def emit_shift_report(textos: list[NewsText]) -> str:
+        """Write the text of every news item of the shift report, one entry per case."""
+        return _refusals(lambda: write_tools.emit_shift_report(ctx, frames, textos))
+
+    available: dict[str, Callable[..., Awaitable[str]]] = {
+        "list_available_logbooks": list_available_logbooks,
+        "get_logbook": get_logbook,
+        "get_deviations": get_deviations,
+        "get_active_cases": get_active_cases,
+        "get_case": get_case,
+        "get_delayed_units": get_delayed_units,
+        "emit_alert": emit_alert,
+        "emit_shift_report": emit_shift_report,
+    }
+    for name in (*READ_TOOLS, *WRITE_TOOLS):
+        if name in tools:
+            server.add_tool(available[name], name=name)
     return server

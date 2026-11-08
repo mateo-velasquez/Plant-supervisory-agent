@@ -1,10 +1,11 @@
 """Settings from environment variables (take precedence) and '.env'; fails fast if anything is missing."""
 
+from decimal import Decimal
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -31,6 +32,37 @@ class Settings(BaseSettings):
     # Size budgets for tool outputs and logbook texts (006 R12); about 4x the longest logbook.
     tool_output_max_chars: int = Field(default=4000, gt=0)
     logbook_max_chars: int = Field(default=4000, gt=0)
+
+    # Anthropic call and retry limits (007 R16).
+    anthropic_max_tokens: int = Field(default=16000, ge=1, le=128_000)
+    anthropic_max_retries: int = Field(default=4, ge=0, le=10)
+    anthropic_retry_base_seconds: float = Field(default=1.0, gt=0)
+    anthropic_retry_cap_seconds: float = 30.0
+
+    # Loop limits (007 R16); the prompt ceiling is the 100k hard limit.
+    prompt_token_limit: int = Field(default=95000, ge=1, le=100_000)
+    agent_max_turns: int = Field(default=8, ge=1)
+    notice_text_max_chars: int = Field(default=1500, gt=0)
+
+    # Prices in USD per million tokens (007 R16).
+    price_input_per_mtok: Decimal = Field(default=Decimal("0.10"), ge=0)
+    price_cache_write_5m_per_mtok: Decimal = Field(default=Decimal("0.125"), ge=0)
+    price_cache_write_1h_per_mtok: Decimal = Field(default=Decimal("0.20"), ge=0)
+    price_cache_read_per_mtok: Decimal = Field(default=Decimal("0.01"), ge=0)
+    price_output_per_mtok: Decimal = Field(default=Decimal("0.50"), ge=0)
+    long_context_threshold_tokens: int = Field(default=100000, gt=0)
+    long_context_multiplier: Decimal = Field(default=Decimal(5), ge=1)
+
+    @model_validator(mode="after")
+    def _retry_cap_not_below_base(self) -> Self:
+        if self.anthropic_retry_cap_seconds < self.anthropic_retry_base_seconds:
+            raise ValueError("anthropic_retry_cap_seconds must be >= anthropic_retry_base_seconds")
+        return self
+
+    @property
+    def traces_dir(self) -> Path:
+        """Run trace files, derived from output_dir."""
+        return self.output_dir / "traces"
 
     @property
     def registry_path(self) -> Path:
