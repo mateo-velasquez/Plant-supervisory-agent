@@ -1,6 +1,6 @@
 # 006 · Logbook store and MCP server — Spec
 
-- **Status:** Draft
+- **Status:** Implemented
 - **Requirements:** FR-17 (verification), FR-20 (delimiting), FR-27, NFR-03, FR-40 (held out, reused)
 - **Stories:** US-06 (verbatim check), US-08 (delimited logbooks)
 - **Decisions:** ADR-0002, ADR-0003, ADR-0007 (revised by ADR-0013), ADR-0011 (held-out policy reused), ADR-0012, ADR-0013. Q-01, Q-12, Q-24 (decided here), Q-37 (reused).

@@ -99,7 +99,7 @@ They are pure and typed, and they round floats to 1 decimal themselves:
 
 ### Budget
 - `def to_text(view: BaseModel) -> str`: `json.dumps(view.model_dump(mode="json"), ensure_ascii=False, separators=(",", ":"))`.
-- `def fit_list(rebuild: Callable[[int | None], BaseModel], total: int, tool: str, max_chars: int) -> str`: tries `rebuild(None)`, then `rebuild(k)` for decreasing `k` until the text fits. It raises `OverBudget` when even `rebuild(0)` does not fit. No field-name strings.
+- `def fit_list(full: BaseModel, rebuild: Callable[[int | None], BaseModel], total: int, tool: str, max_chars: int) -> str`: tries the already-built `full` view, then `rebuild(k)` for decreasing `k` until the text fits. It raises `OverBudget` when even `rebuild(0)` does not fit. No field-name strings.
 - `def check_budget(text: str, tool: str, max_chars: int) -> str`: returns `text` or raises `OverBudget`.
 - `class OverBudget(RejectedRequest)`: `<tool> output is <n> characters, over the budget of <max>`. `get_logbook` logs its overflow at WARNING before raising.
 
