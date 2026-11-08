@@ -27,12 +27,12 @@ from plant_monitor.domain.causes import CauseCategory
 from plant_monitor.domain.enums import Market, Model, Severity, Stage
 from plant_monitor.domain.models import Combination, Shift
 from plant_monitor.domain.notices import NoticeType, Reason
+from plant_monitor.domain.verbatim import contains_verbatim as contains_verbatim
 from plant_monitor.ingestion.errors import DataLoadError, describe_validation_error
 from plant_monitor.ingestion.held_out import check_ids
 
 _GOLDEN_GLOB = "*.yaml"
 _CITATION = re.compile(r"\bcriterio \d", re.IGNORECASE)
-_WHITESPACE = re.compile(r"\s+")
 
 
 class Capability(StrEnum):
@@ -196,17 +196,6 @@ class GoldenSet:
 
 
 type LogbookSource = Callable[[frozenset[str]], Mapping[str, str]]
-
-
-def contains_verbatim(text: str, fragment: str) -> bool:
-    """True iff 'fragment' occurs in 'text' with whitespace runs collapsed; case-sensitive (Q-36)."""
-    needle = _collapse(fragment)
-    return bool(needle) and needle in _collapse(text)
-
-
-def _collapse(value: str) -> str:
-    """'value' with every whitespace run replaced by one space."""
-    return _WHITESPACE.sub(" ", value).strip()
 
 
 @dataclass(frozen=True)
