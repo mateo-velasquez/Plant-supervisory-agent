@@ -4,6 +4,8 @@ import sqlite3
 import sys
 from datetime import UTC, datetime
 
+from pydantic import ValidationError
+
 from plant_monitor.cases.registry import SqliteRegistry
 from plant_monitor.config import get_settings
 from plant_monitor.domain.calendar import HeldOutPolicy
@@ -31,7 +33,14 @@ _REGISTRY_FILE = "registry.sqlite3"
 
 def main() -> int:
     """Replay days 1-7 into a new run directory; 0 when no notice is pending, 1 otherwise, 2 on failure."""
-    settings = get_settings()
+    try:
+        settings = get_settings()
+    except ValidationError as exc:
+        fields = ", ".join(str(err["loc"][0]).upper() for err in exc.errors())
+        print(
+            f"settings: invalid or missing {fields} (unused by this script; set any value)", file=sys.stderr
+        )
+        return 2
     try:
         shifts = load_shifts(settings.plant_dir / _SHIFTS_FILE)
         ctx = PlantContext(

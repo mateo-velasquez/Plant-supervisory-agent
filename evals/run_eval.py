@@ -6,6 +6,8 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from plant_monitor.config import get_settings
 from plant_monitor.evaluation.cli import run_eval
 from plant_monitor.evaluation.golden import Capability
@@ -39,7 +41,14 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the evaluation and return its exit code (0, 1 or 2)."""
     args = _parser().parse_args(argv)
-    settings = get_settings()
+    try:
+        settings = get_settings()
+    except ValidationError as exc:
+        fields = ", ".join(str(err["loc"][0]).upper() for err in exc.errors())
+        print(
+            f"settings: invalid or missing {fields} (unused by this script; set any value)", file=sys.stderr
+        )
+        return 2
     capabilities: frozenset[Capability] = frozenset(
         capability for group in args.capabilities for capability in group
     )
