@@ -1,0 +1,59 @@
+# Día 4, solo T10 (S019-S020): el fin de la auditoría de Europa y el gap de SUV x Brasil.
+# Calculado a mano desde data/snapshots S001-S020 (el avance acumula liberadas desde S001), data/planta/*.csv,
+# criterio 1 a 6 de criterio.md y umbrales.yaml. T10 es legible en S020 (Q-01). El estado de los casos viene de day_03.yaml.
+covers: [T10]
+
+notes: >-
+  Heredado en el informe de T09 (S018): SUV x Europa@S015 escalado/critica y SUV x Local@S017 en_seguimiento/media.
+  Levantamiento de la elevación (Q-11, Q-39): T10 (legible en S020) dice que la auditoría terminó a las 08:30 y que las SUV
+  retenidas se liberaron, así que la elevación se levanta en S020 (la línea anterior de T08 sobre el regreso del auditor no es una resolución).
+  SUV x Europa: S019 -> gap 0 u, demora 0 d, ninguna (limpio, pero la elevación mantiene la severidad efectiva critica, Q-26);
+  S020 -> gap 0 u, demora 0 d, ninguna, sin elevación. Dos snapshots limpios (S019, S020) y sin elevación vigente en S020, así que el
+  caso se resuelve en S020 (criterio 3, Q-25). El máximo desde el informe de T09 es critica (S019 bajo la elevación); una corrida solo con umbrales
+  da ninguna ahí.
+  SUV x Local: S019 -2 u -8,3 % demora 1 d media; S020 -4 u -16,7 % demora 1 d media. Mismo estado en_seguimiento, misma
+  severidad media y sin pico respecto del informe de T09, así que no hay novedad (criterio 4: sin aviso).
+  SUV x Brasil: S018 -1 u -5,6 % ninguna; S019 -3 u -16,7 % (plan diario 18), demora 0 d, cuello de botella ninguno: media, así que
+  se abre en S019; S020 -3 u -16,7 %, demora 0 d: media, en_seguimiento. El faltante de 3 u está justo en el
+  piso gap.minimo_unidades ("por debajo de 3" no da desvío, así que 3 u cuenta: Q-07 límites inclusivos).
+
+news:
+  - id: t10-se-resolved
+    turno_id: T10
+    case: {modelo: SUV, mercado: Europa, abre_en: S015}
+    estado: resuelto
+    severidad: ninguna
+    severidad_maxima: critica
+    depends_on: ["Q-39"]
+    # Sin 'requires': la presencia es la misma con o sin el agente; solo difiere severidad_maxima (atributo, no condiciona).
+    justification: "criterio 3, criterio 4, criterio 5, Q-25, Q-26: resuelto en el turno. S019 y S020 están limpios (gap 0 u, demora 0 d), la bitácora de T10 levanta la elevación en S020 ('La auditoría de homologación terminó a las 8:30 y se liberaron las SUV para Europa que estaban retenidas.') así que no hay elevación vigente en S020: resuelto, severidad ninguna. El máximo desde el informe de T09 es critica: en S019 la elevación mantiene la severidad efectiva critica (Q-26, Q-28). Solo con umbrales el estado y la severidad son los mismos pero el máximo es ninguna."
+  - id: t10-sb-new
+    turno_id: T10
+    case: {modelo: SUV, mercado: Brasil, abre_en: S019}
+    estado: en_seguimiento
+    severidad: media
+    severidad_maxima: media
+    depends_on: ["Q-07"]
+    justification: "criterio 4: caso nuevo; criterio 3; criterio 2: SUV x Brasil se abre en S019 con gap -3 u = -16,7 % del plan diario 18 (media; 3 u cumple el piso de 3 unidades, Q-07) y demora 0 d; en el cierre de T10 S020 está en_seguimiento, gap -3 u = -16,7 %, media. Máximo media desde la apertura (criterio 4, Q-28). Cuello de botella ninguno (sin unidades demoradas)."
+
+causes:
+  - id: t10-se-news-cause
+    case: {modelo: SUV, mercado: Europa, abre_en: S015}
+    notice: informe_de_turno
+    turno_id: T10
+    categoria: retencion_de_calidad
+    etapa: calidad
+    requires: [agent]
+    depends_on: ["Q-02", "Q-38"]
+    evidencia:
+      bitacora: T07
+      fragmento: "A media mañana llegó la auditoría de homologación para Europa y retuvo en calidad las SUV de exportación que pasaban por la estación final."
+    justification: "criterio 6, Q-38: el caso conserva su causa de origen y su cita de T07 hasta que se resuelve, aunque T10 informe que la auditoría terminó. La novedad de T10 es la novedad de resolución de SUV x Europa@S015, cuyo último snapshot con desvío (S018) tenía cuello de botella calidad."
+  - id: t10-sb-news-cause
+    case: {modelo: SUV, mercado: Brasil, abre_en: S019}
+    notice: informe_de_turno
+    turno_id: T10
+    categoria: no_declarada
+    etapa: null
+    depends_on: ["Q-02", "Q-17", "Q-32"]
+    justification: "criterio 6 no_declarada: ninguna etapa vincula una causa de bitácora con este caso. El cuello de botella del caso es ninguno en S019 y S020 (sin unidades demoradas), así que modelo + etapa no coincide con nada (Q-02); las líneas de repintado de T09/T10 sobre SUV en Gris Grafito no se vinculan a un caso sin etapa. Solo por gap, así que etapa es null (Q-17, Q-32: etapa del último snapshot con desvío, S020, ninguna)."

@@ -1,0 +1,16 @@
+# Día 1 (T01-T03, S001-S006): ninguna combinación tiene desvío, así que no se espera nada.
+# Calculado a mano desde data/snapshots S001-S006 y data/planta/*.csv con criterio 1 a 3 de criterio.md y umbrales.yaml.
+# Cualquier alerta o novedad en estos turnos es un error (turno cubierto, silencio esperado, Q-34).
+covers: [T01, T02, T03]
+
+notes: >-
+  Silencio esperado, criterio 3 (un caso se abre solo con desvío, criterio 2: severidad mínima media o más).
+  En las 9 combinaciones modelo x mercado de S001 a S006 el mayor faltante es -1 unidad
+  (Sedán x Local -1 u = -2,8 % y Sedán x Brasil -1 u = -4,2 % en S004, el cierre de T02),
+  por debajo del piso de 3 unidades (gap.minimo_unidades) y por debajo del umbral media (10 %).
+  Ninguna unidad se proyecta para perder un embarque, así que la demora es 0 días en todas las combinaciones y snapshots
+  (umbrales: Local media 1 d, Brasil/Europa alta 1 d). La severidad mínima es ninguna en todos lados,
+  así que no se abre ningún caso, no se dispara ninguna alerta y los tres informes de turno no tienen novedades (criterio 4).
+  La línea de la bitácora de T02 sobre la parada de montaje de Sedán (incidente I01, resuelta en el mismo turno)
+  no abre un caso: los datos no muestran desvío. Tanto el criterio completo como una corrida solo con umbrales
+  esperan el mismo silencio, por eso ningún ítem lleva requires ni depends_on.

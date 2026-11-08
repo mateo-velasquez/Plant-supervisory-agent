@@ -1,0 +1,86 @@
+# Día 3 (T07-T09, S013-S018): la auditoría de homologación de Europa y el repintado de SUV.
+# Calculado a mano desde data/snapshots S001-S018 (el avance acumula liberadas desde S001), data/planta/*.csv,
+# criterio 1 a 6 de criterio.md y umbrales.yaml. Las bitácoras T07-T09 se leen solo en su snapshot de cierre (Q-01).
+# Criterio completo: la elevación del criterio 5 por la auditoría de Europa está codificada (Q-39), así que los ítems que
+# existen solo por ella llevan requires [agent]; la escalada solo por umbrales en S016 no es un ítem golden.
+covers: [T07, T08, T09]
+
+notes: >-
+  Estado heredado del día 2: todo caso de Sedán está resuelto antes de S013 (Sedán x Europa en S011, Sedán x Local y
+  Sedán x Brasil en S012), así que no hay ningún caso activo en S013 ni S014 y el informe de T07 no tiene novedades.
+  Elevación del criterio 5 (Q-39): T07 (legible en S014) dice que la auditoría retuvo las SUV para Europa en calidad y pidió
+  revisar cada unidad antes de liberarla, sin fecha de resolución. La elevación a critica rige desde S014 (alcance: SUV x
+  Europa en calidad, Q-02) hasta que T10 informa el fin (S020). SUV x Europa no tiene caso en S014, y una elevación sola nunca
+  abre uno (Q-25).
+  Números de SUV x Europa (plan diario 30; gap en unidades, % del plan diario; demora en días; severidad mínima;
+  cuello de botella): S013 0 u 0 % 0 d ninguna ninguno; S014 -1 u -3,3 % 0 d ninguna ninguno; S015 -5 u -16,7 % 0 d media calidad;
+  S016 -5 u -16,7 % 7 d critica calidad; S017 -5 u -16,7 % 7 d critica calidad; S018 -5 u -16,7 % 7 d critica calidad.
+  Sin la elevación el caso se abre en S015 como abierto/media y escala en S016 (demora 7 d >= 3 d critica); con ella
+  el caso se abre ya escalado en S015 (Q-08). Ambos dan escalado/critica/critica en el informe de T08.
+  T09 no tiene novedad de SUV x Europa: el caso está escalado/critica en S016 y sigue escalado/critica en S018, con máximo
+  critica desde el informe de T08, así que no cambió nada (criterio 4: sin aviso).
+  SUV x Local: demora 1 d (Local media) desde S017, cuello de botella pintura (4 unidades en repintado). Ninguna otra
+  combinación tiene desvío en S013-S018.
+
+alerts:
+  - id: t08-se-alert
+    case: {modelo: SUV, mercado: Europa, abre_en: S015}
+    snapshot_id: S015
+    motivo: [bitacora]
+    requires: [agent]
+    depends_on: ["Q-39"]
+    justification: "criterio 5, criterio 3, criterio 4, Q-08: elevación decidida en S014 a partir de T07, que no da fecha de fin de la auditoría ('El auditor pidió revisar documentación de cada unidad antes de liberarlas.'). SUV x Europa no tiene caso en S014 (gap -1 u = -3,3 %, demora 0 d), y una elevación sola no abre ninguno (Q-25). En S015 el gap es -5 u (-16,7 % del plan diario 30) = media, demora 0 d, cuello de botella calidad (5 unidades retenidas), así que el caso se abre con la elevación vigente y queda escalado de inmediato: una alerta en S015. motivo es solo bitacora: el mínimo (media) está por debajo de critica y ningún umbral da critica todavía (Q-31). Solo con umbrales la alerta llegaría en S016 (demora 7 d >= 3 d, critica), no es un ítem golden."
+
+news:
+  # T07 (S014): sin novedades. No hay caso activo; todas las entradas de SUV x Europa están bajo el umbral (criterio 2).
+  - id: t08-se-new
+    turno_id: T08
+    case: {modelo: SUV, mercado: Europa, abre_en: S015}
+    estado: escalado
+    severidad: critica
+    severidad_maxima: critica
+    justification: "criterio 4: caso nuevo; criterio 3: escalado. SUV x Europa se abrió en S015 (gap -5 u = -16,7 %, media por gap) y está escalado/critica en el cierre de T08 S016 (gap -5 u = -16,7 % media; demora 7 d: las unidades retenidas en calidad pierden EUR-0305, corte 2026-03-04T20:00, y llegan a EUR-0312, salida 2026-03-12T14:00, 7 d >= 3 d critica). Máximo critica desde la apertura (criterio 4). El mismo estado y las mismas severidades resultan con o sin la elevación del criterio 5."
+  - id: t09-sl-new
+    turno_id: T09
+    case: {modelo: SUV, mercado: Local, abre_en: S017}
+    estado: en_seguimiento
+    severidad: media
+    severidad_maxima: media
+    justification: "criterio 4: caso nuevo; criterio 3: SUV x Local se abre en S017 (mitad de T09): gap 0 u, demora 1 d (las unidades en repintado llegan a LOC-0306 en vez de LOC-0305) = media para Local (media >= 1 d), cuello de botella pintura (4 unidades). En el cierre de T09 S018 está en_seguimiento (abierto un snapshot antes): gap -1 u = -4,2 % (por debajo del piso de 3 unidades), demora 1 d, media. Máximo media desde la apertura (criterio 4, Q-28). Sin novedad de SUV x Europa en T09: sin cambios desde el informe de T08 (escalado/critica, máximo critica), criterio 4: sin aviso."
+
+causes:
+  - id: t08-se-alert-cause
+    case: {modelo: SUV, mercado: Europa, abre_en: S015}
+    notice: alerta_inmediata
+    categoria: retencion_de_calidad
+    etapa: calidad
+    requires: [agent]
+    depends_on: ["Q-02", "Q-39"]
+    evidencia:
+      bitacora: T07
+      fragmento: "A media mañana llegó la auditoría de homologación para Europa y retuvo en calidad las SUV de exportación que pasaban por la estación final."
+    justification: "criterio 6 retencion_de_calidad: una auditoría retiene unidades terminadas en calidad. Vinculado por modelo + etapa (Q-02): el cuello de botella del caso en S015 es calidad (5 unidades demoradas) y la línea de T07 nombra las SUV para Europa en calidad, lo que lo acota a SUV x Europa. T07 es legible en S014, así que la alerta en S015 puede citarla."
+  - id: t08-se-news-cause
+    case: {modelo: SUV, mercado: Europa, abre_en: S015}
+    notice: informe_de_turno
+    turno_id: T08
+    categoria: retencion_de_calidad
+    etapa: calidad
+    requires: [agent]
+    depends_on: ["Q-02"]
+    evidencia:
+      bitacora: T07
+      fragmento: "A media mañana llegó la auditoría de homologación para Europa y retuvo en calidad las SUV de exportación que pasaban por la estación final."
+    justification: "criterio 6, Q-38: el caso conserva la causa que lo originó, con su cita original de T07, aunque T08 (legible en S016) agrega 'La auditoría de homologación sigue revisando las SUV para Europa.' Mismo vínculo por modelo + etapa que la alerta: cuello de botella calidad en S016."
+  - id: t09-sl-news-cause
+    case: {modelo: SUV, mercado: Local, abre_en: S017}
+    notice: informe_de_turno
+    turno_id: T09
+    categoria: retrabajo
+    etapa: pintura
+    requires: [agent]
+    depends_on: ["Q-02"]
+    evidencia:
+      bitacora: T09
+      fragmento: "A las 2:00 se separaron las carrocerías de SUV en Gris Grafito que habían salido de pintura desde la tarde, por diferencia de tono con la muestra patrón. Vuelven a la cabina de repintado; se estiman seis horas por unidad."
+    justification: "criterio 6 retrabajo: las unidades vuelven a una etapa anterior (repintado). Vinculado por modelo + etapa (Q-02): SUV x Local tiene cuello de botella pintura en S017 y S018 (4 unidades en repintado), mientras que SUV x Europa está en calidad, así que la auditoría de Europa no aplica acá. T09 es legible en S018, el cierre del turno que informa el caso."
