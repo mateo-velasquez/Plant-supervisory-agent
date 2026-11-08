@@ -27,7 +27,7 @@ Target layout. Modules are created when their spec is implemented; this file is 
 │   ├── metrics/              # thresholds, lookup tables, progress, cumulative plan, gap, delay, bottleneck, min severity
 │   ├── cases/                # lifecycle state machine, novelty rules, registry (repository over SQLite)
 │   ├── logbooks/             # logbook store, availability by shift, verbatim citation check
-│   ├── mcp_server/           # own MCP server: read tools, write tools, criteria prompt
+│   ├── mcp_server/           # own in-process MCP server and ToolClient: read tools, write tools, criteria prompt
 │   ├── agents/               # agentic loop, agent roles + tool allowlists, factory, system prompts
 │   ├── hooks/                # pre-tool, post-tool and on-stop guards
 │   ├── notify/               # notifier port + adapters (console, file per shift)
@@ -64,7 +64,20 @@ Target layout. Modules are created when their spec is implemented; this file is 
 |---|---|---|
 | `domain/enums.py` | 001, 002 | `Severity` (ordered), `Stage` (downstream `rank`), `Market`, `Model`, `PRODUCTION_STAGES`, `ShiftPosition`, `AnomalyKind` |
 | `domain/models.py` | 001, 002 | Frozen input models, `Combination`, `CombinationMetrics`, `all_combinations()`, `Anomaly`, `SnapshotCommit` |
-| `domain/calendar.py` | 002, 005 | `snapshot_position` (shift row and `ShiftPosition`); `HeldOutPolicy` (`from_calendar`, refused sets while closed) |
+| `domain/calendar.py` | 002, 005, 006 | `snapshot_position` (shift row and `ShiftPosition`); `calendar_order`; `closed_shifts` (R1); `HeldOutPolicy` (`from_calendar`, refused sets while closed) |
+| `domain/verbatim.py` | 006 | `normalize_whitespace`, `contains_verbatim` (shared by the golden loader and the logbook citation check) |
+| `domain/errors.py` | 006 | `RejectedRequest`: base of refusals whose message is shown to the model (R13) |
+| `logbooks/store.py` | 006 | `LogbookLoader`, `Logbook`, `LogbookStore` (`available`, `get` with R3 check order, `verify_citation`); loads only through the injected loader (R4) |
+| `logbooks/errors.py` | 006 | `UnknownLogbook`, `LogbookHeldOut`, `LogbookNotAvailable`, `EmptyFragment`, `FragmentNotFound` (`RejectedRequest` subclasses) |
+| `logbooks/render.py` | 006 | `render_logbook`: the delimited `<bitacora>` block with colliding tags escaped (R6, X1) |
+| `logbooks/__init__.py` | 006 | Re-exports the store, the errors and `render_logbook` |
+| `mcp_server/__init__.py` | 006 | Package docstring only |
+| `mcp_server/context.py` | 006 | `SnapshotFrame`, `FrameHolder` (`current`, `entered` raises `ValueError` on nesting; R7), `NoCurrentSnapshot`, `UnknownCase`, `CaseReader` (read-only protocol, R14), `ToolContext` |
+| `mcp_server/budget.py` | 006 | `to_text` (compact JSON), `check_budget`, `fit_list` (drops list items from the end through a `rebuild` callable), `OverBudget` (R12) |
+| `mcp_server/views.py` | 006 | Output view models in Spanish field names: `AvailableLogbook`, `LogbooksView`, `DeviationsView`, `ActiveCasesView`, `CaseView`, `DelayedUnitsView` and their rows; pure builders (`deviations_view`, `active_cases_view`, `case_view`, `delayed_units_view`) round floats (R8–R11) |
+| `mcp_server/read_tools.py` | 006 | The six read tools as pure sync functions `(ctx, frames, ...) -> str`; no `mcp` import; each applies `check_budget`, or `fit_list` for the truncatable lists of `get_case` and `get_delayed_units` (R12) |
+| `mcp_server/server.py` | 006 | `READ_TOOLS`, `build_server(ctx, frames)`: async wrappers that map `RejectedRequest` to `ToolError` (R13) |
+| `mcp_server/client.py` | 006 | `ToolClient` (async context manager over the in-process SDK client), `ToolSpec`, `ToolOutcome`: plain dataclasses, the only door `agents` uses (D4) |
 | `domain/cases.py` | 003 | `CaseState`, `CaseEvent`, `effective_severity` (the only place it is computed), `case_id_for`, `Case`, `CaseHistoryRow` |
 | `domain/causes.py` | 004 | `CauseCategory` (§6 catalog), `Cause` (`etapa` nullable, Q-17), `Evidence` |
 | `domain/notices.py` | 004 | Output contract: `NoticeType`, `Origin`, `Reason` (`motivo`, Q-31), `Notice`, `ActiveCaseRow`, `ShiftReport`, `PendingDelivery`, deterministic `notice_id_for` / `report_id_for` |
@@ -75,7 +88,7 @@ Target layout. Modules are created when their spec is implemented; this file is 
 | `cases/templates.py` | 004 | Deterministic Spanish `texto` and number formatting until spec 008 |
 | `cases/registry/` | 003, 004, 005 | Package re-exporting the names below. `schema.py` (`SCHEMA`, `SCHEMA_VERSION` = 2), `session.py` (`Session`: connection, open unit, write guard, `savepoint`), `sqlite.py` (`SqliteRegistry`: `user_version`, the only unit of work `processing`, `ProcessedStore`), `cases_repo.py` (`SqliteCaseRepository` incl. `resolved_unreported` and `last_deviation_row`, `CaseRepository` protocol), `releases.py` (`SqliteReleaseStore`), `notices.py` (`SqliteNoticeStore` = `registry.notices`: decisions and delivery outbox, ADR-0010; module-level `read_deliverables(path)`, read-only `mode=ro`, same `DELIVERABLE_FILTER` as `pending()`) |
 | `cases/tracker.py` | 003 | `CaseTracker.track` (lifecycle over the registry; re-runnable within a snapshot, Q-27) and `mark_reported`; `CaseDelta`, `TrackedEvent` |
-| `config.py` | 003, 004, 005 | `Settings.registry_path` = `output_dir / "registry.sqlite3"`, `Settings.notices_dir` = `output_dir / "notices"`; `heldout_open`, `heldout_first_shift`; derived `plant_dir`, `snapshots_dir`, `logbooks_dir`, `rules_dir`, `evals_dir` |
+| `config.py` | 003, 004, 005, 006 | `tool_output_max_chars`, `logbook_max_chars` (006); `Settings.registry_path` = `output_dir / "registry.sqlite3"`, `Settings.notices_dir` = `output_dir / "notices"`; `heldout_open`, `heldout_first_shift`; derived `plant_dir`, `snapshots_dir`, `logbooks_dir`, `rules_dir`, `evals_dir` |
 | `notify/port.py` | 004 | `Notifier` protocol (`alert`, `report`) |
 | `notify/console.py`, `notify/file.py`, `notify/composite.py` | 004 | `ConsoleNotifier` (never fails on encoding), `FileNotifier` (atomic report per shift, idempotent `alertas.jsonl`), `CompositeNotifier` |
 | `ingestion/errors.py` | 001 | `DataLoadError` and validation-message formatting |
@@ -126,7 +139,8 @@ evaluation → ingestion → domain
 - `notify` imports only `domain`; text is built in `cases/templates.py`, not by the channels.
 - `cases` imports only `domain` and `metrics.thresholds` (checked per module). `SqliteRegistry` satisfies `runner`'s `ProcessedStore` structurally, without importing `runner`.
 - `metrics` and `cases` never import `agents`, `mcp_server` or `anthropic`. The deterministic core is testable without the model.
-- Only `agents` imports `anthropic`, and only `mcp_server` imports `mcp`.
+- Only `agents` imports `anthropic`, and only `mcp_server` imports `mcp`. `agents` reaches the server only through `mcp_server.client` (`ToolClient`), in-process (ADR-0013).
+- `logbooks` imports only `domain`, `ingestion` and `logbooks`, and loads files only through `read_logbook_texts`. `mcp_server` imports only `domain`, `metrics`, `cases`, `logbooks`, `mcp_server` and `mcp`; never `config`, `runner`, `agents`, `evaluation` or `anthropic`.
 - `evaluation` imports only `domain` and `ingestion`, with one exception: `evaluation/sources.py` imports `read_deliverables` from `cases.registry.notices` (ADR-0011). It never imports `cases.novelty`, so noise is judged independently of the code under test.
 - `evals/` holds thin scripts: they read `get_settings()`, call `evaluation` or `runner`, and turn errors into one line and an exit code. No logic lives there.
 

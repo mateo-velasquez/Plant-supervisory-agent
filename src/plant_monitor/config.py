@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     heldout_open: bool = False
     heldout_first_shift: str = Field(default="T22", min_length=1)
 
+    # Size budgets for tool outputs and logbook texts (006 R12); about 4x the longest logbook.
+    tool_output_max_chars: int = Field(default=4000, gt=0)
+    logbook_max_chars: int = Field(default=4000, gt=0)
+
     @property
     def registry_path(self) -> Path:
         """Registry SQLite file, derived from output_dir."""
