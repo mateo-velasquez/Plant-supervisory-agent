@@ -70,6 +70,26 @@ Seed for the incident catalog (A1) and the first golden cases. Quotes verified v
 | `retrabajos` is cumulative: it stays at 1 after paint, so it means repainting only while in `pintura` | Explained (FR-08) |
 | Each logbook's "Producción" line gives plant-wide released vs plan; cross-check with `liberadas` | Checked (spec 005): T01–T21 match exactly (distinct `liberadas` of the mid and closing snapshots = released; plan 72 every shift); no duplicates. One release each in T11 and T14 has an `hora` outside the shift window, with no effect on the totals |
 
+### A3 · Threshold-only smoke run, days 1–7 (spec 005)
+
+`evals/smoke_days_1_7.py`, run 2026-11-08: 43 arrivals read (cut at `orden` 43), 42 snapshots processed, the second `S034` skipped (same hash), no anomalies, outbox empty at the end. 11 cases, 4 alerts, 21 reports. A starting point for the golden cases, never their source.
+
+| Case | Opens | Escalates (alert) | Resolves | Notes |
+|---|---|---|---|---|
+| Sedán × Local, Sedán × Brasil | S008 (T04 close, `media`, `montaje`) | — | S012 | T04 released 61 of 72 |
+| Sedán × Europa | S009 (`alta`, `montaje`) | — | S011 | Clean from S010; news in T05 (new, peak `alta`) and T06 (resolved) |
+| SUV × Europa | S015 (`media`, `calidad`) | S016 (`retraso`) | S020 | Europe audit (T07–T10). With §5 the case would open already escalated at S015 (raise in force since the T07 close, Q-08) and the raise would be lifted at T10 |
+| SUV × Local | S017 (`media`, `pintura`) | — | S024 | Repaint; the 2 late LOC-0305 units of A4 |
+| SUV × Brasil | S019 (`media`, no bottleneck) | — | S023 | Gap-only for its whole life |
+| Pickup × Local | S021 (`media`, `calidad`) | — | S023 | |
+| Sedán × Brasil | S026 (`media`, `montaje`) | — | S029 | Second case of the combination |
+| Pickup × Local, Pickup × Brasil | S034 (T17 close, `media`, `montaje`) | S036 (`gap`) | open at S042 | Pickup assembly stop (T17–T19). The cumulative gap keeps them `critica` through day 7. With §5 the raise would apply at the T17 close (S034) |
+| Pickup × Europa | S035 (`alta`, `montaje`) | S036 (`gap`) | open at S042 | Same stop |
+
+- **Day 1 (T01–T03):** no case opens, so the three reports are empty (the T02 Sedán stop resolved within the shift). The day-1 golden case is all "silence": any alert or news item there is an error.
+- **Q-17 (revisited):** a `no_declarada` cause with `etapa = null` occurs in real data: SUV × Brasil throughout, and the resolved news of Sedán × Brasil (S008) and SUV × Local, whose last deviation snapshot (Q-32) had no delayed units. No change to the decision.
+- **Noise:** T19–T21 carry no news while three cases stay `escalado`/`critica`, as §4 requires.
+
 ## MCP tool inventory (draft for 006 and 008)
 
 | Tool | Kind | Status |
