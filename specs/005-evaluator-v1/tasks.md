@@ -2,7 +2,7 @@
 
 Ordered, test-first. Each task is small enough for one commit. "Ex" refers to the worked examples in `spec.md`. Who does a task is noted when it is not the usual `/implement-spec` loop (test-writer → domain-implementer → reviewer).
 
-- [ ] T0 · Docs, no code: commit the `docs/requirements.md` rows Q-33–Q-38 drafted with this spec. ADR-0011 (the evaluator reads the registry outbox and re-derives noise independently; golden YAML keyed by opening snapshot; `requires` vs `depends_on`), its row in `docs/adr/README.md`, and `docs/roadmap.md` row 005 are written by the **main session** and go in this same commit.
+- [x] T0 · Docs, no code: commit the `docs/requirements.md` rows Q-33–Q-38 drafted with this spec. ADR-0011 (the evaluator reads the registry outbox and re-derives noise independently; golden YAML keyed by opening snapshot; `requires` vs `depends_on`), its row in `docs/adr/README.md`, and `docs/roadmap.md` row 005 are written by the **main session** and go in this same commit.
 - [x] T1 · Tests E36 (held-out settings defaults and env, empty first shift rejected, no cutoff field, derived path properties not in `model_fields`, `.env.example` lists every field's env name) → `config.py` (`heldout_open`, `heldout_first_shift`, `plant_dir`, `snapshots_dir`, `logbooks_dir`, `rules_dir`, `evals_dir`) and `.env.example`. Add both env names to the isolation fixture in `tests/test_config.py`.
 - [x] T2 · Tests E4 (policy from an unordered calendar, closed and open, unknown first shift → `ValueError`) → `HeldOutPolicy` in `domain/calendar.py`.
 - [x] T3 · Tests E5a/f and E6–E7 (`check_ids` closed and open; BOM, stops when the allowed set completes without parsing later rows, handle closed, repeat before completion; out-of-order, held-out row even with the open policy, file ends before completion, wrong first `orden`, schema error, empty allowed set, late-repeat limitation) → `ingestion/held_out.py` (`check_ids`), `ingestion/rows.py` (`iter_rows` as a `Generator`; `read_rows` built on it, existing tests unchanged) and `ingestion/arrivals.py` (`load_arrivals_until`).
@@ -36,7 +36,7 @@ Ordered, test-first. Each task is small enough for one commit. "Ex" refers to th
   - Cause `retencion_de_calidad` / `calidad` with its T07 fragment, kept on the T10 news per Q-38.
   - Items that hinge on an open question carry `depends_on`. It must load.
 - [x] T19 · **First baseline (user runs, Claude reads):** `uv run python evals/run_eval.py --registry <smoke registry> --golden evals/golden` (capabilities none). Record in `docs/roadmap.md` the gated alert, news and noise result and the not-gated `requires: [agent]` results. Investigate every gated error: either a golden item is wrong (fix it, with a new justification) or the system is (open a `fix/` branch).
-- [ ] T20 · Docs:
+- [x] T20 · Docs:
   - `docs/STRUCTURE.md`: the `evaluation/` module and its files; `HeldOutPolicy` in `domain/calendar.py`; `ingestion/held_out.py`, `ingestion/logbooks.py` and `iter_rows`; `read_deliverables` in `cases/registry/notices.py`; the dependency rule `evaluation → ingestion → domain` with the `sources.py → cases.registry.notices` exception; `evals/` thin scripts; Tests vs evals.
   - README "How to run evals": smoke run, eval CLI, `--capabilities`, `HELDOUT_OPEN` vs `CLAUDE_ALLOW_HELDOUT`, exit codes.
   - `docs/roadmap.md` row 005 status Implemented; spec status Implemented.

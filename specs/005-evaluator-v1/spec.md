@@ -1,9 +1,9 @@
 # 005 · Evaluator v1 — Spec
 
-- **Status:** Ready
+- **Status:** Implemented
 - **Requirements:** FR-39 (notices and noise; the cause metric arrives in spec 008), FR-40, FR-25 (contract read back), FR-17 (verbatim check of golden evidence), NFR-04, NFR-07
 - **Stories:** US-12
-- **Decisions:** ADR-0004 (data not versioned), ADR-0006 (dev hook vs product guard), ADR-0010 (outbox), ADR-0011 (the evaluator reads the registry outbox and re-derives noise on its own; golden YAML keyed by opening snapshot). Q-14 (context), Q-17, Q-32 (gap-only causes), and Q-33 to Q-38 (decided here).
+- **Decisions:** ADR-0004 (data not versioned), ADR-0006 (dev hook vs product guard), ADR-0010 (outbox), ADR-0011 (the evaluator reads the registry outbox and re-derives noise on its own; golden YAML keyed by opening snapshot). Q-14 (context), Q-17, Q-32 (gap-only causes), and Q-33 to Q-40 (decided here).
 - **Week:** W1 (grows weekly)
 
 ## Goal
@@ -265,24 +265,26 @@ Measure whether a change improved or broke the system. A run's alerts and shift 
 - **Q-36:** run causes are not scored in 005. The golden already records the true causes with `requires: [agent]`, so spec 008 starts from a baseline.
 - **Q-37:** the arrivals reader stops at completion of the allowed set, so no held-out row is read from a sorted file (E6). A late repeat of an allowed snapshot is not read (E7g, documented limitation).
 - **Q-38:** a case's cause stays the one that produced it, with its original citation, until the case resolves. The T10 golden for the Europe audit keeps `retencion_de_calidad` / `calidad` with the T07 citation even though T10 reports the audit finished.
+- **Q-39:** §5 applies to the Europe audit: raise readable at S014, SUV × Europa opens already escalated at S015, the raise is lifted at S020.
+- **Q-40:** a gap-only case is linked by model when the data trace its shortfall to the units a logbook names. The T10 golden for SUV × Brasil carries `retrabajo` / `pintura` with the T09 fragment.
 - **Stage of a cited cause (note for spec 008):** §6 sets the stage from the data only for `no_declarada`. For a cited cause the golden uses the stage the logbook names (`calidad` for the audit), and spec 008 settles it.
 - **Citation from a logbook not yet available (note for spec 006, Q-01):** golden evidence is not checked for availability at the target notice's snapshot in 005. Spec 006 settles Q-01, and spec 008 applies it to golden and notice evidence.
 - **S034** arrives twice with the same file. The smoke run lists it as skipped (FR-02), and the arrivals reader returns both rows (E6 has the same shape at orden 3–4).
 - Noise compares consecutive reports in `RunOutput` order. A run that stopped early yields fewer reports, and noise is computed over what exists. The missing reports show up in news scoring for covered shifts.
 - An expected alert counts alerts of its case at **any** snapshot, so a late or early alert is `wrong_snapshot`, never `missing` plus `extra`. A case opened at another snapshot is a different case (E16).
 - A golden item's `depends_on` names questions by pattern only; the loader does not read `requirements.md`.
-- A golden `justification` written in prose is documentation: English, with contract values in Spanish (ADR-0005).
+- A golden `justification` written in prose is documentation in Spanish, citing rules as `criterio N` and never with the section sign; logbook quotes stay verbatim (Q-34).
 - **Assumption:** logbooks are UTF-8 (BOM tolerated). The verbatim check normalizes whitespace only, matching the draft of spec 006 (Q-12). If spec 006 settles a different rule, spec 008 compares the two on the golden fragments.
 
 ## Acceptance
-- [ ] E1–E26, E30 and E32–E40 are tests and pass; every rule above has a passing test. E27–E29 and E31 are listed in spec 008.
-- [ ] Spec 001–004 tests pass unchanged (`pending()` included, now on `DELIVERABLE_FILTER`); `read_rows` keeps its behavior on top of the streaming reader; no test is deleted.
-- [ ] Import boundaries (E38) are in `tests/unit/test_import_boundaries.py`; `evaluation` is added to the model-SDK scan.
-- [ ] `HELDOUT_OPEN` and `HELDOUT_FIRST_SHIFT` are in `Settings`, `.env.example` and the settings tests; `tests/test_config.py` isolates them.
-- [ ] `evals/` is type-checked: `mypy src tests evals` in CI, pre-commit, `/check` and `CLAUDE.md`.
-- [ ] A3 smoke run executed by the user over days 1–7; output read and summarized in the roadmap (cases that open, escalate, resolve; S034 skipped; outbox empty).
-- [ ] A1 catalog in `evals/golden/incidents.md`, with the authoring notes (quoted justifications, `requires` vs `depends_on`). A4 is done (roadmap).
-- [ ] Golden cases for day 1 (`day_01.yaml`, T01–T03) and the Europe audit (T07–T10) exist, load with their evidence verified, and are verified by hand against `criterio.md`.
-- [ ] `evals/run_eval.py` prints the table, writes the summary under `output_dir/evals/` and exits as specified.
-- [ ] `docs/STRUCTURE.md` (the `evaluation` module, `HeldOutPolicy` in `domain`, `check_ids`/loaders in `ingestion`, `read_deliverables` in `cases/registry`, the dependency rule, `evals/` scripts) and the README section "How to run evals" match the implementation.
-- [ ] `ruff`, `mypy --strict` and `pytest --cov` pass.
+- [x] E1–E26, E30 and E32–E40 are tests and pass; every rule above has a passing test. E27–E29 and E31 are listed in spec 008.
+- [x] Spec 001–004 tests pass unchanged (`pending()` included, now on `DELIVERABLE_FILTER`); `read_rows` keeps its behavior on top of the streaming reader; no test is deleted.
+- [x] Import boundaries (E38) are in `tests/unit/test_import_boundaries.py`; `evaluation` is added to the model-SDK scan.
+- [x] `HELDOUT_OPEN` and `HELDOUT_FIRST_SHIFT` are in `Settings`, `.env.example` and the settings tests; `tests/test_config.py` isolates them.
+- [x] `evals/` is type-checked: `mypy src tests evals` in CI, pre-commit, `/check` and `CLAUDE.md`.
+- [x] A3 smoke run executed by the user over days 1–7; output read and summarized in the roadmap (cases that open, escalate, resolve; S034 skipped; outbox empty).
+- [x] A1 catalog in `evals/golden/incidents.md`, with the authoring notes (quoted justifications, `requires` vs `depends_on`). A4 is done (roadmap).
+- [x] Golden cases for day 1 (`day_01.yaml`, T01–T03) and the Europe audit (T07–T10) exist, load with their evidence verified, and are verified by hand against `criterio.md`.
+- [x] `evals/run_eval.py` prints the table, writes the summary under `output_dir/evals/` and exits as specified.
+- [x] `docs/STRUCTURE.md` (the `evaluation` module, `HeldOutPolicy` in `domain`, `check_ids`/loaders in `ingestion`, `read_deliverables` in `cases/registry`, the dependency rule, `evals/` scripts) and the README section "How to run evals" match the implementation.
+- [x] `ruff`, `mypy --strict` and `pytest --cov` pass.
