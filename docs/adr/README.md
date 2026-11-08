@@ -13,5 +13,6 @@ One file per significant decision: `NNNN-short-title.md`, numbered in order, nev
 | [0007](0007-own-agent-loop-with-mcp-client.md) | Own agent loop on the Anthropic SDK, connected to our MCP server | Proposed |
 | [0008](0008-series-runner-resilience.md) | Series runner resilience: content-hash idempotency, unit of work, non-fatal anomalies | Accepted |
 | [0010](0010-notice-outbox-delivery-after-commit.md) | Deliver notices after commit through a registry outbox (at-least-once) | Accepted |
+| [0011](0011-evaluator-reads-outbox-independent-noise.md) | Evaluator reads the registry outbox, re-derives noise independently, and gates golden items by capability | Accepted |
 
 Template: [template.md](template.md)

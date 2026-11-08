@@ -13,7 +13,7 @@ uv sync                      # install / sync the environment
 uv run pytest --cov          # tests + coverage (min 80%)
 uv run ruff check .          # lint
 uv run ruff format .         # format
-uv run mypy src tests        # types (strict)
+uv run mypy src tests evals  # types (strict)
 uv run pre-commit run --all-files   # every hook, including gitleaks
 ```
 All checks must pass before a task is considered done. CI (`.github/workflows/ci.yml`) runs the same on Ubuntu and Windows and never calls the model.

@@ -10,7 +10,15 @@ from plant_monitor.config import Settings
 def _isolate_environment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Each test runs without the real .env or system variables."""
     monkeypatch.chdir(tmp_path)
-    for var in ("ANTHROPIC_API_KEY", "ANTHROPIC_MODEL", "ANTHROPIC_EFFORT", "DATA_DIR", "LOG_LEVEL"):
+    for var in (
+        "ANTHROPIC_API_KEY",
+        "ANTHROPIC_MODEL",
+        "ANTHROPIC_EFFORT",
+        "DATA_DIR",
+        "LOG_LEVEL",
+        "HELDOUT_OPEN",
+        "HELDOUT_FIRST_SHIFT",
+    ):
         monkeypatch.delenv(var, raising=False)
 
 
@@ -55,3 +63,48 @@ def test_rejects_invalid_effort(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ANTHROPIC_EFFORT", "turbo")
     with pytest.raises(ValidationError):
         Settings()
+
+
+def test_e36_heldout_defaults_and_no_cutoff_field() -> None:
+    settings = Settings(anthropic_api_key="k")
+    assert settings.heldout_open is False
+    assert settings.heldout_first_shift == "T22"
+    assert not [name for name in Settings.model_fields if "cutoff" in name]
+
+
+def test_e36_heldout_settings_read_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    monkeypatch.setenv("HELDOUT_OPEN", "true")
+    monkeypatch.setenv("HELDOUT_FIRST_SHIFT", "T20")
+    settings = Settings()
+    assert settings.heldout_open is True
+    assert settings.heldout_first_shift == "T20"
+
+
+def test_e36_empty_first_heldout_shift_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    monkeypatch.setenv("HELDOUT_FIRST_SHIFT", "")
+    with pytest.raises(ValidationError):
+        Settings()
+
+
+def test_e36_derived_paths_come_from_data_dir_and_output_dir() -> None:
+    settings = Settings(anthropic_api_key="k", data_dir=Path("d"), output_dir=Path("o"))
+    assert settings.plant_dir == Path("d") / "planta"
+    assert settings.snapshots_dir == Path("d") / "snapshots"
+    assert settings.logbooks_dir == Path("d") / "bitacoras"
+    assert settings.rules_dir == Path("d") / "reglas"
+    assert settings.evals_dir == Path("o") / "evals"
+    derived = {"plant_dir", "snapshots_dir", "logbooks_dir", "rules_dir", "evals_dir"}
+    assert derived.isdisjoint(Settings.model_fields)
+
+
+def test_e36_env_example_lists_every_settings_field() -> None:
+    example = Path(__file__).resolve().parents[1] / ".env.example"
+    names = {
+        line.split("=", 1)[0].strip()
+        for line in example.read_text(encoding="utf-8").splitlines()
+        if "=" in line and not line.lstrip().startswith("#")
+    }
+    assert {field.upper() for field in Settings.model_fields} <= names
+    assert {"HELDOUT_OPEN", "HELDOUT_FIRST_SHIFT"} <= names

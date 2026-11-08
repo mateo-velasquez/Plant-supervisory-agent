@@ -28,7 +28,7 @@ Spec Driven Development plan from today to Demo Day. Every spec traces to requir
 | | [002 series-runner](../specs/002-series-runner/) | `llegadas.csv` replay, idempotency with content hash, snapshot → shift mapping, non-fatal data anomalies | 01, 02, 04 | 01 | Q-10, Q-18–Q-23, ADR-0008 | Must | 11-08 | Implemented |
 | | [003 case-registry](../specs/003-case-registry/) | SQLite repository, lifecycle state machine, max severity since last report | 05, 12–15, 23 | 03 | Q-25–Q-28 | Must | 11-09 | Implemented |
 | | [004 notices-and-reports](../specs/004-notices-and-reports/) | Immediate alert, novelty rules, shift report, `motivo`, `sin_aviso` log, notice outbox, console and file notifier | 21–26 | 04, 05 | Q-13, Q-14, Q-17, Q-23, Q-31, Q-32, ADR-0010 | Must | 11-11 | Implemented |
-| | [005 evaluator-v1](../specs/005-evaluator-v1/) | Golden-case format, alerts/news/noise metrics, incident catalog, real-data smoke run of days 1–7 | 39 | 12 | A1, A3, A4 | Must | 11-12 | Draft |
+| | [005 evaluator-v1](../specs/005-evaluator-v1/) | Golden-case format, alerts/news/cause/noise metrics, held-out guard, incident catalog, real-data smoke run of days 1–7 | 39, 40 | 12 | A1, A3, Q-33–Q-38, ADR-0011 | Must | 11-12 | Ready |
 | 2 · The agent | [006 logbooks-and-mcp](../specs/006-logbooks-and-mcp/) | Logbook store (availability at shift close, verbatim check), MCP server and read tools | 17, 27 | — | Q-01, Q-12, Q-24, ADR-0007 transport | Must | 11-14 | Draft |
 | | [007 coordinator-agent](../specs/007-coordinator-agent/) | Own agent loop, single coordinator over one day, `emit_alert`/`emit_shift_report`, trace log, token accounting | 27, 37, 38 | 10 | ADR-0007, D3 | Must | 11-15 | Draft |
 | | [008 cited-cause-and-escalation](../specs/008-cited-cause-and-escalation/) | `set_cause`, `raise_severity`, `lift_severity_raise`, active-cause entity, `no_declarada` | 16–19 | 06, 07 | Q-02, Q-11, Q-12, Q-29, Q-30 | Must | 11-16 | Draft |
@@ -66,9 +66,9 @@ Seed for the incident catalog (A1) and the first golden cases. Quotes verified v
 
 | Anomaly (A4) | Status |
 |---|---|
-| 12 units enter `despacho` after their assigned shipment's departure | To explain |
+| 12 units enter `despacho` after their assigned shipment's departure | Explained (spec 005): 2 SUV × Local on LOC-0305 (repainted twice, yard 03-05 22:03–22:30, after the 14:00 cut-off) and 10 Pickup × Brasil on BRA-0308 (Pickup assembly stop of T17, yard 03-08 13:24–18:18, after the 06:00 cut-off). They enter `despacho` exactly at the next shipment's cut-off (LOC-0306, BRA-0309): they ride the next one, and `embarque_asignado` is never reassigned. No rule is affected: §1 excludes yard and dispatch units, and Q-05 measures delay against the assigned shipment. Golden hint: both combinations should show delay while those units were still upstream |
 | `retrabajos` is cumulative: it stays at 1 after paint, so it means repainting only while in `pintura` | Explained (FR-08) |
-| Each logbook's "Producción" line gives plant-wide released vs plan; cross-check with `liberadas` | To check |
+| Each logbook's "Producción" line gives plant-wide released vs plan; cross-check with `liberadas` | Checked (spec 005): T01–T21 match exactly (distinct `liberadas` of the mid and closing snapshots = released; plan 72 every shift); no duplicates. One release each in T11 and T14 has an `hora` outside the shift window, with no effect on the totals |
 
 ## MCP tool inventory (draft for 006 and 008)
 

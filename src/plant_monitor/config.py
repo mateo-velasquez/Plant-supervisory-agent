@@ -24,6 +24,10 @@ class Settings(BaseSettings):
 
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
 
+    # Product guard for held-out days (FR-40, Q-37); not the dev hook CLAUDE_ALLOW_HELDOUT.
+    heldout_open: bool = False
+    heldout_first_shift: str = Field(default="T22", min_length=1)
+
     @property
     def registry_path(self) -> Path:
         """Registry SQLite file, derived from output_dir."""
@@ -33,6 +37,31 @@ class Settings(BaseSettings):
     def notices_dir(self) -> Path:
         """Directory of the file notifier, derived from output_dir."""
         return self.output_dir / "notices"
+
+    @property
+    def plant_dir(self) -> Path:
+        """Plant files (turnos.csv, plan, standards, shipments), derived from data_dir."""
+        return self.data_dir / "planta"
+
+    @property
+    def snapshots_dir(self) -> Path:
+        """Snapshot JSON files and 'llegadas.csv', derived from data_dir."""
+        return self.data_dir / "snapshots"
+
+    @property
+    def logbooks_dir(self) -> Path:
+        """Shift logbook texts, derived from data_dir."""
+        return self.data_dir / "bitacoras"
+
+    @property
+    def rules_dir(self) -> Path:
+        """Domain rules (criterio.md, umbrales.yaml), derived from data_dir."""
+        return self.data_dir / "reglas"
+
+    @property
+    def evals_dir(self) -> Path:
+        """Evaluation run outputs, derived from output_dir."""
+        return self.output_dir / "evals"
 
 
 @lru_cache

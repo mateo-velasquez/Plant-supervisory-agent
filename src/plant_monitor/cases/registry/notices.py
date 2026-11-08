@@ -2,7 +2,10 @@
 
 import sqlite3
 from collections.abc import Sequence
+from contextlib import closing
 from datetime import datetime
+from pathlib import Path
+from typing import Final
 
 from plant_monitor.domain.notices import Notice, NoticeType, PendingDelivery, ShiftReport, report_id_for
 
@@ -10,6 +13,28 @@ from .session import Session
 
 _KIND_NOTICE = "notice"
 _KIND_REPORT = "report"
+DELIVERABLE_FILTER: Final = "(kind = 'report' OR tipo = 'alerta_inmediata')"
+_READ_COLUMNS: Final = frozenset({"seq", "idx", "kind", "tipo", "payload"})
+
+
+def read_deliverables(path: Path) -> tuple[Notice | ShiftReport, ...]:
+    """Deliverable rows of a registry file in (seq, idx) order; read-only, never creates the file."""
+    if not path.is_file():
+        raise ValueError(f"{path}: registry not found")
+    try:
+        with closing(sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)) as conn:
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(notices)")}
+            if missing := _READ_COLUMNS - columns:
+                raise ValueError(f"{path}: table notices lacks {sorted(missing)}")
+            found = conn.execute(
+                f"SELECT kind, payload FROM notices WHERE {DELIVERABLE_FILTER} ORDER BY seq, idx"
+            ).fetchall()
+    except sqlite3.Error as error:
+        raise ValueError(f"{path}: not a readable registry ({error})") from error
+    try:
+        return tuple(_parse(kind, payload) for kind, payload in found)
+    except ValueError as error:
+        raise ValueError(f"{path}: unreadable payload in notices ({error})") from error
 
 
 class SqliteNoticeStore:
@@ -77,8 +102,8 @@ class SqliteNoticeStore:
         if self._session.open is not None:
             raise RuntimeError(f"pending inside the processing of {self._session.open[0]}")
         found = self._session.conn.execute(
-            "SELECT notice_id, kind, payload FROM notices "
-            "WHERE (kind = 'report' OR tipo = 'alerta_inmediata') AND delivered_at IS NULL "
+            f"SELECT notice_id, kind, payload FROM notices "
+            f"WHERE {DELIVERABLE_FILTER} AND delivered_at IS NULL "
             "ORDER BY seq, idx"
         ).fetchall()
         return tuple(PendingDelivery(r[0], _parse(r[1], r[2])) for r in found)

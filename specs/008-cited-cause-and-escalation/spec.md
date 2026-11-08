@@ -27,6 +27,15 @@ To be written when the spec moves to Ready. Seeds from days 1–7 (verified quot
 - T07 → T10 Europe audit: `retencion_de_calidad` in `calidad`; the escalation comes from the threshold (EUR-0305 missed, 7 days).
 - T17 → T19 Pickup assembly stop with no date: raise at T17 for every Pickup case in `montaje`, lifted at T19.
 
+**Moved from spec 005 (Q-36): the FR-39 cause metric.** `evaluation/causes.py` adds `score_causes` and its result types on top of spec 005's `Result`/`tally`. `run_eval` gathers the logbooks cited by target notices. Seeds:
+- A cause hit when the notice fragment differs from the logbook only in whitespace.
+- A `categoria` miss.
+- Notice-evidence failures: fragment not verbatim, logbook not loaded, `evidence_missing` for a declared cause with no evidence, case-sensitive mismatch.
+- A gap-only `no_declarada` scored against a run alert (`etapa` null vs `montaje`), and `target_missing` for an alert or a news item.
+- Q-38: the cause stays the original one until the case resolves.
+- Open notes from 005: whether the stage of a cited cause is the stage the logbook names or the data bottleneck; whether a citation from a logbook not yet available is an error (Q-01).
+- Confirm with Q-02 that spec 005's per-case release of extras (an unmet `requires: [agent]` item releases only its own case's extras) holds: a §5 raise must not change another case's news without that case carrying its own golden items.
+
 ## Edge cases and assumptions
 - **Q-02:** the scope is model + stage.
 - **Q-11:** a dedicated lift tool.

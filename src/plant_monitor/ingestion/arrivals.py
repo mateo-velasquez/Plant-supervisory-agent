@@ -1,12 +1,14 @@
 """Loader for 'llegadas.csv': the order in which snapshots reached the plant."""
 
+import contextlib
 from pathlib import Path
 
 from pydantic import NaiveDatetime, PositiveInt, field_validator
 
+from plant_monitor.domain.calendar import HeldOutPolicy
 from plant_monitor.domain.models import FrozenModel
 from plant_monitor.ingestion.errors import DataLoadError
-from plant_monitor.ingestion.rows import read_rows
+from plant_monitor.ingestion.rows import iter_rows, read_rows
 
 FORBIDDEN_NAME_CHARS = '/\\:*?"<>|'
 FORBIDDEN_NAME_ENDINGS = ". "
@@ -56,13 +58,40 @@ def load_arrivals(path: Path) -> list[Arrival]:
                 f" (first at row {first_line[row.orden]})"
             )
         first_line[row.orden] = line
-    arrivals = [
-        Arrival(
-            orden=row.orden,
-            snapshot_id=row.snapshot_id,
-            archivo=path.parent / row.archivo,
-            recibido=row.recibido,
-        )
-        for _, row in rows
-    ]
+    arrivals = [_resolve(path, row) for _, row in rows]
     return sorted(arrivals, key=lambda arrival: arrival.orden)
+
+
+def load_arrivals_until(path: Path, policy: HeldOutPolicy) -> list[Arrival]:
+    """Stream 'llegadas.csv' and stop right after the row that completes the allowed snapshots."""
+    if not policy.allowed_snapshots:
+        raise ValueError("no allowed snapshots: the first held-out shift leaves nothing to read")
+    remaining = set(policy.allowed_snapshots)
+    arrivals: list[Arrival] = []
+    expected = 1
+    with contextlib.closing(iter_rows(path, _ArrivalRow)) as rows:
+        for line, row in rows:
+            if row.orden != expected:
+                raise DataLoadError(f"{path}, row {line}: field 'orden': {row.orden}, expected {expected}")
+            if row.snapshot_id in policy.held_out_snapshots:
+                raise DataLoadError(f"{path}, row {line}: snapshot {row.snapshot_id} is held out")
+            arrivals.append(_resolve(path, row))
+            remaining.discard(row.snapshot_id)
+            if not remaining:
+                break
+            expected += 1
+    if remaining:
+        raise DataLoadError(
+            f"{path}: ends before every allowed snapshot arrived; missing {sorted(remaining)}"
+        )
+    return arrivals
+
+
+def _resolve(path: Path, row: _ArrivalRow) -> Arrival:
+    """Arrival of 'row' with 'archivo' resolved against the directory of 'path'."""
+    return Arrival(
+        orden=row.orden,
+        snapshot_id=row.snapshot_id,
+        archivo=path.parent / row.archivo,
+        recibido=row.recibido,
+    )

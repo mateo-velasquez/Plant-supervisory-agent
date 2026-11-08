@@ -2,11 +2,17 @@
 
 import json
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from plant_monitor.domain.cases import Case, CaseHistoryRow, CaseState
 from plant_monitor.domain.enums import Market, Model, Severity, Stage
 from plant_monitor.domain.models import Combination, CombinationMetrics
+from plant_monitor.ingestion.plant import load_shifts
 
+if TYPE_CHECKING:
+    from plant_monitor.domain.calendar import HeldOutPolicy
+
+FIXTURE_PLANT = Path(__file__).resolve().parent / "fixtures" / "plant"
 PICKUP_BRAZIL = Combination(modelo=Model.PICKUP, mercado=Market.BRAZIL)
 
 
@@ -184,3 +190,10 @@ def write_snapshot(tmp_path: Path, payload: dict[str, object], name: str = "S001
     path = tmp_path / name
     path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
     return path
+
+
+def held_out_policy(first_shift: str = "T03", *, is_open: bool = False) -> HeldOutPolicy:
+    """Policy over the fixture calendar (T01 to T03); imported lazily so older tests still collect."""
+    from plant_monitor.domain.calendar import HeldOutPolicy
+
+    return HeldOutPolicy.from_calendar(load_shifts(FIXTURE_PLANT / "turnos.csv"), first_shift, is_open)

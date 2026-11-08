@@ -9,7 +9,7 @@ Run, in this order, from the repository root, and do not stop at the first failu
 1. `uv lock --check`
 2. `uv run ruff check .`
 3. `uv run ruff format --check .` (the **whole repo**, not only changed `.py` files; this is what CI runs)
-4. `uv run mypy src tests`
+4. `uv run mypy src tests evals`
 5. `uv run pytest --cov`
 6. `uv run pre-commit run --all-files`
 7. `git status --short`: hooks may have fixed files (line endings, whitespace); list them.

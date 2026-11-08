@@ -1,7 +1,8 @@
-"""001 T11, 002 T15, 003 T2/T16, 004 T9: no model SDK in pure or service code; layers import what they may."""
+"""001 T11, 002 T15, 003 T2/T16, 004 T9, 005 T6: no model SDK in service code; layers import what they may."""
 
 import ast
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -10,9 +11,15 @@ import pytest
 
 PACKAGE = Path(__file__).resolve().parents[2] / "src" / "plant_monitor"
 PROJECT = "plant_monitor"
-SDK_FREE_PACKAGES = ("metrics", "domain", "ingestion", "runner", "cases", "notify")
+SDK_FREE_PACKAGES = ("metrics", "domain", "ingestion", "runner", "cases", "notify", "evaluation")
 FORBIDDEN = frozenset({"anthropic", "mcp"})
 ROOT = "<root>"
+EVALUATION_ALLOWED = ("plant_monitor.domain", "plant_monitor.ingestion", "plant_monitor.evaluation")
+SOURCES_EXTRA = ("plant_monitor.cases.registry.notices.read_deliverables",)
+SQL_PATTERN = re.compile(
+    "SELECT .+ FROM|INSERT INTO|UPDATE [a-z_]+ SET|DELETE FROM|PRAGMA |CREATE TABLE",
+    re.DOTALL,
+)
 CASES_ALLOWED = ("plant_monitor.domain", "plant_monitor.metrics.thresholds", "plant_monitor.cases")
 
 
@@ -157,6 +164,49 @@ def test_module_scanner_reports_imports_outside_the_allowed_modules(source: str,
     assert disallowed_modules(source, "plant_monitor.cases", CASES_ALLOWED) == expected
 
 
+def sql_strings(source: str) -> list[str]:
+    """String constants of 'source' that look like SQL statements."""
+    return [
+        node.value
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Constant) and isinstance(node.value, str) and SQL_PATTERN.search(node.value)
+    ]
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("from plant_monitor.cases.registry.notices import read_deliverables", set()),
+        (
+            "from plant_monitor.cases.registry.notices import SqliteNoticeStore",
+            {"plant_monitor.cases.registry.notices.SqliteNoticeStore"},
+        ),
+        (
+            "from plant_monitor.cases.registry import SqliteRegistry",
+            {"plant_monitor.cases.registry.SqliteRegistry"},
+        ),
+        ("from plant_monitor.cases.novelty import is_repeat", {"plant_monitor.cases.novelty.is_repeat"}),
+        ("from plant_monitor import config", {"plant_monitor.config"}),
+    ],
+)
+def test_sources_scanner_allows_exactly_read_deliverables_from_cases(source: str, expected: set[str]) -> None:
+    allowed = (*EVALUATION_ALLOWED, *SOURCES_EXTRA)
+    assert disallowed_modules(source, "plant_monitor.evaluation", allowed) == expected
+
+
+@pytest.mark.parametrize(
+    ("source", "found"),
+    [
+        ('q = "SELECT kind FROM notices"', True),
+        ('q = "PRAGMA table_info(notices)"', True),
+        ('"""Select the cases from the golden set."""', False),
+        ("x = 1", False),
+    ],
+)
+def test_sql_scanner_flags_statements_not_prose(source: str, found: bool) -> None:
+    assert bool(sql_strings(source)) is found
+
+
 # --- No model SDK ---
 
 
@@ -171,7 +221,13 @@ def test_sdk_free_package_modules_never_import_model_sdks(package: str) -> None:
 
 
 @pytest.mark.parametrize(
-    "module", ["plant_monitor.metrics.engine", "plant_monitor.runner.series", "plant_monitor.cases.tracker"]
+    "module",
+    [
+        "plant_monitor.metrics.engine",
+        "plant_monitor.runner.series",
+        "plant_monitor.cases.tracker",
+        "plant_monitor.evaluation.scoring",
+    ],
 )
 def test_importing_module_loads_no_model_sdk(tmp_path: Path, module: str) -> None:
     probe = (
@@ -244,3 +300,71 @@ def test_runner_pipeline_does_not_import_notify() -> None:
 def test_runner_outbox_imports_only_domain_runner_and_notify() -> None:
     allowed = {"domain", "runner", "notify"}
     assert layer_offenders([PACKAGE / "runner" / "outbox.py"], allowed) == {}
+
+
+# --- 005 evaluation (E38) ---
+
+
+def test_evaluation_modules_import_only_domain_ingestion_and_evaluation() -> None:
+    offenders = {
+        str(path.relative_to(PACKAGE)): sorted(extra)
+        for path in modules_of("evaluation")
+        if (
+            extra := disallowed_modules(
+                path.read_text(encoding="utf-8"),
+                package_of(path),
+                (*EVALUATION_ALLOWED, *(SOURCES_EXTRA if path.name == "sources.py" else ())),
+            )
+        )
+    }
+    assert offenders == {}
+
+
+def test_only_evaluation_sources_may_import_the_registry_reader() -> None:
+    importers = sorted(
+        path.name
+        for path in modules_of("evaluation")
+        if any(
+            name.startswith("plant_monitor.cases")
+            for name in project_modules(path.read_text(encoding="utf-8"), package_of(path))
+        )
+    )
+    assert importers in ([], ["sources.py"])
+
+
+def test_evaluation_never_imports_the_novelty_rules() -> None:
+    """Noise is re-derived independently of the system it checks (ADR-0011)."""
+    offenders = [
+        path.name
+        for path in modules_of("evaluation")
+        if any(
+            name.startswith("plant_monitor.cases.novelty")
+            for name in project_modules(path.read_text(encoding="utf-8"), package_of(path))
+        )
+    ]
+    assert offenders == []
+
+
+def test_evaluation_has_no_sqlite_import_and_no_sql() -> None:
+    imports = [
+        path.name
+        for path in modules_of("evaluation")
+        if "sqlite3" in imported_roots(path.read_text(encoding="utf-8"))
+    ]
+    texts = [path.read_text(encoding="utf-8") for path in modules_of("evaluation")]
+    statements = [s for text in texts for s in sql_strings(text)]
+    assert (imports, statements) == ([], [])
+
+
+def test_importing_evaluation_scoring_loads_no_cases_module_and_no_sqlite(tmp_path: Path) -> None:
+    probe = (
+        "import json, sys\n"
+        "import plant_monitor.evaluation.scoring\n"
+        "print(json.dumps(sorted(m for m in sys.modules "
+        "if m == 'sqlite3' or m == 'plant_monitor.cases' or m.startswith('plant_monitor.cases.'))))\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", probe], capture_output=True, text=True, check=False, cwd=tmp_path
+    )
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == []
