@@ -163,7 +163,7 @@ def write_e40_registry(path: Path) -> None:
 
 type Item = dict[str, object]
 
-JUSTIFICATION = "§4 synthetic golden item"
+JUSTIFICATION = "criterio 4: ítem sintético"
 
 
 def fixture_shifts() -> list[Shift]:

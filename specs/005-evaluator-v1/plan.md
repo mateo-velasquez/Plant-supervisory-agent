@@ -118,7 +118,7 @@ type SnapshotId = Annotated[StrictStr, StringConstraints(pattern=r"^S\d{3}$")]
 type ShiftId = Annotated[StrictStr, StringConstraints(pattern=r"^T\d{2}$")]
 type QuestionId = Annotated[StrictStr, StringConstraints(pattern=r"^Q-\d{2,}$")]
 type ItemId = Annotated[StrictStr, StringConstraints(pattern=r"^[a-z0-9][a-z0-9_-]*$")]
-type Justification = Annotated[StrictStr, AfterValidator(_cites_rule)]   # stripped, non-empty, '§' + digit
+type Justification = Annotated[StrictStr, AfterValidator(_cites_rule)]   # stripped, non-empty, 'criterio' + number
 type Fragment = Annotated[StrictStr, StringConstraints(min_length=1)]
 # Enums and tuples are lax (YAML strings → enums, lists → tuples); a bare str is never a tuple.
 

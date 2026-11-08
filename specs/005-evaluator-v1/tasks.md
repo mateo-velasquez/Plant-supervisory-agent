@@ -28,7 +28,7 @@ Ordered, test-first. Each task is small enough for one commit. "Ex" refers to th
   - Every alert and news item of every case, per the full criteria.
   - Causes, including the T02 Sedán assembly stop with its same-shift resolution: no §5 raise.
   - Declared causes carry `requires: [agent]` and verbatim evidence.
-  - Each item is justified with §n and numbers or a quote, computed by hand, never copied from the smoke output.
+  - Each item is justified in Spanish with `criterio N` (never the section sign) and numbers or a quote, computed by hand, never copied from the smoke output.
   - It must load with `load_golden` and the real logbook loader.
 - [ ] T18 · **Golden Europe audit (`eval-curator`, verified by the user):** `evals/golden/day_03.yaml` (T07–T09) and `evals/golden/day_04.yaml` (T10).
   - Every news item in those shifts.

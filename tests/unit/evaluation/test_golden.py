@@ -78,23 +78,23 @@ def test_e1_golden_load_with_labels_and_requires(tmp_path: Path) -> None:
                 "S003",
                 id="sel-escalates",
                 motivo=["gap"],
-                justification="§2, §4: escalates at S003, gap -18 u (-50 %) reaches critica (35 %)",
+                justification="criterio 2 y 4: escala en S003, gap -18 u (-50 %) llega a critica (35 %)",
             )
         ],
         news=[
-            golden_news("T01", justification="§4 new case; §2 gap -12 u (-33 %) is alta"),
+            golden_news("T01", justification="criterio 4: caso nuevo; criterio 2: gap -12 u (-33 %) es alta"),
             golden_news(
                 "T02",
                 estado="escalado",
                 severidad="critica",
                 maxima="critica",
-                justification="§3, §4 state and severity changed",
+                justification="criterio 3 y 4: cambian estado y severidad",
             ),
         ],
         causes=[
             golden_cause(
                 SEL,
-                justification="§6 no logbook names a cause; gap-only, no bottleneck",
+                justification="criterio 6: ninguna bitácora nombra la causa; solo gap, sin cuello",
                 depends_on=["Q-17"],
             )
         ],
@@ -133,7 +133,7 @@ def _raw_duplicate_key() -> str:
     return (
         "covers: [T01, T02]\n"
         "alerts:\n"
-        '  - justification: "§4 duplicate key"\n'
+        '  - justification: "criterio 4: clave duplicada"\n'
         "    case: {modelo: Sedán, mercado: Local, abre_en: S001}\n"
         "    snapshot_id: S003\n"
         "    snapshot_id: S003\n"
@@ -172,8 +172,8 @@ E2_CASES: list[tuple[str, Callable[[], object], tuple[str, ...]]] = [
         ("justification",),
     ),
     (
-        "b_justification_with_section_sign_but_no_digit",
-        lambda: golden_file(["T01"], news=[golden_news("T01", justification="§ new case")]),
+        "b_justification_with_criterio_but_no_number",
+        lambda: golden_file(["T01"], news=[golden_news("T01", justification="criterio: caso nuevo")]),
         ("justification",),
     ),
     (

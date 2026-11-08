@@ -31,7 +31,7 @@ from plant_monitor.ingestion.errors import DataLoadError, describe_validation_er
 from plant_monitor.ingestion.held_out import check_ids
 
 _GOLDEN_GLOB = "*.yaml"
-_CITATION = re.compile(r"§\d")
+_CITATION = re.compile(r"\bcriterio \d", re.IGNORECASE)
 _WHITESPACE = re.compile(r"\s+")
 
 
@@ -58,10 +58,10 @@ class _UniqueKeyLoader(yaml.SafeLoader):
 
 
 def _cites_rule(value: str) -> str:
-    """Stripped text that is non-blank and cites a section as '§<n>'."""
+    """Stripped text that is non-blank and cites a rule as 'criterio <n>'."""
     stripped = value.strip()
     if not stripped or _CITATION.search(stripped) is None:
-        raise ValueError("justification must be non-blank and cite a section as '§<n>'")
+        raise ValueError("justification must be non-blank and cite a rule as 'criterio <n>'")
     return stripped
 
 
