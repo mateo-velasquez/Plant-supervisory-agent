@@ -5,6 +5,8 @@
 - **Stories:** US-xx
 - **Week:** Wn
 
+<!-- Budget: about 20 KB. Over it, split the feature or add a "## Size" section saying why. -->
+
 ## Goal
 One paragraph: what problem this feature solves and for whom.
 
@@ -13,13 +15,22 @@ One paragraph: what problem this feature solves and for whom.
 - Out (and where it goes instead):
 
 ## Behavior
-Rules stated precisely, each traceable to a requirement or a criteria section (§n).
+Each rule is its own heading, traceable to a requirement or a criteria section (§n).
+
+### R1 · Rule title
+Rule stated precisely (FR-xx, §n).
 
 ## Worked examples
-Concrete inputs → expected outputs. Each example becomes at least one test.
+Concrete inputs → expected outputs. Each example becomes one test; variants go in one row.
+
+| Id | Input (rule) | Expected |
+|---|---|---|
+| E1 | … (R1) | … |
 
 ## Edge cases and assumptions
-Link to open questions (Q-xx) where applicable.
+Only cases that protect a real risk. Link to open questions (Q-xx) where applicable.
+
+- **X1** · …
 
 ## Acceptance
 - [ ] Every rule above has a passing test.
