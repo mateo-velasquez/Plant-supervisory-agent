@@ -420,3 +420,143 @@ def test_e18_verbatim_and_errors_import_nothing_from_the_project() -> None:
     """E18: the two shared 'domain' modules are leaves."""
     files = [PACKAGE / "domain" / "verbatim.py", PACKAGE / "domain" / "errors.py"]
     assert layer_offenders(files, set()) == {}
+
+
+# --- 007 coordinator agent (E22, R17) ---
+
+AGENTS_ALLOWED = (
+    "plant_monitor.domain",
+    "plant_monitor.telemetry",
+    "plant_monitor.config",
+    "plant_monitor.agents",
+)
+AGENTS_TYPES = "plant_monitor.mcp_server.types"
+ANTHROPIC_MODULE = "agents/anthropic_model.py"
+
+
+def anthropic_importers(sources: dict[str, str]) -> list[str]:
+    """Relative paths of the sources that import 'anthropic'."""
+    return sorted(path for path, source in sources.items() if "anthropic" in imported_roots(source))
+
+
+def loaded_by_import(tmp_path: Path, module: str, roots: tuple[str, ...]) -> list[str]:
+    """Modules of the given top-level 'roots' that importing 'module' loads in a fresh interpreter."""
+    probe = (
+        "import json, sys\n"
+        f"import {module}\n"
+        f"print(json.dumps(sorted(m for m in sys.modules if m.split('.')[0] in {sorted(roots)!r})))\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", probe], capture_output=True, text=True, check=False, cwd=tmp_path
+    )
+    assert result.returncode == 0, result.stderr
+    loaded: list[str] = json.loads(result.stdout)
+    return loaded
+
+
+def test_e22_only_the_anthropic_model_imports_anthropic() -> None:
+    """E22 (R17): 'anthropic' appears in one module of 'src' and nowhere else."""
+    sources = {
+        p.relative_to(PACKAGE).as_posix(): p.read_text(encoding="utf-8") for p in PACKAGE.rglob("*.py")
+    }
+    assert anthropic_importers(sources) == [ANTHROPIC_MODULE]
+
+
+@pytest.mark.parametrize("path", ["agents/loop.py", "telemetry/trace.py"])
+def test_e22_scanner_flags_import_anthropic_under_agents_loop_or_telemetry(path: str) -> None:
+    """E22 (R17): a fixture 'import anthropic' outside 'anthropic_model.py' is flagged."""
+    sources = {path: "import anthropic\n", ANTHROPIC_MODULE: "import anthropic\n"}
+    assert anthropic_importers(sources) == sorted([path, ANTHROPIC_MODULE])
+    assert [p for p in anthropic_importers(sources) if p != ANTHROPIC_MODULE] == [path]
+
+
+def test_e22_agents_never_imports_mcp_and_imports_only_its_allowed_modules() -> None:
+    """E22 (R17): 'agents' reaches 'mcp_server' only through 'types', never 'mcp' itself."""
+    offenders: dict[str, list[str]] = {}
+    for path in modules_of("agents"):
+        source = path.read_text(encoding="utf-8")
+        extra = disallowed_modules(source, package_of(path), (*AGENTS_ALLOWED, AGENTS_TYPES))
+        if extra or "mcp" in imported_roots(source):
+            offenders[path.name] = sorted(extra | ({"mcp"} & imported_roots(source)))
+    assert offenders == {}
+
+
+def test_e22_agents_scanner_rejects_mcp_server_client_and_server() -> None:
+    """E22 (R17): the 'agents' allow-list admits 'mcp_server.types' but not 'client' or 'server'."""
+    allowed = (*AGENTS_ALLOWED, AGENTS_TYPES)
+    ok = "from plant_monitor.mcp_server.types import ToolSpec"
+    bad = (
+        "from plant_monitor.mcp_server.client import ToolClient\nfrom plant_monitor.mcp_server import server"
+    )
+    assert disallowed_modules(ok, "plant_monitor.agents", allowed) == set()
+    assert disallowed_modules(bad, "plant_monitor.agents", allowed) == {
+        "plant_monitor.mcp_server.client.ToolClient",
+        "plant_monitor.mcp_server.server",
+    }
+
+
+def test_e22_telemetry_imports_only_domain_and_is_sdk_free() -> None:
+    """E22 (R17): 'telemetry' depends on 'domain' alone and loads neither SDK."""
+    files = modules_of("telemetry")
+    assert layer_offenders(files, {"domain", "telemetry"}) == {}
+    assert [p.name for p in files if imported_roots(p.read_text(encoding="utf-8")) & FORBIDDEN] == []
+
+
+def test_e22_agent_pipeline_imports_only_its_allowed_layers_and_no_anthropic() -> None:
+    """E22 (R17): 'runner/agent_pipeline.py' layers are the pipeline's plus the agent ones."""
+    path = PACKAGE / "runner" / "agent_pipeline.py"
+    allowed = {
+        "domain",
+        "runner",
+        "cases",
+        "metrics",
+        "agents",
+        "mcp_server",
+        "telemetry",
+        "logbooks",
+        "config",
+    }
+    assert layer_offenders([path], allowed) == {}
+    assert "anthropic" not in imported_roots(path.read_text(encoding="utf-8"))
+
+
+def test_e22_cases_draft_follows_the_cases_rule_and_mcp_server_never_imports_it() -> None:
+    """E22 (R17): 'cases/draft.py' stays pure, and 'mcp_server' does not depend on the draft."""
+    draft = PACKAGE / "cases" / "draft.py"
+    assert disallowed_modules(draft.read_text(encoding="utf-8"), package_of(draft), CASES_ALLOWED) == set()
+    importers = [
+        p.name
+        for p in modules_of("mcp_server")
+        if any(
+            name.startswith("plant_monitor.cases.draft")
+            for name in project_modules(p.read_text(encoding="utf-8"), package_of(p))
+        )
+    ]
+    assert importers == []
+
+
+@pytest.mark.parametrize(
+    "module",
+    [
+        "plant_monitor.agents.loop",
+        "plant_monitor.agents.model",
+        "plant_monitor.agents.factory",
+        "plant_monitor.telemetry.trace",
+    ],
+)
+def test_e22_importing_agent_core_loads_neither_anthropic_nor_mcp(tmp_path: Path, module: str) -> None:
+    """E22 (R17): the SDK-free agent core stays SDK-free at import time."""
+    assert loaded_by_import(tmp_path, module, ("anthropic", "mcp")) == []
+
+
+def test_e22_importing_agent_pipeline_loads_no_anthropic(tmp_path: Path) -> None:
+    """E22 (R17): the pipeline builds the MCP server but never loads the model SDK."""
+    assert loaded_by_import(tmp_path, "plant_monitor.runner.agent_pipeline", ("anthropic",)) == []
+
+
+def test_e22_client_re_exports_the_shared_types() -> None:
+    """E22 (R17): 'client' re-exports the very objects defined in 'types'."""
+    from plant_monitor.mcp_server import client, types
+
+    assert client.ToolSpec is types.ToolSpec
+    assert client.ToolOutcome is types.ToolOutcome
