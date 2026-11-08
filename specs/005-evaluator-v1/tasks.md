@@ -1,17 +1,43 @@
 # 005 · Evaluator v1 — Tasks
 
-Ordered, test-first. Each task is small enough for one commit.
+Ordered, test-first. Each task is small enough for one commit. "Ex" refers to the worked examples in `spec.md`. Who does a task is noted when it is not the usual `/implement-spec` loop (test-writer → domain-implementer → reviewer).
 
-- [ ] T1 · Golden-case models (alerts, news per shift, causes, `justification`, `depends_on`) with loader tests → `evaluation/golden.py`.
-- [ ] T2 · Alert scoring test (US-12): hit only with exactly one alert at the expected snapshot; missing and extra counted → `evaluation/scoring.py`.
-- [ ] T3 · News scoring test: missing and extra news are both errors.
-- [ ] T4 · Cause scoring test: `categoria` and `etapa` match, and the fragment exists verbatim in the cited logbook.
-- [ ] T5 · Noise test: news repeated unchanged from the previous report is counted, with no golden data.
-- [ ] T6 · Held-out guard test: T22–T30 and S043–S060 are refused unless the held-out setting is on (new `Settings` field, `.env.example`, settings test) → `evaluation/held_out.py`.
-- [ ] T7 · **A3:** smoke run of the threshold-only pipeline over real days 1–7; list which cases open, escalate and resolve (on demand, not CI) → `evals/smoke_days_1_7.py`.
-- [ ] T8 · **A1 (user + `eval-curator`):** incident catalog for T01–T21 (shift, category, stage, resolution date, distractors, injection attempts) → `evals/golden/incidents.md`.
-- [ ] T9 · **A4:** explain the anomalies (12 units in `despacho` after their departure; logbook "Producción" line vs `liberadas`); record findings in the roadmap and add Q-xx if needed.
-- [ ] T10 · `eval-curator`: golden cases for day 1 (T01–T03), verified by hand.
-- [ ] T11 · `eval-curator`: golden cases for the Europe audit (T07–T10, EUR-0305 missed, `retencion_de_calidad`).
-- [ ] T12 · Eval CLI: prints the metrics table, writes a summary under `output_dir`, exits non-zero on errors → `evals/run_eval.py`.
-- [ ] T13 · Update `docs/STRUCTURE.md` (`evaluation/` module), README "How to run evals", and set status to Implemented.
+- [x] T0 · Docs, no code: commit the `docs/requirements.md` rows Q-33–Q-38 drafted with this spec. ADR-0011 (the evaluator reads the registry outbox and re-derives noise independently; golden YAML keyed by opening snapshot; `requires` vs `depends_on`), its row in `docs/adr/README.md`, and `docs/roadmap.md` row 005 are written by the **main session** and go in this same commit.
+- [x] T1 · Tests E36 (held-out settings defaults and env, empty first shift rejected, no cutoff field, derived path properties not in `model_fields`, `.env.example` lists every field's env name) → `config.py` (`heldout_open`, `heldout_first_shift`, `plant_dir`, `snapshots_dir`, `logbooks_dir`, `rules_dir`, `evals_dir`) and `.env.example`. Add both env names to the isolation fixture in `tests/test_config.py`.
+- [x] T2 · Tests E4 (policy from an unordered calendar, closed and open, unknown first shift → `ValueError`) → `HeldOutPolicy` in `domain/calendar.py`.
+- [x] T3 · Tests E5a/f and E6–E7 (`check_ids` closed and open; BOM, stops when the allowed set completes without parsing later rows, handle closed, repeat before completion; out-of-order, held-out row even with the open policy, file ends before completion, wrong first `orden`, schema error, empty allowed set, late-repeat limitation) → `ingestion/held_out.py` (`check_ids`), `ingestion/rows.py` (`iter_rows` as a `Generator`; `read_rows` built on it, existing tests unchanged) and `ingestion/arrivals.py` (`load_arrivals_until`).
+- [x] T4 · Tests E8 (BOM and CRLF stripped, missing file, refusal before any file is opened) → `ingestion/logbooks.py` (`read_logbook_texts`).
+- [x] T5 · Tests E40 (deliverables in `seq`, `idx` order, delivered and pending alike, per-case rows skipped, file unchanged, missing path not created, missing column, empty registry; `pending()` unchanged) → `cases/registry/notices.py`: `DELIVERABLE_FILTER` shared with `pending()`, and the module-level `read_deliverables`. All 004 notice-store tests pass unchanged.
+- [x] T6 · Tests E9–E10 and E38 (source split, held-out refusal, missing path, missing table as `DataLoadError`; `RunOutput` validators, duplicates allowed; import boundaries incl. the `sources.py` exception, no SQL or `sqlite3` in `evaluation`, no `cases.novelty`, the subprocess probe, `evaluation` in the SDK scan) → `evaluation/__init__.py`, `evaluation/output.py` (`RunOutput`), `evaluation/sources.py` (`load_run_output`). Add `tests/eval_builders.py` (`alert`, `news`, `row`, `report`); registering it in ruff's `known-local-folder` in `pyproject.toml` is done by the **main session**.
+- [x] T7 · Tests E1–E3, E5b–e and E30 (happy load with `id` labels and `requires`; every schema and file check incl. strict ids, duplicate YAML keys, evidence required iff a declared cause; cross-file checks incl. duplicate `id`; held-out refusal before semantic checks and before any logbook call; `contains_verbatim` cases; golden evidence verified with a single injected logbook call) → `evaluation/golden.py` (`Capability`, golden models, `_UniqueKeyLoader`, `Labeled`, `GoldenSet`, `contains_verbatim`, `load_golden`). Golden item helpers go in `tests/eval_builders.py`.
+- [x] T8 · Tests E11–E17 (hit, missing, wrong snapshot, duplicates, extra vs unscored, opened at another snapshot, `motivo` attribute) → `evaluation/results.py` (`Section`, `Result`, `tally`, `errors`, `ALERT_ERRORS`, `NEWS_ERRORS`) and `evaluation/scoring.py` (`score_alerts`).
+- [x] T9 · Tests E18–E23 (escalation at close scored independently, missing and extra news, attribute mismatches, two cases of one combination, covered shifts with missing or empty reports, uncovered shift) → `score_news`.
+- [x] T10 · Tests E24–E26 (repeat with `abierto` ≡ `en_seguimiento`; state change, severity change, peak, new, resolved, first report, consecutive-only; duplicate alerts reported but not gating) → `evaluation/noise.py` (`RepeatedNews`, `NoiseScore`, `count_noise`), with no import of `cases.novelty`.
+- [x] T11 · Tests E32–E34 and E39 (`depends_on` is tracking only and still gates; `requires` gating with capabilities none and `{agent}`, including the per-case release of extras; exit codes; summary JSON file name, keys, tallies, LF and aware time; table sections) → the gating flags in `evaluation/scoring.py` and `evaluation/summary.py` (`EvalSummary`, `evaluate`, `exit_code`, `render_table`, `write_summary`).
+- [x] T12 · Tests E35 (case timeline order and fields) → `evaluation/timeline.py` (`CaseTimeline`, `case_timeline`).
+- [x] T13 · Tests E37 (exit 0, 1 and 2; `requires` excluded or included through `capabilities`; summary written only on success; no logbook read when none is cited) → `evaluation/cli.py` (`run_eval`, keyword-only) and the thin `evals/run_eval.py` (`--capabilities`). The **main session** adds `evals` to the mypy paths in `.github/workflows/ci.yml`, `.pre-commit-config.yaml`, `.claude/skills/check/SKILL.md` and the `CLAUDE.md` commands.
+- [x] T14 · **A3 (Claude writes, user runs, Claude reads):** `evals/smoke_days_1_7.py` per the plan's composition (`out.mkdir(parents=True)` before the registry; `RunAborted`, `DataLoadError` and `ValueError` → one line, exit 2; `load_run_output` after the registry is closed). Not tested in CI, but linted and type-checked. The **user** runs `uv run python evals/smoke_days_1_7.py` (it reads `.env`). Claude reads the printed output and the run directory, then records in `docs/roadmap.md` which cases open, escalate and resolve, confirms that the second `S034` was skipped and that the outbox was empty, and revisits Q-17 (gap-only cases seen in real data).
+- [x] T15 · **A4 (Claude, research; done while drafting, no Q-xx needed):** explain the 12 units that enter `despacho` after their assigned shipment's departure, and check each logbook's "Producción" line against `liberadas` per shift (days 1–7 only). Record the findings in `docs/roadmap.md` ("Known findings in days 1–7") and add a Q-xx to `docs/requirements.md` if a rule is affected.
+- [x] T16 · **A1 (user + `eval-curator`):** incident catalog for T01–T21 in `evals/golden/incidents.md`. For each incident: shift(s), category (§6), stage, start quote, resolution quote or date, whether §5 applies, and the distractors and injection attempts nearby. Its header holds the golden authoring notes:
+  - quote every `justification` in YAML;
+  - use `requires: [agent]` for §5 raises, their effects and declared causes;
+  - use `depends_on` for tracking only;
+  - a cause keeps its origin until the case resolves (Q-38).
+  Not parsed by code.
+- [x] T17 · **Golden day 1 (`eval-curator`, verified by the user):** `evals/golden/day_01.yaml` covering T01–T03 (S001–S006).
+  - Every alert and news item of every case, per the full criteria.
+  - Causes, including the T02 Sedán assembly stop with its same-shift resolution: no §5 raise.
+  - Declared causes carry `requires: [agent]` and verbatim evidence.
+  - Each item is justified in Spanish with `criterio N` (never the section sign) and numbers or a quote, computed by hand, never copied from the smoke output.
+  - It must load with `load_golden` and the real logbook loader.
+- [x] T18 · **Golden Europe audit (`eval-curator`, verified by the user):** `evals/golden/day_03.yaml` (T07–T09) and `evals/golden/day_04.yaml` (T10).
+  - Every news item in those shifts.
+  - The SUV × Europa expectations under the full criteria: decide by hand from the T07–T09 logbooks whether §5 applies. If it does, the agent-driven alert and news items carry `requires: [agent]`; the threshold path stands as it is (EUR-0305 missed, EUR-0312 reachable, 7 days, `critica`).
+  - Cause `retencion_de_calidad` / `calidad` with its T07 fragment, kept on the T10 news per Q-38.
+  - Items that hinge on an open question carry `depends_on`. It must load.
+- [x] T19 · **First baseline (user runs, Claude reads):** `uv run python evals/run_eval.py --registry <smoke registry> --golden evals/golden` (capabilities none). Record in `docs/roadmap.md` the gated alert, news and noise result and the not-gated `requires: [agent]` results. Investigate every gated error: either a golden item is wrong (fix it, with a new justification) or the system is (open a `fix/` branch).
+- [x] T20 · Docs:
+  - `docs/STRUCTURE.md`: the `evaluation/` module and its files; `HeldOutPolicy` in `domain/calendar.py`; `ingestion/held_out.py`, `ingestion/logbooks.py` and `iter_rows`; `read_deliverables` in `cases/registry/notices.py`; the dependency rule `evaluation → ingestion → domain` with the `sources.py → cases.registry.notices` exception; `evals/` thin scripts; Tests vs evals.
+  - README "How to run evals": smoke run, eval CLI, `--capabilities`, `HELDOUT_OPEN` vs `CLAUDE_ALLOW_HELDOUT`, exit codes.
+  - `docs/roadmap.md` row 005 status Implemented; spec status Implemented.
+  - Run `/verify-criteria` for §3, §4, §5 and §6 on the golden files, then `/check`.

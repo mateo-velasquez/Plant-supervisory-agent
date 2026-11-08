@@ -32,6 +32,7 @@ Target layout. Modules are created when their spec is implemented; this file is 
 │   ├── hooks/                # pre-tool, post-tool and on-stop guards
 │   ├── notify/               # notifier port + adapters (console, file per shift)
 │   ├── telemetry/            # token/cost accounting, trace log
+│   ├── evaluation/           # golden loader, alert/news/noise scoring, summary, eval CLI (ADR-0011)
 │   └── runner/               # series runner (order, dedupe, anomaly checks, unit of work) and CLI entry point
 ├── tests/
 │   ├── unit/                 # one module per domain rule; no I/O, no LLM
@@ -40,8 +41,9 @@ Target layout. Modules are created when their spec is implemented; this file is 
 │   ├── fixtures/             # small synthetic dataset (versioned)
 │   └── builders.py           # shared snapshot builders (`from builders import ...`)
 ├── evals/
-│   ├── golden/               # hand-verified expected notices per day (days 1–7)
-│   └── run_eval.py           # notices, cause and noise metrics
+│   ├── golden/               # hand-verified expected notices per day (days 1–7) + incidents.md catalog
+│   ├── run_eval.py           # thin script over evaluation.cli.run_eval
+│   └── smoke_days_1_7.py     # threshold-only run of days 1–7 into outputs/evals/smoke-<ts>/
 ├── specs/
 │   ├── stories/              # user stories with Gherkin acceptance criteria
 │   ├── _template/            # spec / plan / tasks templates
@@ -62,7 +64,7 @@ Target layout. Modules are created when their spec is implemented; this file is 
 |---|---|---|
 | `domain/enums.py` | 001, 002 | `Severity` (ordered), `Stage` (downstream `rank`), `Market`, `Model`, `PRODUCTION_STAGES`, `ShiftPosition`, `AnomalyKind` |
 | `domain/models.py` | 001, 002 | Frozen input models, `Combination`, `CombinationMetrics`, `all_combinations()`, `Anomaly`, `SnapshotCommit` |
-| `domain/calendar.py` | 002 | `snapshot_position` (shift row and `ShiftPosition`) |
+| `domain/calendar.py` | 002, 005 | `snapshot_position` (shift row and `ShiftPosition`); `HeldOutPolicy` (`from_calendar`, refused sets while closed) |
 | `domain/cases.py` | 003 | `CaseState`, `CaseEvent`, `effective_severity` (the only place it is computed), `case_id_for`, `Case`, `CaseHistoryRow` |
 | `domain/causes.py` | 004 | `CauseCategory` (§6 catalog), `Cause` (`etapa` nullable, Q-17), `Evidence` |
 | `domain/notices.py` | 004 | Output contract: `NoticeType`, `Origin`, `Reason` (`motivo`, Q-31), `Notice`, `ActiveCaseRow`, `ShiftReport`, `PendingDelivery`, deterministic `notice_id_for` / `report_id_for` |
@@ -71,17 +73,19 @@ Target layout. Modules are created when their spec is implemented; this file is 
 | `cases/novelty.py` | 004 | Pure §4 rules, reused by spec 010's hooks: `alerts_for` / `alerted_case_ids` (last delta only), `news_reasons` / `expected_news` (`NewsReason`, `NewsItem`), `report_set`, `active_rows`, `case_order` |
 | `cases/notice_builder.py` | 004 | `reasons_for` / `origin_for` (Q-31), `default_cause` (Q-17, Q-32), `case_notice`, `build_snapshot_notices` (one decision per evaluated case, the report at closing), `ShiftClose`, `SnapshotNotices` |
 | `cases/templates.py` | 004 | Deterministic Spanish `texto` and number formatting until spec 008 |
-| `cases/registry/` | 003, 004 | Package re-exporting the names below. `schema.py` (`SCHEMA`, `SCHEMA_VERSION` = 2), `session.py` (`Session`: connection, open unit, write guard, `savepoint`), `sqlite.py` (`SqliteRegistry`: `user_version`, the only unit of work `processing`, `ProcessedStore`), `cases_repo.py` (`SqliteCaseRepository` incl. `resolved_unreported` and `last_deviation_row`, `CaseRepository` protocol), `releases.py` (`SqliteReleaseStore`), `notices.py` (`SqliteNoticeStore` = `registry.notices`: decisions and delivery outbox, ADR-0010) |
+| `cases/registry/` | 003, 004, 005 | Package re-exporting the names below. `schema.py` (`SCHEMA`, `SCHEMA_VERSION` = 2), `session.py` (`Session`: connection, open unit, write guard, `savepoint`), `sqlite.py` (`SqliteRegistry`: `user_version`, the only unit of work `processing`, `ProcessedStore`), `cases_repo.py` (`SqliteCaseRepository` incl. `resolved_unreported` and `last_deviation_row`, `CaseRepository` protocol), `releases.py` (`SqliteReleaseStore`), `notices.py` (`SqliteNoticeStore` = `registry.notices`: decisions and delivery outbox, ADR-0010; module-level `read_deliverables(path)`, read-only `mode=ro`, same `DELIVERABLE_FILTER` as `pending()`) |
 | `cases/tracker.py` | 003 | `CaseTracker.track` (lifecycle over the registry; re-runnable within a snapshot, Q-27) and `mark_reported`; `CaseDelta`, `TrackedEvent` |
-| `config.py` | 003, 004 | `Settings.registry_path` = `output_dir / "registry.sqlite3"`, `Settings.notices_dir` = `output_dir / "notices"` |
+| `config.py` | 003, 004, 005 | `Settings.registry_path` = `output_dir / "registry.sqlite3"`, `Settings.notices_dir` = `output_dir / "notices"`; `heldout_open`, `heldout_first_shift`; derived `plant_dir`, `snapshots_dir`, `logbooks_dir`, `rules_dir`, `evals_dir` |
 | `notify/port.py` | 004 | `Notifier` protocol (`alert`, `report`) |
 | `notify/console.py`, `notify/file.py`, `notify/composite.py` | 004 | `ConsoleNotifier` (never fails on encoding), `FileNotifier` (atomic report per shift, idempotent `alertas.jsonl`), `CompositeNotifier` |
 | `ingestion/errors.py` | 001 | `DataLoadError` and validation-message formatting |
 | `ingestion/plant.py` | 001 | `load_plan`, `load_standards`, `load_shipments`, `load_shifts` (BOM, row checks, plan completeness) |
-| `ingestion/rows.py` | 002 | `read_rows`: shared CSV row reader (BOM, physical-line errors) |
+| `ingestion/rows.py` | 002, 005 | `iter_rows`: streaming CSV row reader (BOM, physical-line errors); `read_rows` = `list(iter_rows(...))` |
+| `ingestion/held_out.py` | 005 | `check_ids`: refuses held-out shift and snapshot ids (`DataLoadError`) |
+| `ingestion/logbooks.py` | 005 | `read_logbook_texts`: shift logbook texts through the held-out guard (`utf-8-sig`, universal newlines) |
 | `ingestion/snapshot.py` | 001, 002 | `load_snapshot`, `parse_snapshot` (bytes, no filesystem) |
 | `ingestion/hashing.py` | 002 | `content_hash`: lowercase hex SHA-256 of raw bytes |
-| `ingestion/arrivals.py` | 002 | `Arrival`, `load_arrivals` (`llegadas.csv`, sorted by `orden`) |
+| `ingestion/arrivals.py` | 002, 005 | `Arrival`, `load_arrivals` (`llegadas.csv`, sorted by `orden`); `load_arrivals_until` (streams up to the allowed snapshots) |
 | `runner/ports.py` | 002, 004 | `ProcessedStore` (unit of work over a `SnapshotCommit`), `SnapshotPipeline` and `PostCommit` protocols |
 | `runner/outbox.py` | 004 | `OutboxDispatcher` (`PostCommit`: ordered, at-least-once delivery after commit, ADR-0010) and the `PendingNotices` protocol |
 | `runner/memory_store.py` | 002 | `InMemoryProcessedStore` |
@@ -96,6 +100,15 @@ Target layout. Modules are created when their spec is implemented; this file is 
 | `metrics/bottleneck.py` | 001 | Delayed units and bottleneck stage |
 | `metrics/severity.py` | 001 | Gap, delay and minimum severity |
 | `metrics/engine.py` | 001 | `PlantContext` and `compute_metrics` for one snapshot |
+| `evaluation/output.py` | 005 | `RunOutput`: a run's deliverable alerts and shift reports |
+| `evaluation/sources.py` | 005 | `load_run_output`: reads the registry outbox through `read_deliverables` and refuses held-out ids |
+| `evaluation/golden.py` | 005 | Golden YAML schema and `load_golden` (`GoldenSet`, `Capability`; keys `{modelo, mercado, abre_en}` → `case_id_for`; `covers`, `depends_on`, `requires`; justifications cite `criterio N`; verbatim evidence check at load) |
+| `evaluation/results.py` | 005 | `Result`, `Section`, `tally`, `errors`, `ALERT_ERRORS`, `NEWS_ERRORS` |
+| `evaluation/scoring.py` | 005 | `score_alerts`, `score_news` (covered shifts only; `requires` gating and per-case release of extras) |
+| `evaluation/noise.py` | 005 | `count_noise` (`RepeatedNews`, `NoiseScore`): §4 repeats re-derived without `cases.novelty`; duplicate alerts reported, not gating |
+| `evaluation/summary.py` | 005 | `EvalSummary`, `evaluate`, `exit_code`, `render_table`, `write_summary` (`outputs/evals/eval-<ts>.json`) |
+| `evaluation/timeline.py` | 005 | `CaseTimeline`, `case_timeline` (calendar order) |
+| `evaluation/cli.py` | 005 | `run_eval` (keyword-only): exit 0 ok, 1 gated errors, 2 load error |
 
 ## Dependency rule
 Dependencies point inward:
@@ -105,6 +118,7 @@ runner → agents → mcp_server → cases / metrics / logbooks → domain
                 ↘ hooks ↗
 runner → notify
 notify, telemetry, ingestion → domain
+evaluation → ingestion → domain
 ```
 
 - `domain` imports nothing from the project.
@@ -113,6 +127,8 @@ notify, telemetry, ingestion → domain
 - `cases` imports only `domain` and `metrics.thresholds` (checked per module). `SqliteRegistry` satisfies `runner`'s `ProcessedStore` structurally, without importing `runner`.
 - `metrics` and `cases` never import `agents`, `mcp_server` or `anthropic`. The deterministic core is testable without the model.
 - Only `agents` imports `anthropic`, and only `mcp_server` imports `mcp`.
+- `evaluation` imports only `domain` and `ingestion`, with one exception: `evaluation/sources.py` imports `read_deliverables` from `cases.registry.notices` (ADR-0011). It never imports `cases.novelty`, so noise is judged independently of the code under test.
+- `evals/` holds thin scripts: they read `get_settings()`, call `evaluation` or `runner`, and turn errors into one line and an exit code. No logic lives there.
 
 ## Design patterns
 
@@ -130,4 +146,4 @@ notify, telemetry, ingestion → domain
 
 ## Tests vs evals
 - **Tests** (`tests/`) check code against rules and run in CI with no network.
-- **Evals** (`evals/`) check system behavior, including the model, against golden cases. They run on demand and cost money.
+- **Evals** (`evals/`) check system behavior, including the model, against golden cases. They run on demand on real data (days 1–7 only) and cost money once the agent is in the loop. The evaluator code itself (`src/plant_monitor/evaluation/`) is tested in CI like any module, with synthetic fixtures.

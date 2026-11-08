@@ -20,7 +20,7 @@ Days 8–10 are held out (FR-40): never open, grep or compute over shifts **T22�
 1. Pick a day or shift and compute the expected metrics by hand or with a throwaway script (never commit the script into `src/`).
 2. Apply `criterio.md` §3–§6 step by step: when each case opens, escalates, resolves; which alerts fire and in which snapshot; what each shift report's news must contain.
 3. For causes, quote the exact logbook fragment and verify it appears verbatim in that logbook.
-4. Record every expected item with its justification (rule §n and the numbers or quote that support it).
+4. Record every expected item with its justification: the rule as `criterio N` and the numbers or quote that support it. Golden analyses (`notes`, `justification`, comments, `incidents.md`) are written in **Spanish** and never use the section sign; logbook quotes stay verbatim.
 5. Mark uncertain items explicitly with the open question (Q-xx) they depend on, instead of guessing.
 
 ## Output

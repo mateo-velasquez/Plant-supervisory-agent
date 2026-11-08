@@ -47,10 +47,27 @@ Place the course dataset in `data/` (see [data/README.md](data/README.md)).
 ```powershell
 uv run pytest --cov              # tests + coverage (min 80%)
 uv run ruff check . ; uv run ruff format .
-uv run mypy src tests
+uv run mypy src tests evals
 uv run pre-commit run --all-files
 ```
 CI runs the same checks on Ubuntu and Windows for every PR. CI never calls the model.
+
+## How to run evals
+Evals run on demand over the real data of days 1–7 ([ADR-0011](docs/adr/0011-evaluator-reads-outbox-independent-noise.md)). Both scripts read `Settings`, so `ANTHROPIC_API_KEY` must be set (any value works while the run is threshold-only).
+
+```powershell
+# 1. Threshold-only run of days 1–7: writes outputs/evals/smoke-<timestamp>/registry.sqlite3
+uv run python evals/smoke_days_1_7.py
+
+# 2. Score a run's registry against the golden cases in evals/golden/
+uv run python evals/run_eval.py --registry outputs/evals/smoke-<timestamp>/registry.sqlite3 --golden evals/golden
+uv run python evals/run_eval.py --registry <run>/registry.sqlite3 --golden evals/golden --capabilities agent
+```
+
+- `--capabilities` (repeatable or comma-separated, default none) names what the run can do. Golden items marked `requires: [agent]` are always scored, but they only decide the result when the run has that capability.
+- The eval prints a table (alerts, news, noise, gated errors per section and per open question) and writes `outputs/evals/eval-<timestamp>.json`.
+- Exit codes: `0` no gated errors, `1` gated errors (the smoke run also exits `1` if notices are left pending), `2` load or settings error.
+- Held-out days: `HELDOUT_OPEN` (default `false`) and `HELDOUT_FIRST_SHIFT` (default `T22`) are the product guard; the evaluator and the smoke run refuse T22–T30 and S043–S060 while it is closed. `CLAUDE_ALLOW_HELDOUT=1` is a different switch: it only opens the Claude Code guard hook. Both stay closed until the held-out run (week 5).
 
 ## Documentation
 | | |
