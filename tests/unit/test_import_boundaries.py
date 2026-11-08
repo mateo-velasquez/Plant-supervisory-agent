@@ -368,3 +368,55 @@ def test_importing_evaluation_scoring_loads_no_cases_module_and_no_sqlite(tmp_pa
     )
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout) == []
+
+
+# --- 006 logbooks and MCP (E18) ---
+
+MCP_SERVER_ALLOWED = {"domain", "metrics", "cases", "logbooks", "mcp_server"}
+
+
+def mcp_importers(sources: dict[str, str]) -> list[str]:
+    """Relative paths of the sources outside 'mcp_server' that import 'mcp'."""
+    return sorted(
+        path
+        for path, source in sources.items()
+        if not path.startswith("mcp_server/") and "mcp" in imported_roots(source)
+    )
+
+
+def test_e18_only_mcp_server_imports_mcp() -> None:
+    """E18: every package, including 'agents' once it exists, keeps 'mcp' out; only 'mcp_server' has it."""
+    sources = {
+        str(path.relative_to(PACKAGE).as_posix()): path.read_text(encoding="utf-8")
+        for path in PACKAGE.rglob("*.py")
+    }
+    assert mcp_importers(sources) == []
+    assert any(imported_roots(sources[p]) & {"mcp"} for p in sources if p.startswith("mcp_server/"))
+
+
+@pytest.mark.parametrize("path", ["logbooks/store.py", "agents/runner.py"])
+def test_e18_scanner_flags_import_mcp_under_logbooks_or_agents(path: str) -> None:
+    """E18: a fixture source with 'import mcp' under 'logbooks' or 'agents' is flagged."""
+    assert mcp_importers({path: "import mcp\n", "mcp_server/client.py": "import mcp\n"}) == [path]
+
+
+def test_e18_logbooks_imports_only_domain_ingestion_and_logbooks_and_no_sdk() -> None:
+    """E18: the 'logbooks' allow-list, and it joins the SDK-free scan."""
+    assert layer_offenders(modules_of("logbooks"), {"domain", "ingestion", "logbooks"}) == {}
+    sdk = [
+        p.name for p in modules_of("logbooks") if imported_roots(p.read_text(encoding="utf-8")) & FORBIDDEN
+    ]
+    assert sdk == []
+
+
+def test_e18_mcp_server_imports_only_its_allowed_layers_and_no_anthropic() -> None:
+    """E18: 'mcp_server' never reads config, runner, agents or evaluation, nor 'anthropic'."""
+    files = modules_of("mcp_server")
+    assert layer_offenders(files, MCP_SERVER_ALLOWED) == {}
+    assert [p.name for p in files if "anthropic" in imported_roots(p.read_text(encoding="utf-8"))] == []
+
+
+def test_e18_verbatim_and_errors_import_nothing_from_the_project() -> None:
+    """E18: the two shared 'domain' modules are leaves."""
+    files = [PACKAGE / "domain" / "verbatim.py", PACKAGE / "domain" / "errors.py"]
+    assert layer_offenders(files, set()) == {}
