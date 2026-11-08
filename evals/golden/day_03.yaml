@@ -46,7 +46,7 @@ news:
     estado: en_seguimiento
     severidad: media
     severidad_maxima: media
-    justification: "criterio 4: caso nuevo; criterio 3: SUV x Local se abre en S017 (mitad de T09): gap 0 u, demora 1 d (las unidades en repintado llegan a LOC-0306 en vez de LOC-0305) = media para Local (media >= 1 d), cuello de botella pintura (4 unidades). En el cierre de T09 S018 está en_seguimiento (abierto un snapshot antes): gap -1 u = -4,2 % (por debajo del piso de 3 unidades), demora 1 d, media. Máximo media desde la apertura (criterio 4, Q-28). Sin novedad de SUV x Europa en T09: sin cambios desde el informe de T08 (escalado/critica, máximo critica), criterio 4: sin aviso."
+    justification: "criterio 4: caso nuevo; criterio 3: SUV x Local se abre en S017 (mitad de T09): gap 0 u, demora 1 d (las 2 unidades en repintado asignadas a LOC-0305 llegan a LOC-0306) = media para Local (media >= 1 d), cuello de botella pintura (4 unidades). En el cierre de T09 S018 está en_seguimiento (abierto un snapshot antes): gap -1 u = -4,2 % (por debajo del piso de 3 unidades), demora 1 d, media. Máximo media desde la apertura (criterio 4, Q-28). Sin novedad de SUV x Europa en T09: sin cambios desde el informe de T08 (escalado/critica, máximo critica), criterio 4: sin aviso."
 
 causes:
   - id: t08-se-alert-cause
@@ -67,7 +67,7 @@ causes:
     categoria: retencion_de_calidad
     etapa: calidad
     requires: [agent]
-    depends_on: ["Q-02"]
+    depends_on: ["Q-02", "Q-38"]
     evidencia:
       bitacora: T07
       fragmento: "A media mañana llegó la auditoría de homologación para Europa y retuvo en calidad las SUV de exportación que pasaban por la estación final."

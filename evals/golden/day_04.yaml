@@ -11,7 +11,7 @@ notes: >-
   S020 -> gap 0 u, demora 0 d, ninguna, sin elevación. Dos snapshots limpios (S019, S020) y sin elevación vigente en S020, así que el
   caso se resuelve en S020 (criterio 3, Q-25). El máximo desde el informe de T09 es critica (S019 bajo la elevación); una corrida solo con umbrales
   da ninguna ahí.
-  SUV x Local: S019 -2 u -8,3 % demora 1 d media; S020 -4 u -16,7 % demora 1 d media. Mismo estado en_seguimiento, misma
+  SUV x Local: S019 -2 u -8,3 % demora 1 d media; S020 -4 u -16,7 % demora 1 d media (por gap y por demora). Mismo estado en_seguimiento, misma
   severidad media y sin pico respecto del informe de T09, así que no hay novedad (criterio 4: sin aviso).
   SUV x Brasil: S018 -1 u -5,6 % ninguna; S019 -3 u -16,7 % (plan diario 18), demora 0 d, cuello de botella ninguno: media, así que
   se abre en S019; S020 -3 u -16,7 %, demora 0 d: media, en_seguimiento. El faltante de 3 u está justo en el
@@ -53,7 +53,11 @@ causes:
     case: {modelo: SUV, mercado: Brasil, abre_en: S019}
     notice: informe_de_turno
     turno_id: T10
-    categoria: no_declarada
-    etapa: null
-    depends_on: ["Q-02", "Q-17", "Q-32"]
-    justification: "criterio 6 no_declarada: ninguna etapa vincula una causa de bitácora con este caso. El cuello de botella del caso es ninguno en S019 y S020 (sin unidades demoradas), así que modelo + etapa no coincide con nada (Q-02); las líneas de repintado de T09/T10 sobre SUV en Gris Grafito no se vinculan a un caso sin etapa. Solo por gap, así que etapa es null (Q-17, Q-32: etapa del último snapshot con desvío, S020, ninguna)."
+    categoria: retrabajo
+    etapa: pintura
+    requires: [agent]
+    depends_on: ["Q-02", "Q-17", "Q-40"]
+    evidencia:
+      bitacora: T09
+      fragmento: "A las 2:00 se separaron las carrocerías de SUV en Gris Grafito que habían salido de pintura desde la tarde, por diferencia de tono con la muestra patrón. Vuelven a la cabina de repintado; se estiman seis horas por unidad."
+    justification: "criterio 6 retrabajo: las unidades vuelven a una etapa anterior (repintado), y criterio 6 permite no_declarada solo si ninguna bitácora dice por qué. El caso no tiene cuello de botella en S019 y S020 (sin unidades demoradas), así que se vincula por modelo (Q-17, Q-40): el faltante de 3 u son exactamente las 3 SUV x Brasil en Gris Grafito enviadas a repintado en S017 (U01905, U01929, U01941, retrabajos 1), y T09 nombra las SUV en Gris Grafito sin indicar mercado. T10 confirma el regreso ('Las SUV en Gris Grafito repintadas empezaron a volver a la línea de montaje.')."

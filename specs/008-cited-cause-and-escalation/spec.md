@@ -33,6 +33,7 @@ To be written when the spec moves to Ready. Seeds from days 1–7 (verified quot
 - Notice-evidence failures: fragment not verbatim, logbook not loaded, `evidence_missing` for a declared cause with no evidence, case-sensitive mismatch.
 - A gap-only `no_declarada` scored against a run alert (`etapa` null vs `montaje`), and `target_missing` for an alert or a news item.
 - Q-38: the cause stays the original one until the case resolves.
+- Q-40: a gap-only case linked by model to a logbook cause when the data trace its shortfall to the named units (SUV × Brasil, T10, `retrabajo` / `pintura` from T09). Confirm it together with Q-02.
 - Open notes from 005: whether the stage of a cited cause is the stage the logbook names or the data bottleneck; whether a citation from a logbook not yet available is an error (Q-01).
 - Confirm with Q-02 that spec 005's per-case release of extras (an unmet `requires: [agent]` item releases only its own case's extras) holds: a §5 raise must not change another case's news without that case carrying its own golden items.
 
