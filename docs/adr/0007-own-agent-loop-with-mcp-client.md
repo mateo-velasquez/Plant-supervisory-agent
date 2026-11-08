@@ -20,5 +20,5 @@ We write the agent loop ourselves on the `anthropic` Messages API with tool use.
 - Negative / risks: more code to own (loop, retries with backoff, stop conditions, cost accounting).
 - Follow-ups:
   - ~~Decide where the `mcp` client is imported~~: done in spec 006, a thin adapter in `mcp_server/client.py`, so only `mcp_server` imports `mcp` (ADR-0013).
-  - Before spec 007, check Haiku 5.5 parameters (`effort`, thinking, minimum cacheable prefix, pricing) against the current API docs.
+  - ~~Before spec 007, check Haiku 5.5 parameters against the current API docs~~: done 2026-11-08 (spec 007 D1). Thinking is adaptive only (`budget_tokens` returns 400) and its blocks go back unmodified in an append-only history; `effort` defaults to `medium`; sampling parameters return 400; the minimum cacheable prefix is 512 tokens; $0.10 / $0.50 per MTok up to 100k prompt tokens and ×5 above. The loop contract is [ADR-0014](0014-coordinator-loop-contract.md).
   - ~~Set this ADR to Accepted once spec 006 confirms the transport~~: done (ADR-0013).

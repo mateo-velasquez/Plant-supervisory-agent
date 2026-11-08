@@ -16,5 +16,6 @@ One file per significant decision: `NNNN-short-title.md`, numbered in order, nev
 | [0011](0011-evaluator-reads-outbox-independent-noise.md) | Evaluator reads the registry outbox, re-derives noise independently, and gates golden items by capability | Accepted |
 | [0012](0012-lean-spec-workflow.md) | Lean spec workflow: anchored reading, spec size budget, delta re-review and test budget | Accepted |
 | [0013](0013-in-process-mcp-transport-and-tool-client.md) | In-process MCP transport, ToolClient adapter and in-unit-of-work writes | Accepted |
+| [0014](0014-coordinator-loop-contract.md) | Coordinator loop contract: template fallback, notice draft writer, budget guard and sync-to-async bridge | Accepted |
 
 Template: [template.md](template.md)
