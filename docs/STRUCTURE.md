@@ -43,7 +43,8 @@ Target layout. Modules are created when their spec is implemented; this file is 
 ├── evals/
 │   ├── golden/               # hand-verified expected notices per day (days 1–7) + incidents.md catalog
 │   ├── run_eval.py           # thin script over evaluation.cli.run_eval
-│   └── smoke_days_1_7.py     # threshold-only run of days 1–7 into outputs/evals/smoke-<ts>/
+│   ├── smoke_days_1_7.py     # threshold-only run of days 1–7 into outputs/evals/smoke-<ts>/
+│   └── agent_days_1_3.py     # on-demand run of days 1–3 with the coordinator and Haiku (paid; user-run)
 ├── specs/
 │   ├── stories/              # user stories with Gherkin acceptance criteria
 │   ├── _template/            # spec / plan / tasks templates
@@ -72,11 +73,13 @@ Target layout. Modules are created when their spec is implemented; this file is 
 | `logbooks/render.py` | 006 | `render_logbook`: the delimited `<bitacora>` block with colliding tags escaped (R6, X1) |
 | `logbooks/__init__.py` | 006 | Re-exports the store, the errors and `render_logbook` |
 | `mcp_server/__init__.py` | 006 | Package docstring only |
-| `mcp_server/context.py` | 006 | `SnapshotFrame`, `FrameHolder` (`current`, `entered` raises `ValueError` on nesting; R7), `NoCurrentSnapshot`, `UnknownCase`, `CaseReader` (read-only protocol, R14), `ToolContext` |
+| `mcp_server/context.py` | 006, 007 | `SnapshotFrame` (with `notices: NoticeTextWriter | None`, 007), `NoticeTextWriter` protocol (007), `FrameHolder` (`current`, `entered` raises `ValueError` on nesting; R7), `NoCurrentSnapshot`, `UnknownCase`, `CaseReader` (read-only protocol, R14), `ToolContext` |
 | `mcp_server/budget.py` | 006 | `to_text` (compact JSON), `check_budget`, `fit_list` (drops list items from the end through a `rebuild` callable), `OverBudget` (R12) |
 | `mcp_server/views.py` | 006 | Output view models in Spanish field names: `AvailableLogbook`, `LogbooksView`, `DeviationsView`, `ActiveCasesView`, `CaseView`, `DelayedUnitsView` and their rows; pure builders (`deviations_view`, `active_cases_view`, `case_view`, `delayed_units_view`) round floats (R8–R11) |
+| `mcp_server/types.py` | 007 | `ToolSpec`, `ToolOutcome`: plain dataclasses with no `mcp` import, re-exported by `client.py`, so `agents` stays SDK-free |
+| `mcp_server/write_tools.py` | 007 | `emit_alert`, `emit_shift_report` (`NewsText`): sync functions that write `texto` through the frame's `NoticeTextWriter`; `NoNoticeWriter` refusal (R8, R9) |
 | `mcp_server/read_tools.py` | 006 | The six read tools as pure sync functions `(ctx, frames, ...) -> str`; no `mcp` import; each applies `check_budget`, or `fit_list` for the truncatable lists of `get_case` and `get_delayed_units` (R12) |
-| `mcp_server/server.py` | 006 | `READ_TOOLS`, `build_server(ctx, frames)`: async wrappers that map `RejectedRequest` to `ToolError` (R13) |
+| `mcp_server/server.py` | 006, 007 | `READ_TOOLS`, `WRITE_TOOLS`, `build_server(ctx, frames, tools=READ_TOOLS)`: async wrappers that map `RejectedRequest` to `ToolError` (R13) |
 | `mcp_server/client.py` | 006 | `ToolClient` (async context manager over the in-process SDK client), `ToolSpec`, `ToolOutcome`: plain dataclasses, the only door `agents` uses (D4) |
 | `domain/cases.py` | 003 | `CaseState`, `CaseEvent`, `effective_severity` (the only place it is computed), `case_id_for`, `Case`, `CaseHistoryRow` |
 | `domain/causes.py` | 004 | `CauseCategory` (§6 catalog), `Cause` (`etapa` nullable, Q-17), `Evidence` |
@@ -87,8 +90,9 @@ Target layout. Modules are created when their spec is implemented; this file is 
 | `cases/notice_builder.py` | 004 | `reasons_for` / `origin_for` (Q-31), `default_cause` (Q-17, Q-32), `case_notice`, `build_snapshot_notices` (one decision per evaluated case, the report at closing), `ShiftClose`, `SnapshotNotices` |
 | `cases/templates.py` | 004 | Deterministic Spanish `texto` and number formatting until spec 008 |
 | `cases/registry/` | 003, 004, 005 | Package re-exporting the names below. `schema.py` (`SCHEMA`, `SCHEMA_VERSION` = 2), `session.py` (`Session`: connection, open unit, write guard, `savepoint`), `sqlite.py` (`SqliteRegistry`: `user_version`, the only unit of work `processing`, `ProcessedStore`), `cases_repo.py` (`SqliteCaseRepository` incl. `resolved_unreported` and `last_deviation_row`, `CaseRepository` protocol), `releases.py` (`SqliteReleaseStore`), `notices.py` (`SqliteNoticeStore` = `registry.notices`: decisions and delivery outbox, ADR-0010; module-level `read_deliverables(path)`, read-only `mode=ro`, same `DELIVERABLE_FILTER` as `pending()`) |
+| `cases/draft.py` | 007 | `NoticeDraft`: in-memory draft of a snapshot's notices (`required`, `missing`, `write_alert`, `write_news`, `build` through the validators) and its `RejectedRequest` refusals (R8–R10) |
 | `cases/tracker.py` | 003 | `CaseTracker.track` (lifecycle over the registry; re-runnable within a snapshot, Q-27) and `mark_reported`; `CaseDelta`, `TrackedEvent` |
-| `config.py` | 003, 004, 005, 006 | `tool_output_max_chars`, `logbook_max_chars` (006); `Settings.registry_path` = `output_dir / "registry.sqlite3"`, `Settings.notices_dir` = `output_dir / "notices"`; `heldout_open`, `heldout_first_shift`; derived `plant_dir`, `snapshots_dir`, `logbooks_dir`, `rules_dir`, `evals_dir` |
+| `config.py` | 003, 004, 005, 006, 007 | Model, retry, loop, price and long-context settings and derived `traces_dir` (007); `tool_output_max_chars`, `logbook_max_chars` (006); `Settings.registry_path` = `output_dir / "registry.sqlite3"`, `Settings.notices_dir` = `output_dir / "notices"`; `heldout_open`, `heldout_first_shift`; derived `plant_dir`, `snapshots_dir`, `logbooks_dir`, `rules_dir`, `evals_dir` |
 | `notify/port.py` | 004 | `Notifier` protocol (`alert`, `report`) |
 | `notify/console.py`, `notify/file.py`, `notify/composite.py` | 004 | `ConsoleNotifier` (never fails on encoding), `FileNotifier` (atomic report per shift, idempotent `alertas.jsonl`), `CompositeNotifier` |
 | `ingestion/errors.py` | 001 | `DataLoadError` and validation-message formatting |
@@ -103,7 +107,16 @@ Target layout. Modules are created when their spec is implemented; this file is 
 | `runner/outbox.py` | 004 | `OutboxDispatcher` (`PostCommit`: ordered, at-least-once delivery after commit, ADR-0010) and the `PendingNotices` protocol |
 | `runner/memory_store.py` | 002 | `InMemoryProcessedStore` |
 | `runner/checks.py` | 002 | Pure anomaly checks: shift mismatch, future stage entry, unit identity |
-| `runner/pipeline.py` | 004 | `ThresholdPipeline`, `shift_close`, `deviation_rows` and the `ReleaseLog`, `NoticeSink`, `NoticeCaseReader` protocols |
+| `runner/pipeline.py` | 004, 007 | `ThresholdPipeline` (`decide` → `SnapshotDecision`, `finish`; `process = finish(decide())`, 007), `shift_close`, `deviation_rows` and the `ReleaseLog`, `NoticeSink`, `NoticeCaseReader` protocols |
+| `runner/agent_pipeline.py` | 007 | `AgentPipeline` (call decision, frame check against `current_snapshot()`, `anyio.run` bridge with single-leaf exception-group unwrap, single `finish`, staged and aborted trace lines), `OpenUnit`, `NoticeSteps`, `build_agent_pipeline` (composition root) |
+| `runner/post_commit.py` | 007 | `PostCommitChain`: runs post-commit steps (trace flush, outbox) in order; a failing step is logged and never blocks the next |
+| `agents/model.py` | 007 | Model port: content blocks, `Message`, `ModelRequest`, `ModelReply`, `ModelSession`, `ModelPort`, `ModelCallFailed` (no SDK types) |
+| `agents/anthropic_model.py` | 007 | `AnthropicModel` (the only `anthropic` import): own retries with backoff (`RetryPolicy`, `backoff_delay`, `is_retryable`), `to_params`, `from_message` |
+| `agents/fake_model.py` | 007 | `FakeModel`: scripted replies and token counts for tests (NFR-07) |
+| `agents/loop.py` | 007 | `Coordinator` (turns, stop conditions, tool errors, reminder, budget guard, append-only history), `ToolPort`, `TextProgress`, `LoopOutcome`, `LoopConfig`, `LoopLog` |
+| `agents/brief.py`, `agents/factory.py`, `agents/prompts/coordinator.md` | 007 | `render_brief`, `render_reminder`; `COORDINATOR_TOOLS`, `load_prompt`, `build_coordinator`; prompt v1 (R15) |
+| `telemetry/usage.py` | 007 | `Usage`, `PriceCard`, `cost_usd` (long-context ×5 card above 100k prompt tokens) |
+| `telemetry/trace.py` | 007 | `TraceLine`, `build_line`, `abort_outcome`, `trace_path`, `TraceWriter` (stage, `after_commit`, `write_now`; logs its own `OSError`), `read_trace`, `run_totals` |
 | `runner/series.py` | 002, 004 | `RunSummary`, `RunAborted`, `run_series` (order, dedupe, checks, delegate; optional `post_commit` at run start and after each commit) |
 | `metrics/thresholds.py` | 001 | `Thresholds` and `load_thresholds` for `umbrales.yaml` |
 | `metrics/tables.py` | 001 | `StandardsTable`, `ShipmentsTable` (bisect over cut-offs) |
@@ -139,7 +152,8 @@ evaluation → ingestion → domain
 - `notify` imports only `domain`; text is built in `cases/templates.py`, not by the channels.
 - `cases` imports only `domain` and `metrics.thresholds` (checked per module). `SqliteRegistry` satisfies `runner`'s `ProcessedStore` structurally, without importing `runner`.
 - `metrics` and `cases` never import `agents`, `mcp_server` or `anthropic`. The deterministic core is testable without the model.
-- Only `agents` imports `anthropic`, and only `mcp_server` imports `mcp`. `agents` reaches the server only through `mcp_server.client` (`ToolClient`), in-process (ADR-0013).
+- Only `agents/anthropic_model.py` imports `anthropic`, and only `mcp_server` imports `mcp`. `agents` imports only `domain`, `telemetry`, `config`, `agents` and `mcp_server.types`; the composition root (`runner/agent_pipeline.py`) wires `ToolClient` in-process (ADR-0013, ADR-0014).
+- `telemetry` imports only `domain`. `runner/agent_pipeline.py` may import `agents`, `mcp_server`, `telemetry`, `logbooks` and `config`, never `anthropic` (the model is injected).
 - `logbooks` imports only `domain`, `ingestion` and `logbooks`, and loads files only through `read_logbook_texts`. `mcp_server` imports only `domain`, `metrics`, `cases`, `logbooks`, `mcp_server` and `mcp`; never `config`, `runner`, `agents`, `evaluation` or `anthropic`.
 - `evaluation` imports only `domain` and `ingestion`, with one exception: `evaluation/sources.py` imports `read_deliverables` from `cases.registry.notices` (ADR-0011). It never imports `cases.novelty`, so noise is judged independently of the code under test.
 - `evals/` holds thin scripts: they read `get_settings()`, call `evaluation` or `runner`, and turn errors into one line and an exit code. No logic lives there.
