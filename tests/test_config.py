@@ -18,6 +18,8 @@ def _isolate_environment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Non
         "LOG_LEVEL",
         "HELDOUT_OPEN",
         "HELDOUT_FIRST_SHIFT",
+        "TOOL_OUTPUT_MAX_CHARS",
+        "LOGBOOK_MAX_CHARS",
     ):
         monkeypatch.delenv(var, raising=False)
 
@@ -97,6 +99,40 @@ def test_e36_derived_paths_come_from_data_dir_and_output_dir() -> None:
     assert settings.evals_dir == Path("o") / "evals"
     derived = {"plant_dir", "snapshots_dir", "logbooks_dir", "rules_dir", "evals_dir"}
     assert derived.isdisjoint(Settings.model_fields)
+
+
+def test_e19_budget_defaults() -> None:
+    """E19 (a): both budgets default to 4000."""
+    settings = Settings(anthropic_api_key="k")
+    assert settings.tool_output_max_chars == 4000
+    assert settings.logbook_max_chars == 4000
+
+
+def test_e19_budgets_read_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """E19 (b): env overrides both budgets."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    monkeypatch.setenv("TOOL_OUTPUT_MAX_CHARS", "2500")
+    monkeypatch.setenv("LOGBOOK_MAX_CHARS", "3000")
+    settings = Settings()
+    assert settings.tool_output_max_chars == 2500
+    assert settings.logbook_max_chars == 3000
+
+
+@pytest.mark.parametrize("name", ["TOOL_OUTPUT_MAX_CHARS", "LOGBOOK_MAX_CHARS"])
+def test_e19_zero_budget_is_rejected(monkeypatch: pytest.MonkeyPatch, name: str) -> None:
+    """E19 (c): a zero budget is invalid."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    monkeypatch.setenv(name, "0")
+    with pytest.raises(ValidationError):
+        Settings()
+
+
+def test_e19_env_example_has_both_budget_lines() -> None:
+    """E19 (d): '.env.example' names both variables."""
+    example = Path(__file__).resolve().parents[1] / ".env.example"
+    lines = example.read_text(encoding="utf-8").splitlines()
+    for name in ("TOOL_OUTPUT_MAX_CHARS", "LOGBOOK_MAX_CHARS"):
+        assert any(line.startswith(f"{name}=") for line in lines)
 
 
 def test_e36_env_example_lists_every_settings_field() -> None:
