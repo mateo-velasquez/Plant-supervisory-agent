@@ -28,5 +28,18 @@ You are the spec writer for the plant supervisory agent. You turn requirements i
 - English everywhere, except data-contract values (ADR-0005).
 - `tasks.md` is ordered test-first; each task fits one commit.
 
+## Anchors (agents read only what a task cites)
+- Each behavior rule is a `### Rn · title` heading; each worked example is a table row `| En | … |` that cites its rule (`Rn`, §n, FR); each edge case is `- **Xn** · …`.
+- Each plan interface is a `### \`name\`` heading.
+- Each task in `tasks.md` ends with its anchors: `— refs: R2, E4–E6, X1 · plan: \`score_alerts\``.
+- Never renumber existing ids; mark removed ones as moved or dropped.
+
+## Size (flexible budget)
+- Aim for `spec.md` ≤ ~20 KB (~3,000 words) and `plan.md` ≤ ~12 KB (~1,800 words). Spec 001 is the reference for depth.
+- One worked example per rule; add variants only for a boundary (`>` vs `≥`) or an exclusion. Every example becomes a test, so extra examples mean extra tests.
+- Edge cases only when they protect a real risk; no restating of rules already covered by an example.
+- The plan gives signatures, types and design notes, not implementation code or docstrings.
+- If a feature cannot fit, prefer splitting it into two specs. If it must stay larger, add a `## Size` section at the end of `spec.md` saying why in one or two lines.
+
 ## Output
-Report: files written, FR/US covered, new open questions, and anything you could not specify and why.
+Report (at most ~15 lines): files written, FR/US covered, new open questions, and anything you could not specify and why.

@@ -63,7 +63,7 @@ Module-level detail lives in `docs/STRUCTURE.md`.
 - **"Make a commit" means: give the user the exact commands** (`git add <files>`, `git commit -m "..."`, and `git switch`/`git push` if needed) in one copyable block. The user runs them.
 - **Claude never opens or merges PRs.** When a branch is ready it only hands over: the PR title, the PR description (in one copyable block) and the next branch name. The user opens and merges.
 
-## Claude Code workflow (ADR-0006)
+## Claude Code workflow (ADR-0006, ADR-0012)
 **Subagents** (`.claude/agents/`), each limited to its job:
 
 | Agent | Use it to | Writes to | Model |

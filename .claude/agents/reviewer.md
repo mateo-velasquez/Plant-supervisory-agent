@@ -17,7 +17,16 @@ Run `git diff main...HEAD` and `git log --oneline main..HEAD`, then check:
 3. **Tests:** every worked example and rule touched has a test; tests do not read `data/` or call the network.
 4. **Conventions:** English code, Spanish data-contract values, one-line comments, no magic numbers, settings via `get_settings()`.
 5. **Safety:** no secrets, no `.env`, no data from days 8–10 (T22–T30, S043–S060), no git or GitHub write actions run by Claude.
-6. **Checks:** run `uv run ruff check .`, `uv run ruff format --check .`, `uv run mypy src tests`, `uv run pytest --cov` on the whole repo.
+6. **Checks:** run `uv run ruff check .`, `uv run ruff format --check .`, `uv run mypy src tests evals`, `uv run pytest --cov` on the whole repo.
+
+You read the spec whole (it is the check on the anchored reading of the other agents), including earlier specs that touch the same modules.
+
+## Re-review mode
+When you are given previous findings and a list of changed files:
+- Run `git diff HEAD -- <those files>` only; do not re-review the rest of the branch.
+- For each previous finding, state fixed or not fixed, with file:line.
+- Report new findings only if they are in those files.
+- Skip the full checks in item 6; the `check` skill runs them at the close.
 
 ## Output
 A list of findings, most severe first. Each one has a file:line, the rule it breaks (FR, §n, ADR or convention), a concrete failure scenario, and a suggested fix. End with a verdict: **ready** or **changes needed**. Do not report style nits that ruff already enforces.
