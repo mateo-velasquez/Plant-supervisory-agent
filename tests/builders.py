@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import pytest
+
 from plant_monitor.domain.cases import Case, CaseHistoryRow, CaseState
 from plant_monitor.domain.enums import Market, Model, Severity, Stage
 from plant_monitor.domain.models import Combination, CombinationMetrics
@@ -197,3 +199,40 @@ def held_out_policy(first_shift: str = "T03", *, is_open: bool = False) -> HeldO
     from plant_monitor.domain.calendar import HeldOutPolicy
 
     return HeldOutPolicy.from_calendar(load_shifts(FIXTURE_PLANT / "turnos.csv"), first_shift, is_open)
+
+
+AGENT_ENV_NAMES = (
+    "ANTHROPIC_MAX_TOKENS",
+    "ANTHROPIC_MAX_RETRIES",
+    "ANTHROPIC_RETRY_BASE_SECONDS",
+    "ANTHROPIC_RETRY_CAP_SECONDS",
+    "PROMPT_TOKEN_LIMIT",
+    "AGENT_MAX_TURNS",
+    "NOTICE_TEXT_MAX_CHARS",
+    "PRICE_INPUT_PER_MTOK",
+    "PRICE_CACHE_WRITE_5M_PER_MTOK",
+    "PRICE_CACHE_WRITE_1H_PER_MTOK",
+    "PRICE_CACHE_READ_PER_MTOK",
+    "PRICE_OUTPUT_PER_MTOK",
+    "LONG_CONTEXT_THRESHOLD_TOKENS",
+    "LONG_CONTEXT_MULTIPLIER",
+)
+SETTINGS_ENV_NAMES = (
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_MODEL",
+    "ANTHROPIC_EFFORT",
+    "DATA_DIR",
+    "LOG_LEVEL",
+    "HELDOUT_OPEN",
+    "HELDOUT_FIRST_SHIFT",
+    "TOOL_OUTPUT_MAX_CHARS",
+    "LOGBOOK_MAX_CHARS",
+    *AGENT_ENV_NAMES,
+)
+
+
+def isolate_settings_env(monkeypatch: pytest.MonkeyPatch, cwd: Path) -> None:
+    """Run in 'cwd' (no dotenv file) with every 'Settings' variable unset."""
+    monkeypatch.chdir(cwd)
+    for var in SETTINGS_ENV_NAMES:
+        monkeypatch.delenv(var, raising=False)

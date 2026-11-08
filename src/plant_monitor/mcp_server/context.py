@@ -1,6 +1,6 @@
 """Snapshot frame, fixed tool context and read-only case reader for the MCP tools (R7, R14)."""
 
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
@@ -13,14 +13,31 @@ from plant_monitor.logbooks.store import LogbookStore
 from plant_monitor.metrics.engine import PlantContext
 
 
+class NoticeTextWriter(Protocol):
+    """Where the write tools put the agent's notice texts (R8, R9)."""
+
+    def write_alert(self, case_id: str, texto: str) -> str:
+        """Store the alert text of 'case_id' and return its notice id."""
+        ...
+
+    def write_news(self, texts: Sequence[tuple[str, str]]) -> tuple[str, ...]:
+        """Store the whole report's texts atomically and return their notice ids."""
+        ...
+
+    def missing(self) -> tuple[str, ...]:
+        """Required notice ids still without a text."""
+        ...
+
+
 @dataclass(frozen=True)
 class SnapshotFrame:
-    """Snapshot being processed: its id, timestamp, metrics and units."""
+    """Snapshot being processed: its id, timestamp, metrics, units and notice writer."""
 
     snapshot_id: str
     at: datetime
     metrics: Mapping[Combination, CombinationMetrics]
     units: tuple[Unit, ...]
+    notices: NoticeTextWriter | None = None
 
 
 class NoCurrentSnapshot(RejectedRequest):

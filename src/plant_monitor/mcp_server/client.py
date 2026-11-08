@@ -1,7 +1,6 @@
 """In-process MCP client: the only door 'agents' uses; returns plain dataclasses, no 'mcp' types (D4)."""
 
 from collections.abc import Mapping
-from dataclasses import dataclass
 from types import TracebackType
 from typing import Self
 
@@ -9,22 +8,8 @@ from mcp import Client
 from mcp.server.mcpserver import MCPServer
 from mcp.types import TextContent
 
-
-@dataclass(frozen=True)
-class ToolSpec:
-    """Name, description and input schema of one tool."""
-
-    name: str
-    description: str
-    input_schema: Mapping[str, object]
-
-
-@dataclass(frozen=True)
-class ToolOutcome:
-    """Text of a tool result and whether it is an error the model should read."""
-
-    text: str
-    is_error: bool
+from plant_monitor.mcp_server.types import ToolOutcome as ToolOutcome
+from plant_monitor.mcp_server.types import ToolSpec as ToolSpec
 
 
 class ToolClient:

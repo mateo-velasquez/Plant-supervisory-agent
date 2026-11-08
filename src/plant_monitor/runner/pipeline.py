@@ -1,14 +1,15 @@
 """Threshold-only snapshot pipeline: metrics, lifecycle and notice decisions inside the unit of work."""
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from typing import Protocol
 
-from plant_monitor.cases.notice_builder import ShiftClose, build_snapshot_notices
+from plant_monitor.cases.notice_builder import ShiftClose, SnapshotNotices, build_snapshot_notices
 from plant_monitor.cases.registry import CaseRepository, SqliteRegistry
 from plant_monitor.cases.tracker import CaseTracker
 from plant_monitor.domain.cases import Case, CaseHistoryRow
 from plant_monitor.domain.enums import ShiftPosition
-from plant_monitor.domain.models import ReleasedUnit, Shift, Snapshot
+from plant_monitor.domain.models import Combination, CombinationMetrics, ReleasedUnit, Shift, Snapshot
 from plant_monitor.domain.notices import Notice, ShiftReport
 from plant_monitor.metrics.engine import PlantContext, compute_metrics
 
@@ -55,6 +56,17 @@ def deviation_rows(case_ids: Iterable[str], reader: NoticeCaseReader) -> dict[st
     return rows
 
 
+@dataclass(frozen=True)
+class SnapshotDecision:
+    """What 'decide' settled for one snapshot, ready for 'finish'."""
+
+    snapshot: Snapshot
+    shift: Shift
+    position: ShiftPosition
+    metrics: Mapping[Combination, CombinationMetrics]
+    notices: SnapshotNotices
+
+
 class ThresholdPipeline:
     """Threshold-only SnapshotPipeline: metrics, lifecycle and notice decisions inside the unit of work."""
 
@@ -77,8 +89,11 @@ class ThresholdPipeline:
         """Wire the pipeline on the registry's shared collaborators."""
         return cls(ctx, registry.releases, registry.cases, registry.cases, registry.notices)
 
-    def process(self, snapshot: Snapshot, shift: Shift, position: ShiftPosition) -> None:
-        """Database writes only; delivery is the post-commit dispatcher's job (ADR-0010)."""
+    def decide(self, snapshot: Snapshot, shift: Shift, position: ShiftPosition) -> SnapshotDecision:
+        """Metrics, lifecycle and notices.
+
+        Writes releases and lifecycle rows to the open unit of work; an abort relies on its rollback.
+        """
         sid = snapshot.snapshot_id
         metrics = compute_metrics(snapshot, self._releases.released_so_far(), self._ctx)
         self._releases.record_releases(snapshot)
@@ -89,6 +104,16 @@ class ThresholdPipeline:
             ids += [case.case_id for case in close.resolved_unreported]
         rows = deviation_rows(ids, self._reader)
         built = build_snapshot_notices(delta, metrics, rows, close)
+        return SnapshotDecision(snapshot, shift, position, metrics, built)
+
+    def finish(self, decision: SnapshotDecision) -> None:
+        """Save the notices once, then mark the reported cases."""
+        sid = decision.snapshot.snapshot_id
+        built = decision.notices
         self._notices.save(sid, built.decisions, built.report)
         for case_id in built.to_mark:
             self._tracker.mark_reported(case_id, sid)
+
+    def process(self, snapshot: Snapshot, shift: Shift, position: ShiftPosition) -> None:
+        """Database writes only; delivery is the post-commit dispatcher's job (ADR-0010)."""
+        self.finish(self.decide(snapshot, shift, position))
