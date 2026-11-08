@@ -32,6 +32,7 @@ One line per decision and why; the full reasoning is in each record. Smaller rul
 | Claude Code workflow with scoped subagents and guard hooks | Costly rules (held-out data, secrets, merges) enforced in code, not prose | [ADR-0006](docs/adr/0006-claude-code-dev-workflow.md) |
 | Own agent loop on the Anthropic SDK with our MCP server (proposed) | Full control over hooks, allowlists and cost; testable with a fake model | [ADR-0007](docs/adr/0007-own-agent-loop-with-mcp-client.md) |
 | Content-hash idempotency, unit of work, non-fatal anomalies | The series runs unattended and the held-out days run once, so a quirk must not stop it | [ADR-0008](docs/adr/0008-series-runner-resilience.md) |
+| Lean spec workflow: anchored reading, size budget, delta re-review, test budget | Cold subagents re-read large specs and tests outgrew the code (98.7% coverage) | [ADR-0012](docs/adr/0012-lean-spec-workflow.md) |
 
 ## Getting started
 Requirements: [uv](https://docs.astral.sh/uv/) ≥ 0.13. Python 3.14 is selected automatically from `.python-version`.
