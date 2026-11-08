@@ -28,7 +28,7 @@ Spec Driven Development plan from today to Demo Day. Every spec traces to requir
 | | [002 series-runner](../specs/002-series-runner/) | `llegadas.csv` replay, idempotency with content hash, snapshot → shift mapping, non-fatal data anomalies | 01, 02, 04 | 01 | Q-10, Q-18–Q-23, ADR-0008 | Must | 11-08 | Implemented |
 | | [003 case-registry](../specs/003-case-registry/) | SQLite repository, lifecycle state machine, max severity since last report | 05, 12–15, 23 | 03 | Q-25–Q-28 | Must | 11-09 | Implemented |
 | | [004 notices-and-reports](../specs/004-notices-and-reports/) | Immediate alert, novelty rules, shift report, `motivo`, `sin_aviso` log, notice outbox, console and file notifier | 21–26 | 04, 05 | Q-13, Q-14, Q-17, Q-23, Q-31, Q-32, ADR-0010 | Must | 11-11 | Implemented |
-| | [005 evaluator-v1](../specs/005-evaluator-v1/) | Golden-case format, alerts/news/cause/noise metrics, held-out guard, incident catalog, real-data smoke run of days 1–7 | 39, 40 | 12 | A1, A3, Q-33–Q-39, ADR-0011 | Must | 11-12 | Ready |
+| | [005 evaluator-v1](../specs/005-evaluator-v1/) | Golden-case format, alerts/news/cause/noise metrics, held-out guard, incident catalog, real-data smoke run of days 1–7 | 39, 40 | 12 | A1, A3, Q-33–Q-39, ADR-0011 | Must | 11-12 | Implemented |
 | 2 · The agent | [006 logbooks-and-mcp](../specs/006-logbooks-and-mcp/) | Logbook store (availability at shift close, verbatim check), MCP server and read tools | 17, 27 | — | Q-01, Q-12, Q-24, ADR-0007 transport | Must | 11-14 | Draft |
 | | [007 coordinator-agent](../specs/007-coordinator-agent/) | Own agent loop, single coordinator over one day, `emit_alert`/`emit_shift_report`, trace log, token accounting | 27, 37, 38 | 10 | ADR-0007, D3 | Must | 11-15 | Draft |
 | | [008 cited-cause-and-escalation](../specs/008-cited-cause-and-escalation/) | `set_cause`, `raise_severity`, `lift_severity_raise`, active-cause entity, `no_declarada` | 16–19 | 06, 07 | Q-02, Q-11, Q-12, Q-29, Q-30 | Must | 11-16 | Draft |
@@ -89,6 +89,19 @@ Seed for the incident catalog (A1) and the first golden cases. Quotes verified v
 - **Day 1 (T01–T03):** no case opens, so the three reports are empty (the T02 Sedán stop resolved within the shift). The day-1 golden case is all "silence": any alert or news item there is an error.
 - **Q-17 (revisited):** a `no_declarada` cause with `etapa = null` occurs in real data: SUV × Brasil throughout, and the resolved news of Sedán × Brasil (S008) and SUV × Local, whose last deviation snapshot (Q-32) had no delayed units. No change to the decision.
 - **Noise:** T19–T21 carry no news while three cases stay `escalado`/`critica`, as §4 requires.
+
+### First evaluator baseline (spec 005, T19)
+
+`evals/run_eval.py` over the A3 registry and `evals/golden` (day 1, T07–T10), capabilities none, run 2026-11-08 (`outputs/evals/eval-20261108T023304Z.json`). **Exit 0, 0 gated errors.**
+
+| Section | Gated | Not gated (`requires: [agent]`) |
+|---|---|---|
+| Alerts | 3 unscored (the S036 Pickup alerts, outside the covered shifts) | 1 `wrong_snapshot` (Q-39): golden expects SUV × Europa at S015 (raise from the T07 logbook); the threshold run alerts at S016 |
+| News | 4 hits (T08 SUV × Europa new, T09 SUV × Local new, T10 SUV × Europa resolved, T10 SUV × Brasil new); 1 `maxima_mismatch` on the T10 resolved news (golden `critica` under the raise, run `ninguna`), an attribute that does not gate; 14 reports unscored (shifts not covered) | — |
+| Noise | 0 repeats | 0 duplicate alerts |
+
+- Day 1 is silence in both the golden and the run: no alert or news in T01–T03.
+- Both differences come from §5 (the T07 raise), which only the agent can apply: they are expected to close in spec 008, not a system bug. No `fix/` branch needed.
 
 ## MCP tool inventory (draft for 006 and 008)
 

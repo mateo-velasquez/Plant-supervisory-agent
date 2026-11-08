@@ -18,24 +18,24 @@ Ordered, test-first. Each task is small enough for one commit. "Ex" refers to th
 - [x] T13 · Tests E37 (exit 0, 1 and 2; `requires` excluded or included through `capabilities`; summary written only on success; no logbook read when none is cited) → `evaluation/cli.py` (`run_eval`, keyword-only) and the thin `evals/run_eval.py` (`--capabilities`). The **main session** adds `evals` to the mypy paths in `.github/workflows/ci.yml`, `.pre-commit-config.yaml`, `.claude/skills/check/SKILL.md` and the `CLAUDE.md` commands.
 - [x] T14 · **A3 (Claude writes, user runs, Claude reads):** `evals/smoke_days_1_7.py` per the plan's composition (`out.mkdir(parents=True)` before the registry; `RunAborted`, `DataLoadError` and `ValueError` → one line, exit 2; `load_run_output` after the registry is closed). Not tested in CI, but linted and type-checked. The **user** runs `uv run python evals/smoke_days_1_7.py` (it reads `.env`). Claude reads the printed output and the run directory, then records in `docs/roadmap.md` which cases open, escalate and resolve, confirms that the second `S034` was skipped and that the outbox was empty, and revisits Q-17 (gap-only cases seen in real data).
 - [x] T15 · **A4 (Claude, research; done while drafting, no Q-xx needed):** explain the 12 units that enter `despacho` after their assigned shipment's departure, and check each logbook's "Producción" line against `liberadas` per shift (days 1–7 only). Record the findings in `docs/roadmap.md` ("Known findings in days 1–7") and add a Q-xx to `docs/requirements.md` if a rule is affected.
-- [ ] T16 · **A1 (user + `eval-curator`):** incident catalog for T01–T21 in `evals/golden/incidents.md`. For each incident: shift(s), category (§6), stage, start quote, resolution quote or date, whether §5 applies, and the distractors and injection attempts nearby. Its header holds the golden authoring notes:
+- [x] T16 · **A1 (user + `eval-curator`):** incident catalog for T01–T21 in `evals/golden/incidents.md`. For each incident: shift(s), category (§6), stage, start quote, resolution quote or date, whether §5 applies, and the distractors and injection attempts nearby. Its header holds the golden authoring notes:
   - quote every `justification` in YAML;
   - use `requires: [agent]` for §5 raises, their effects and declared causes;
   - use `depends_on` for tracking only;
   - a cause keeps its origin until the case resolves (Q-38).
   Not parsed by code.
-- [ ] T17 · **Golden day 1 (`eval-curator`, verified by the user):** `evals/golden/day_01.yaml` covering T01–T03 (S001–S006).
+- [x] T17 · **Golden day 1 (`eval-curator`, verified by the user):** `evals/golden/day_01.yaml` covering T01–T03 (S001–S006).
   - Every alert and news item of every case, per the full criteria.
   - Causes, including the T02 Sedán assembly stop with its same-shift resolution: no §5 raise.
   - Declared causes carry `requires: [agent]` and verbatim evidence.
   - Each item is justified in Spanish with `criterio N` (never the section sign) and numbers or a quote, computed by hand, never copied from the smoke output.
   - It must load with `load_golden` and the real logbook loader.
-- [ ] T18 · **Golden Europe audit (`eval-curator`, verified by the user):** `evals/golden/day_03.yaml` (T07–T09) and `evals/golden/day_04.yaml` (T10).
+- [x] T18 · **Golden Europe audit (`eval-curator`, verified by the user):** `evals/golden/day_03.yaml` (T07–T09) and `evals/golden/day_04.yaml` (T10).
   - Every news item in those shifts.
   - The SUV × Europa expectations under the full criteria: decide by hand from the T07–T09 logbooks whether §5 applies. If it does, the agent-driven alert and news items carry `requires: [agent]`; the threshold path stands as it is (EUR-0305 missed, EUR-0312 reachable, 7 days, `critica`).
   - Cause `retencion_de_calidad` / `calidad` with its T07 fragment, kept on the T10 news per Q-38.
   - Items that hinge on an open question carry `depends_on`. It must load.
-- [ ] T19 · **First baseline (user runs, Claude reads):** `uv run python evals/run_eval.py --registry <smoke registry> --golden evals/golden` (capabilities none). Record in `docs/roadmap.md` the gated alert, news and noise result and the not-gated `requires: [agent]` results. Investigate every gated error: either a golden item is wrong (fix it, with a new justification) or the system is (open a `fix/` branch).
+- [x] T19 · **First baseline (user runs, Claude reads):** `uv run python evals/run_eval.py --registry <smoke registry> --golden evals/golden` (capabilities none). Record in `docs/roadmap.md` the gated alert, news and noise result and the not-gated `requires: [agent]` results. Investigate every gated error: either a golden item is wrong (fix it, with a new justification) or the system is (open a `fix/` branch).
 - [ ] T20 · Docs:
   - `docs/STRUCTURE.md`: the `evaluation/` module and its files; `HeldOutPolicy` in `domain/calendar.py`; `ingestion/held_out.py`, `ingestion/logbooks.py` and `iter_rows`; `read_deliverables` in `cases/registry/notices.py`; the dependency rule `evaluation → ingestion → domain` with the `sources.py → cases.registry.notices` exception; `evals/` thin scripts; Tests vs evals.
   - README "How to run evals": smoke run, eval CLI, `--capabilities`, `HELDOUT_OPEN` vs `CLAUDE_ALLOW_HELDOUT`, exit codes.
