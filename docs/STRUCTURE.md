@@ -62,7 +62,7 @@ Target layout. Modules are created when their spec is implemented; this file is 
 |---|---|---|
 | `domain/enums.py` | 001, 002 | `Severity` (ordered), `Stage` (downstream `rank`), `Market`, `Model`, `PRODUCTION_STAGES`, `ShiftPosition`, `AnomalyKind` |
 | `domain/models.py` | 001, 002 | Frozen input models, `Combination`, `CombinationMetrics`, `all_combinations()`, `Anomaly`, `SnapshotCommit` |
-| `domain/calendar.py` | 002 | `snapshot_position` (shift row and `ShiftPosition`) |
+| `domain/calendar.py` | 002, 005 | `snapshot_position` (shift row and `ShiftPosition`); `HeldOutPolicy` (`from_calendar`, refused sets while closed) |
 | `domain/cases.py` | 003 | `CaseState`, `CaseEvent`, `effective_severity` (the only place it is computed), `case_id_for`, `Case`, `CaseHistoryRow` |
 | `domain/causes.py` | 004 | `CauseCategory` (§6 catalog), `Cause` (`etapa` nullable, Q-17), `Evidence` |
 | `domain/notices.py` | 004 | Output contract: `NoticeType`, `Origin`, `Reason` (`motivo`, Q-31), `Notice`, `ActiveCaseRow`, `ShiftReport`, `PendingDelivery`, deterministic `notice_id_for` / `report_id_for` |
@@ -73,15 +73,17 @@ Target layout. Modules are created when their spec is implemented; this file is 
 | `cases/templates.py` | 004 | Deterministic Spanish `texto` and number formatting until spec 008 |
 | `cases/registry/` | 003, 004 | Package re-exporting the names below. `schema.py` (`SCHEMA`, `SCHEMA_VERSION` = 2), `session.py` (`Session`: connection, open unit, write guard, `savepoint`), `sqlite.py` (`SqliteRegistry`: `user_version`, the only unit of work `processing`, `ProcessedStore`), `cases_repo.py` (`SqliteCaseRepository` incl. `resolved_unreported` and `last_deviation_row`, `CaseRepository` protocol), `releases.py` (`SqliteReleaseStore`), `notices.py` (`SqliteNoticeStore` = `registry.notices`: decisions and delivery outbox, ADR-0010) |
 | `cases/tracker.py` | 003 | `CaseTracker.track` (lifecycle over the registry; re-runnable within a snapshot, Q-27) and `mark_reported`; `CaseDelta`, `TrackedEvent` |
-| `config.py` | 003, 004 | `Settings.registry_path` = `output_dir / "registry.sqlite3"`, `Settings.notices_dir` = `output_dir / "notices"` |
+| `config.py` | 003, 004, 005 | `Settings.registry_path` = `output_dir / "registry.sqlite3"`, `Settings.notices_dir` = `output_dir / "notices"`; `heldout_open`, `heldout_first_shift`; derived `plant_dir`, `snapshots_dir`, `logbooks_dir`, `rules_dir`, `evals_dir` |
 | `notify/port.py` | 004 | `Notifier` protocol (`alert`, `report`) |
 | `notify/console.py`, `notify/file.py`, `notify/composite.py` | 004 | `ConsoleNotifier` (never fails on encoding), `FileNotifier` (atomic report per shift, idempotent `alertas.jsonl`), `CompositeNotifier` |
 | `ingestion/errors.py` | 001 | `DataLoadError` and validation-message formatting |
 | `ingestion/plant.py` | 001 | `load_plan`, `load_standards`, `load_shipments`, `load_shifts` (BOM, row checks, plan completeness) |
-| `ingestion/rows.py` | 002 | `read_rows`: shared CSV row reader (BOM, physical-line errors) |
+| `ingestion/rows.py` | 002, 005 | `iter_rows`: streaming CSV row reader (BOM, physical-line errors); `read_rows` = `list(iter_rows(...))` |
+| `ingestion/held_out.py` | 005 | `check_ids`: refuses held-out shift and snapshot ids (`DataLoadError`) |
+| `ingestion/logbooks.py` | 005 | `read_logbook_texts`: shift logbook texts through the held-out guard (`utf-8-sig`, universal newlines) |
 | `ingestion/snapshot.py` | 001, 002 | `load_snapshot`, `parse_snapshot` (bytes, no filesystem) |
 | `ingestion/hashing.py` | 002 | `content_hash`: lowercase hex SHA-256 of raw bytes |
-| `ingestion/arrivals.py` | 002 | `Arrival`, `load_arrivals` (`llegadas.csv`, sorted by `orden`) |
+| `ingestion/arrivals.py` | 002, 005 | `Arrival`, `load_arrivals` (`llegadas.csv`, sorted by `orden`); `load_arrivals_until` (streams up to the allowed snapshots) |
 | `runner/ports.py` | 002, 004 | `ProcessedStore` (unit of work over a `SnapshotCommit`), `SnapshotPipeline` and `PostCommit` protocols |
 | `runner/outbox.py` | 004 | `OutboxDispatcher` (`PostCommit`: ordered, at-least-once delivery after commit, ADR-0010) and the `PendingNotices` protocol |
 | `runner/memory_store.py` | 002 | `InMemoryProcessedStore` |
