@@ -30,4 +30,5 @@ stateDiagram-v2
 - Current severity is the snapshot's effective severity, even `ninguna`; the max since the last report keeps the peak (Q-26).
 - The max since the last report excludes the report snapshot: marking a case reported empties it, and the next snapshot sets it (Q-28).
 - A raise or lift decided by the agent at a snapshot takes effect at that same snapshot: the tracker re-evaluates it from the pre-snapshot state (Q-27).
+- "Raise in force" on a case means the case is linked to an active cause not yet lifted. Code links cases by scope at the raise, at opening and at every later snapshot while the cause is in force; links are sticky (Q-02, Q-49). A raise decided at N keeps a case active even if the first `track` at N would resolve it (Q-29). A lift undoes only the severity effect; the case keeps its cited cause (Q-30, Q-38).
 - Transitions are one pure function, `next_state` in `cases/lifecycle.py`.
