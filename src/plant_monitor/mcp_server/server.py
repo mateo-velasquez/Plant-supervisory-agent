@@ -6,7 +6,8 @@ from typing import Final
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
-from plant_monitor.domain.enums import Market, Model
+from plant_monitor.domain.causes import CauseCategory
+from plant_monitor.domain.enums import Market, Model, Stage
 from plant_monitor.domain.errors import RejectedRequest
 from plant_monitor.mcp_server import read_tools, write_tools
 from plant_monitor.mcp_server.context import FrameHolder, ToolContext
@@ -20,7 +21,13 @@ READ_TOOLS: Final[tuple[str, ...]] = (
     "get_case",
     "get_delayed_units",
 )
-WRITE_TOOLS: Final[tuple[str, ...]] = ("emit_alert", "emit_shift_report")
+WRITE_TOOLS: Final[tuple[str, ...]] = (
+    "set_cause",
+    "raise_severity",
+    "lift_severity_raise",
+    "emit_alert",
+    "emit_shift_report",
+)
 
 
 def _refusals(call: Callable[[], str]) -> str:
@@ -62,6 +69,35 @@ def build_server(ctx: ToolContext, frames: FrameHolder, tools: Collection[str] =
         """Return the delayed units of one model and market at the current snapshot."""
         return _refusals(lambda: read_tools.get_delayed_units(ctx, frames, modelo, mercado))
 
+    async def set_cause(
+        case_id: str, categoria: CauseCategory, etapa: Stage, bitacora: str, fragmento: str
+    ) -> str:
+        """Record the cause a logbook fragment gives for one case, with its stage."""
+        return _refusals(
+            lambda: write_tools.set_cause(ctx, frames, case_id, categoria, etapa, bitacora, fragmento)
+        )
+
+    async def raise_severity(
+        categoria: CauseCategory,
+        etapa: Stage,
+        modelo: Model,
+        bitacora: str,
+        fragmento: str,
+        mercado: Market | None = None,
+    ) -> str:
+        """Raise severity over a model and stage (any market when 'mercado' is omitted) from a fragment."""
+        return _refusals(
+            lambda: write_tools.raise_severity(
+                ctx, frames, categoria, etapa, modelo, mercado, bitacora, fragmento
+            )
+        )
+
+    async def lift_severity_raise(active_cause_id: str, bitacora: str, fragmento: str) -> str:
+        """Lift an active cause with a fragment of a later logbook."""
+        return _refusals(
+            lambda: write_tools.lift_severity_raise(ctx, frames, active_cause_id, bitacora, fragmento)
+        )
+
     async def emit_alert(case_id: str, texto: str) -> str:
         """Write the text of this snapshot's immediate alert for one case."""
         return _refusals(lambda: write_tools.emit_alert(ctx, frames, case_id, texto))
@@ -77,6 +113,9 @@ def build_server(ctx: ToolContext, frames: FrameHolder, tools: Collection[str] =
         "get_active_cases": get_active_cases,
         "get_case": get_case,
         "get_delayed_units": get_delayed_units,
+        "set_cause": set_cause,
+        "raise_severity": raise_severity,
+        "lift_severity_raise": lift_severity_raise,
         "emit_alert": emit_alert,
         "emit_shift_report": emit_shift_report,
     }

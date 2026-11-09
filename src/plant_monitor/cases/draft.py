@@ -74,17 +74,47 @@ def _with_text(notice: Notice, texto: str) -> Notice:
     return Notice.model_validate({**notice.model_dump(), "texto": texto})
 
 
+def _identity(notice: Notice) -> dict[str, object]:
+    return notice.model_dump(mode="json", exclude={"texto"})
+
+
+def _news_identities(news: Sequence[Notice]) -> list[tuple[str, dict[str, object]]]:
+    return [(n.case_id, _identity(n)) for n in news]
+
+
 class NoticeDraft:
     """The snapshot's notices with template texts, plus the texts the agent wrote."""
 
     def __init__(self, notices: SnapshotNotices, max_chars: int) -> None:
-        self._notices = notices
         self._max_chars = max_chars
         self._texts: dict[str, str] = {}
+        self._load(notices)
+
+    def _load(self, notices: SnapshotNotices) -> None:
+        self._notices = notices
         self._alerts = {n.case_id: n for n in notices.decisions if n.tipo is NoticeType.ALERT}
         self._news = notices.report.novedades if notices.report is not None else ()
         self._required = frozenset(
             [n.notice_id for n in self._alerts.values()] + [n.notice_id for n in self._news]
+        )
+
+    def rebase(self, notices: SnapshotNotices) -> tuple[Notice, ...]:
+        """Swap in re-decided notices, keeping texts of unchanged ones (R13); return the changed ones."""
+        old = {n.notice_id: _identity(n) for n in self._notices.decisions}
+        old_news = _news_identities(self._news)
+        self._load(notices)
+        new = {n.notice_id: _identity(n) for n in notices.decisions}
+        news_ids = {n.notice_id for n in self._news}
+        news_kept = old_news == _news_identities(self._news)
+
+        def kept(nid: str) -> bool:
+            return news_kept if nid in news_ids else old.get(nid) == new.get(nid)
+
+        self._texts = {nid: text for nid, text in self._texts.items() if nid in self._required and kept(nid)}
+        return tuple(
+            n
+            for n in notices.decisions
+            if n.notice_id in self._required and old.get(n.notice_id) != new[n.notice_id]
         )
 
     @property

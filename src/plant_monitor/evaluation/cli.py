@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import TextIO
 
 from plant_monitor.domain.calendar import HeldOutPolicy
+from plant_monitor.evaluation.causes import cited_logbooks
 from plant_monitor.evaluation.golden import Capability, load_golden
 from plant_monitor.evaluation.sources import load_run_output
 from plant_monitor.evaluation.summary import evaluate, exit_code, render_table, write_summary
@@ -36,6 +37,8 @@ def run_eval(
         golden = load_golden(
             golden_dir, shifts, policy, lambda turnos: read_logbook_texts(logbooks_dir, turnos, policy)
         )
+        loadable = (cited_logbooks(run, golden) & policy.known_shifts) - policy.refused_shifts
+        texts = read_logbook_texts(logbooks_dir, sorted(loadable), policy) if loadable else {}
     except (ValueError, OSError) as error:  # DataLoadError is a ValueError
         print(f"eval failed: {error}", file=err)
         return EXIT_LOAD_ERROR
@@ -46,6 +49,7 @@ def run_eval(
         capabilities=capabilities,
         registry=str(registry),
         golden_dir=str(golden_dir),
+        logbooks=texts,
     )
     print(render_table(summary), file=out, end="")
     path = write_summary(summary, out_dir, now)

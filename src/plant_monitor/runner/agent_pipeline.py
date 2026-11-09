@@ -1,8 +1,7 @@
 """Agent snapshot pipeline: the coordinator writes the notice texts inside the unit of work (R1, R10-R12)."""
 
 from contextlib import AbstractAsyncContextManager
-from dataclasses import replace
-from typing import Protocol
+from typing import Literal, Protocol
 
 import anyio
 
@@ -10,7 +9,7 @@ from plant_monitor.agents.brief import render_brief
 from plant_monitor.agents.factory import COORDINATOR_TOOLS, build_coordinator
 from plant_monitor.agents.loop import Coordinator, LoopLog, LoopOutcome, ToolPort
 from plant_monitor.agents.model import ModelPort
-from plant_monitor.cases.draft import NoticeDraft
+from plant_monitor.cases.ledger import CauseLedger
 from plant_monitor.cases.registry import SqliteRegistry
 from plant_monitor.config import Settings
 from plant_monitor.domain.calendar import HeldOutPolicy
@@ -22,11 +21,13 @@ from plant_monitor.mcp_server.client import ToolClient
 from plant_monitor.mcp_server.context import FrameHolder, SnapshotFrame, ToolContext
 from plant_monitor.mcp_server.server import build_server
 from plant_monitor.metrics.engine import PlantContext
+from plant_monitor.runner.judgment import JudgmentFactory, SnapshotWriter, judgment_factory
 from plant_monitor.runner.pipeline import SnapshotDecision, ThresholdPipeline
-from plant_monitor.telemetry.trace import TraceLine, TraceWriter, abort_outcome, build_line
+from plant_monitor.telemetry.trace import DecisionReason, TraceLine, TraceWriter, abort_outcome, build_line
 from plant_monitor.telemetry.usage import PriceCard
 
 REPORT_ID_SUFFIX = "informe"
+NO_TEXT_REASON: DecisionReason = "no_text_needed"
 
 
 class OpenUnit(Protocol):
@@ -40,7 +41,14 @@ class NoticeSteps(Protocol):
 
     def decide(self, snapshot: Snapshot, shift: Shift, position: ShiftPosition) -> SnapshotDecision: ...
 
+    def redecide(self, decision: SnapshotDecision) -> SnapshotDecision: ...
+
     def finish(self, decision: SnapshotDecision) -> None: ...
+
+
+def _kind(reason: DecisionReason | None) -> Literal["call", "skip"]:
+    """The trace's 'decision' for a reason: only 'text_needed' and 'closing_review' call the model."""
+    return "skip" if reason is None or reason == NO_TEXT_REASON else "call"
 
 
 def _single_leaf(error: BaseExceptionGroup[BaseException]) -> BaseException:
@@ -51,8 +59,17 @@ def _single_leaf(error: BaseExceptionGroup[BaseException]) -> BaseException:
     return current
 
 
+def _reason(writer: SnapshotWriter, decision: SnapshotDecision) -> DecisionReason:
+    """Why the model is called, or 'no_text_needed' when it is not (R14)."""
+    if writer.required():
+        return "text_needed"
+    if decision.position is ShiftPosition.CLOSING:
+        return "closing_review"
+    return "no_text_needed"
+
+
 class AgentPipeline:
-    """SnapshotPipeline that has the coordinator write the texts of the notices code decided."""
+    """SnapshotPipeline that has the coordinator judge causes and write the texts code decided."""
 
     def __init__(
         self,
@@ -62,7 +79,7 @@ class AgentPipeline:
         coordinator: Coordinator,
         trace: TraceWriter,
         prices: PriceCard,
-        max_chars: int,
+        judgment: JudgmentFactory,
     ) -> None:
         self._steps = steps
         self._unit = unit
@@ -70,27 +87,33 @@ class AgentPipeline:
         self._coordinator = coordinator
         self._trace = trace
         self._prices = prices
-        self._max_chars = max_chars
+        self._judgment = judgment
 
     def process(self, snapshot: Snapshot, shift: Shift, position: ShiftPosition) -> None:
         """Database writes only; the trace line is staged for the post-commit step (X2)."""
         log = LoopLog()
-        required: tuple[str, ...] = ()
+        writer: SnapshotWriter | None = None
+        reason: DecisionReason | None = None
         try:
             decision = self._steps.decide(snapshot, shift, position)
-            draft = NoticeDraft(decision.notices, self._max_chars)
-            required = draft.required()
-            if not required:
-                self._steps.finish(replace(decision, notices=draft.build()))
+            writer = self._judgment(decision)
+            reason = _reason(writer, decision)
+            if reason == NO_TEXT_REASON:
+                final = writer.final()
+                self._steps.finish(final)
                 log.outcome = LoopOutcome.SKIPPED
-                self._stage(decision, draft, log, "skip", required)
+                self._stage(final, writer, log, reason)
                 return
             self._check_unit(snapshot.snapshot_id)
-            self._converse(decision, draft, log)
-            self._steps.finish(replace(decision, notices=draft.build()))
-            self._stage(decision, draft, log, "call", required)
+            self._converse(decision, writer, log)
+            failure = writer.failure()
+            if failure is not None:
+                raise failure
+            final = writer.final()
+            self._steps.finish(final)
+            self._stage(final, writer, log, reason)
         except Exception as error:
-            self._trace.write_now(self._aborted(snapshot, shift, error, log, required))
+            self._trace.write_now(self._aborted(snapshot, shift, error, log, writer, reason))
             raise
 
     def _check_unit(self, snapshot_id: str) -> None:
@@ -100,19 +123,21 @@ class AgentPipeline:
         if current != snapshot_id:
             raise ValueError(f"snapshot {snapshot_id} is processed but the open unit is {current}")
 
-    def _converse(self, decision: SnapshotDecision, draft: NoticeDraft, log: LoopLog) -> None:
+    def _converse(self, decision: SnapshotDecision, writer: SnapshotWriter, log: LoopLog) -> None:
         """Run the loop in the frame; single-exception groups unwrap to the leaf or inner group (X5)."""
         snapshot = decision.snapshot
         notices = decision.notices
         alerts = [n for n in notices.decisions if n.tipo is NoticeType.ALERT]
         news = notices.report.novedades if notices.report is not None else ()
-        brief = render_brief(snapshot.snapshot_id, decision.shift.turno_id, decision.position, alerts, news)
-        frame = SnapshotFrame(
-            snapshot.snapshot_id, snapshot.timestamp, decision.metrics, snapshot.unidades, draft
+        brief = render_brief(
+            snapshot.snapshot_id, decision.shift.turno_id, decision.position, alerts, news, decision.in_force
+        )
+        frame = SnapshotFrame.with_writer(
+            snapshot.snapshot_id, snapshot.timestamp, decision.metrics, snapshot.unidades, writer
         )
         try:
             with self._frames.entered(frame):
-                anyio.run(self._coordinator.run, snapshot.snapshot_id, brief, draft, log)
+                anyio.run(self._coordinator.run, snapshot.snapshot_id, brief, writer, log)
         except BaseExceptionGroup as group:
             leaf = _single_leaf(group)
             if leaf is group:
@@ -120,27 +145,23 @@ class AgentPipeline:
             raise leaf from None
 
     def _stage(
-        self,
-        decision: SnapshotDecision,
-        draft: NoticeDraft,
-        log: LoopLog,
-        kind: str,
-        required: tuple[str, ...],
+        self, final: SnapshotDecision, writer: SnapshotWriter, log: LoopLog, reason: DecisionReason
     ) -> None:
-        written = set(draft.written())
-        report = decision.notices.report
+        written = set(writer.written())
+        report = final.notices.report
         line = build_line(
-            snapshot_id=decision.snapshot.snapshot_id,
-            turno_id=decision.shift.turno_id,
+            snapshot_id=final.snapshot.snapshot_id,
+            turno_id=final.shift.turno_id,
             status="committed",
-            decision=kind,
+            decision=_kind(reason),
+            decision_reason=reason,
             outcome=log.outcome.value if log.outcome is not None else LoopOutcome.SKIPPED.value,
-            required=required,
+            required=writer.required(),
             model_calls=log.model_calls,
             tool_calls=log.tool_calls,
             thinking=log.thinking,
-            notices_agent=draft.written(),
-            notices_template=[n.notice_id for n in decision.notices.decisions if n.notice_id not in written],
+            notices_agent=writer.written(),
+            notices_template=[n.notice_id for n in final.notices.decisions if n.notice_id not in written],
             report_id=None if report is None else f"{report.turno_id}-{REPORT_ID_SUFFIX}",
             card=self._prices,
         )
@@ -152,15 +173,17 @@ class AgentPipeline:
         shift: Shift,
         error: BaseException,
         log: LoopLog,
-        required: tuple[str, ...],
+        writer: SnapshotWriter | None,
+        reason: DecisionReason | None,
     ) -> TraceLine:
         return build_line(
             snapshot_id=snapshot.snapshot_id,
             turno_id=shift.turno_id,
             status="aborted",
-            decision="call" if required else "skip",
+            decision=_kind(reason),
+            decision_reason=reason,
             outcome=abort_outcome(error),
-            required=required,
+            required=() if writer is None else writer.required(),
             model_calls=log.model_calls,
             tool_calls=log.tool_calls,
             thinking=log.thinking,
@@ -202,12 +225,14 @@ def build_agent_pipeline(
         long_context_threshold=settings.long_context_threshold_tokens,
         long_context_multiplier=settings.long_context_multiplier,
     )
+    ledger = CauseLedger(registry.causes, registry.cases, ctx.shifts)
+    steps = ThresholdPipeline.from_registry(registry, ctx, ledger)
     return AgentPipeline(
-        steps=ThresholdPipeline.from_registry(registry, ctx),
+        steps=steps,
         unit=registry,
         frames=frames,
         coordinator=build_coordinator(settings, model, tools),
         trace=trace,
         prices=prices,
-        max_chars=settings.notice_text_max_chars,
+        judgment=judgment_factory(steps, ledger, settings.notice_text_max_chars),
     )

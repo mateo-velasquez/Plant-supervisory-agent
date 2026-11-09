@@ -8,16 +8,27 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
-from agent_builders import tool
-from draft_builders import agent_text, s001_notices, s003_notices, s010_notices
+from agent_builders import end, tool
+from draft_builders import (
+    agent_text,
+    empty_close_notices,
+    fake_judgment,
+    s001_notices,
+    s003_notices,
+    s010_notices,
+)
+from incident_runs import F5
+from judgment_builders import incident_tool_context
 from mcp.server.mcpserver import MCPServer
 from mcp_builders import tool_context
 
 from plant_monitor.agents.factory import COORDINATOR_TOOLS, build_coordinator
 from plant_monitor.agents.fake_model import FakeModel
 from plant_monitor.agents.loop import ToolPort
-from plant_monitor.agents.model import ModelReply
+from plant_monitor.agents.model import ModelCallFailed, ModelReply
+from plant_monitor.cases.ledger import CaseLookup, CauseLedger
 from plant_monitor.cases.notice_builder import SnapshotNotices
+from plant_monitor.cases.registry import CauseStore, SqliteRegistry
 from plant_monitor.config import Settings
 from plant_monitor.domain.calendar import snapshot_position
 from plant_monitor.domain.enums import ShiftPosition
@@ -25,14 +36,22 @@ from plant_monitor.domain.models import Anomaly, Combination, Shift, Snapshot, S
 from plant_monitor.mcp_server.client import ToolClient
 from plant_monitor.mcp_server.context import FrameHolder, NoCurrentSnapshot
 from plant_monitor.mcp_server.server import build_server
+from plant_monitor.runner import agent_pipeline
 from plant_monitor.runner.agent_pipeline import AgentPipeline
 from plant_monitor.runner.pipeline import SnapshotDecision
 from plant_monitor.runner.series import RunAborted, run_series
 from plant_monitor.telemetry.trace import TraceWriter, read_trace, run_totals
 from plant_monitor.telemetry.usage import PriceCard
 
-from builders import isolate_settings_env
-from notice_builders import plant_shifts, series_snapshot, write_series
+from builders import held_out_policy, isolate_settings_env
+from notice_builders import (
+    news_notice,
+    plant_context,
+    plant_shifts,
+    series_snapshot,
+    shift_report,
+    write_series,
+)
 
 trace_logger = "plant_monitor.telemetry.trace"
 SEL = "S001-Sedán-Local"
@@ -67,6 +86,9 @@ class FakeSteps:
 
     def decide(self, snapshot: Snapshot, shift: Shift, position: ShiftPosition) -> SnapshotDecision:
         return self._decision
+
+    def redecide(self, decision: SnapshotDecision) -> SnapshotDecision:
+        return decision
 
     def finish(self, decision: SnapshotDecision) -> None:
         self.finished.append(decision)
@@ -144,11 +166,14 @@ def make_rig(
     current: str | None,
     max_turns: int = 8,
     trace_path: Path | None = None,
+    redecided: SnapshotNotices | None = None,
+    failure: Exception | None = None,
+    incident: bool = False,
 ) -> Rig:
     """An 'AgentPipeline' over the real tool server, a scripted model and a trace under 'tmp_path'."""
     isolate_settings_env(monkeypatch, tmp_path)
     settings = Settings(anthropic_api_key="k", agent_max_turns=max_turns)
-    ctx, frames = tool_context()
+    ctx, frames = incident_tool_context() if incident else tool_context()
     server = build_server(ctx, frames, tools=COORDINATOR_TOOLS)
     model = FakeModel(script)
     steps = FakeSteps(decision, frames)
@@ -161,7 +186,7 @@ def make_rig(
         coordinator=build_coordinator(settings, model, tool_factory(server)),
         trace=trace,
         prices=price_card(settings),
-        max_chars=settings.notice_text_max_chars,
+        judgment=fake_judgment(settings.notice_text_max_chars, redecided=redecided, failure=failure),
     )
     return Rig(pipeline, steps, model, trace, path, decision)
 
@@ -296,6 +321,148 @@ def test_e18d_unwritable_trace_on_abort_reraises_the_original_error_and_logs_onc
     assert type(info.value) is ValueError
     errors = [r for r in caplog.records if r.name == trace_logger and r.levelno == logging.ERROR]
     assert len(errors) == 1
+
+
+def closing_decision(notices: SnapshotNotices) -> SnapshotDecision:
+    """A decision at S010, a closing snapshot, over 'notices'."""
+    return decision_for("S010", notices, "S004", ShiftPosition.CLOSING)
+
+
+def test_e18a_closing_snapshot_with_an_empty_report_is_called_for_a_review(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """E18a, R14: 'closing_review'; the tool turn does not stop the loop, so two requests, 'done'."""
+    decision = closing_decision(empty_close_notices())
+    script = [tool("get_logbook", {"turno_id": "T01"}), end("Sin causas.")]
+    rig = make_rig(tmp_path, monkeypatch, decision, script, current="S010")
+    run_process(rig)
+    assert len(rig.model.requests) == 2
+    assert len(rig.steps.finished) == 1
+    rig.trace.after_commit()
+    (line,) = read_trace(rig.path)
+    assert (line.status, line.decision, line.decision_reason) == ("committed", "call", "closing_review")
+    assert (line.outcome, line.required) == ("done", [])
+
+
+def test_e18c_closing_snapshot_with_one_news_item_is_called_for_text_needed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """E18c, R14: a required news text makes the call 'text_needed', not 'closing_review'."""
+    news_id = f"S010-informe_de_turno-{SEL10}"
+    notices = SnapshotNotices((news_notice("S010", SEL10),), shift_report("T05", "S010", (SEL10,)), (SEL10,))
+    script = [tool("emit_shift_report", {"textos": [{"case_id": SEL10, "texto": agent_text(news_id)}]})]
+    rig = make_rig(tmp_path, monkeypatch, closing_decision(notices), script, current="S010")
+    run_process(rig)
+    rig.trace.after_commit()
+    (line,) = read_trace(rig.path)
+    assert (line.decision, line.decision_reason, line.required) == ("call", "text_needed", [news_id])
+
+
+def test_s7_an_abort_in_decide_is_a_skip_with_no_reason(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """R14, S7: 'decide' failing leaves no decision yet: 'skip', 'None', no required ids."""
+    rig = make_rig(tmp_path, monkeypatch, s003_decision(), [], current="S003")
+
+    def failing_decide(*_: object) -> SnapshotDecision:
+        raise RuntimeError("decide down")
+
+    monkeypatch.setattr(rig.steps, "decide", failing_decide)
+    with pytest.raises(RuntimeError):
+        run_process(rig)
+    (line,) = read_trace(rig.path)
+    assert (line.status, line.decision, line.decision_reason, line.required) == ("aborted", "skip", None, [])
+    assert line.outcome == "aborted:RuntimeError"
+
+
+def test_s7_an_abort_after_a_closing_review_keeps_call_and_its_reason(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """R14, S7: a model failure in a review with nothing required logs 'call', 'closing_review'."""
+    decision = closing_decision(empty_close_notices())
+    rig = make_rig(tmp_path, monkeypatch, decision, [ModelCallFailed("create", 500)], current="S010")
+    with pytest.raises(ModelCallFailed):
+        run_process(rig)
+    (line,) = read_trace(rig.path)
+    assert (line.status, line.decision, line.decision_reason) == ("aborted", "call", "closing_review")
+    assert (line.required, rig.steps.finished) == ([], [])
+
+
+def test_x4_a_stored_judgment_failure_is_raised_before_finish(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """R10, X4: the loop ends normally, then the stored error aborts the run and 'finish' never runs."""
+    script = [tool("emit_alert", {"case_id": SEL, "texto": agent_text(ALERT_S003)})]
+    rig = make_rig(
+        tmp_path, monkeypatch, s003_decision(), script, current="S003", failure=RuntimeError("boom")
+    )
+    with pytest.raises(RuntimeError, match="boom"):
+        run_process(rig)
+    assert rig.steps.finished == []
+    (line,) = read_trace(rig.path)
+    assert (line.status, line.decision, line.decision_reason) == ("aborted", "call", "text_needed")
+    assert line.required == [ALERT_S003]
+
+
+def test_e18_the_line_and_the_save_use_the_final_notices_after_a_judgment_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """R14, R10: a review that records a cause and gains three texts saves and traces the final ids."""
+    decision = closing_decision(empty_close_notices())
+    textos = [
+        {"case_id": SEL10, "texto": agent_text(REQUIRED_S010[1])},
+        {"case_id": "S007-Pickup-Brasil", "texto": agent_text(REQUIRED_S010[2])},
+    ]
+    cause = {
+        "case_id": SEL10,
+        "categoria": "parada_de_linea",
+        "etapa": "montaje",
+        "bitacora": "T05",
+        "fragmento": F5,
+    }
+    script = [
+        tool("set_cause", cause),
+        tool("emit_alert", {"case_id": SEL10, "texto": agent_text(ALERT_S010)}, "tu-2"),
+        tool("emit_shift_report", {"textos": textos}, "tu-3"),
+    ]
+    rig = make_rig(
+        tmp_path, monkeypatch, decision, script, current="S010", redecided=s010_notices(), incident=True
+    )
+    run_process(rig)
+    (final,) = rig.steps.finished
+    assert final.notices.decisions[0].texto == agent_text(ALERT_S010)
+    rig.trace.after_commit()
+    (line,) = read_trace(rig.path)
+    assert (line.decision, line.decision_reason, line.outcome) == ("call", "closing_review", "done")
+    assert line.required == list(REQUIRED_S010)
+    assert line.notices_agent == list(REQUIRED_S010)
+    assert line.notices_template == [final.notices.decisions[2].notice_id]
+
+
+def test_risk_the_composition_root_builds_one_ledger_for_the_steps_and_the_judgment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Risk: two ledgers would give the model's writes and the lifecycle different views of the causes."""
+    created: list[CauseLedger] = []
+
+    class SpyLedger(CauseLedger):
+        def __init__(self, store: CauseStore, cases: CaseLookup, shifts: Sequence[Shift]) -> None:
+            super().__init__(store, cases, shifts)
+            created.append(self)
+
+    monkeypatch.setattr(agent_pipeline, "CauseLedger", SpyLedger)
+    isolate_settings_env(monkeypatch, tmp_path)
+    settings = Settings(anthropic_api_key="k")
+    with SqliteRegistry(":memory:") as registry:
+        agent_pipeline.build_agent_pipeline(
+            settings,
+            registry,
+            plant_context(),
+            held_out_policy(is_open=True),
+            FakeModel([]),
+            TraceWriter(tmp_path / "trace.jsonl"),
+        )
+    assert len(created) == 1
 
 
 def test_risk_a_group_with_several_errors_is_not_unwrapped(

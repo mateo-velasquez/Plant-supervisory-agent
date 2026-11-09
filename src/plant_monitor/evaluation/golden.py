@@ -255,6 +255,7 @@ def load_golden(
         news=tuple(item for entry in loaded for item in entry.news),
         causes=tuple(item for entry in loaded for item in entry.causes),
     )
+    _check_availability(golden.causes, golden.alerts, calendar)
     _check_evidence(golden.causes, logbooks)
     return golden
 
@@ -400,6 +401,29 @@ def _check_across(loaded: Sequence[_Loaded]) -> None:
         if key in cause_labels:
             raise DataLoadError(f"{cause_labels[key]} and {labeled.label} are the same cause")
         cause_labels[key] = labeled.label
+
+
+def _check_availability(
+    causes: tuple[Labeled[ExpectedCause], ...],
+    alerts: tuple[Labeled[ExpectedAlert], ...],
+    calendar: _Calendar,
+) -> None:
+    """Golden evidence must come from a logbook closed at the target notice's snapshot (R18)."""
+    alert_snapshots: dict[str, str] = {}
+    for alert in alerts:
+        alert_snapshots.setdefault(alert.item.case.case_id, alert.item.snapshot_id)
+    for labeled in causes:
+        item = labeled.item
+        evidence = item.evidencia
+        if evidence is None or evidence.bitacora not in calendar.snapshots:
+            continue
+        target = calendar.closing(item.turno_id) if item.turno_id else alert_snapshots[item.case.case_id]
+        closes = calendar.closing(evidence.bitacora)
+        if calendar.position[closes] > calendar.position[target]:
+            raise DataLoadError(
+                f"{labeled.label}: logbook {evidence.bitacora} is not available at {target}: "
+                f"it closes at {closes}"
+            )
 
 
 def _check_evidence(causes: tuple[Labeled[ExpectedCause], ...], logbooks: LogbookSource) -> None:

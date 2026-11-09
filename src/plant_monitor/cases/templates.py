@@ -28,6 +28,13 @@ _STATE_TEXT = {
     CaseState.ESCALATED: "escalado",
     CaseState.RESOLVED: "resuelto",
 }
+_CATEGORY_TEXT = {
+    CauseCategory.LINE_STOP: "parada de línea",
+    CauseCategory.MISSING_PARTS: "faltante de piezas",
+    CauseCategory.REWORK: "retrabajo",
+    CauseCategory.QUALITY_HOLD: "retención de calidad",
+    CauseCategory.ABSENTEEISM: "ausentismo",
+}
 _REASON_TEXT = {Reason.GAP: "gap", Reason.DELAY: "retraso", Reason.LOGBOOK: "bitácora"}
 
 
@@ -84,7 +91,10 @@ def _combination(case: Case) -> str:
 def cause_text(cause: Cause, facts: CaseFacts) -> str:
     """Cause sentence; the gap-only phrase only when 'facts' knows it (Q-17, Q-32)."""
     if cause.categoria is not CauseCategory.UNDECLARED:
-        raise ValueError(f"{facts.case.case_id}: no template for cause {cause.categoria}")
+        if facts.cited is None or cause.etapa is None:
+            raise ValueError(f"{facts.case.case_id}: no template for cause {cause.categoria}")
+        label, logbook = _CATEGORY_TEXT[cause.categoria], facts.cited.evidence.bitacora
+        return f"Causa: {label}, etapa {cause.etapa} (bitácora {logbook})."
     if cause.etapa is not None:
         return f"Causa no declarada, etapa {cause.etapa}."
     if facts.cause_gap_only:

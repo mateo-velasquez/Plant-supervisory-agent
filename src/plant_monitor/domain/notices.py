@@ -85,6 +85,24 @@ class Notice(FrozenModel):
         return self
 
 
+def notice_brief_item(notice: Notice) -> dict[str, object]:
+    """The compact JSON-ready view of a notice the model reads, with 'borrador' as its template text."""
+    data = notice.model_dump(mode="json")
+    return {
+        "notice_id": data["notice_id"],
+        "case_id": data["case_id"],
+        "modelo": data["modelo"],
+        "mercado": data["mercado"],
+        "estado": data["estado"],
+        "severidad": data["severidad"],
+        "severidad_maxima": data["severidad_maxima"],
+        "motivo": data["motivo"],
+        "causa": data["causa"],
+        "evidencia": data["evidencia"],
+        "borrador": data["texto"],
+    }
+
+
 class ActiveCaseRow(FrozenModel):
     """One row of a report's 'casos_activos' (FR-23); values of the current snapshot."""
 

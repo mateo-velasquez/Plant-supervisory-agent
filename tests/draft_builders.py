@@ -1,13 +1,17 @@
 """Minimal builders for 007 draft and write-tool tests: spec 004 E37-E41 decisions as 'SnapshotNotices'."""
 
+from collections.abc import Callable, Sequence
+from dataclasses import replace
 from datetime import datetime
 
 from plant_monitor.cases.draft import NoticeDraft
 from plant_monitor.cases.notice_builder import SnapshotNotices
 from plant_monitor.domain.cases import CaseState
+from plant_monitor.domain.causes import Cause, CauseCategory, CauseScope, Evidence
 from plant_monitor.domain.enums import Severity
-from plant_monitor.domain.notices import NoticeType
-from plant_monitor.mcp_server.context import SnapshotFrame
+from plant_monitor.domain.notices import Notice, NoticeType
+from plant_monitor.mcp_server.context import JudgmentResult, SnapshotFrame
+from plant_monitor.runner.pipeline import SnapshotDecision
 
 from notice_builders import (
     PICKUP_BRAZIL_CASE,
@@ -83,6 +87,86 @@ def s010_notices() -> SnapshotNotices:
 def empty_close_notices() -> SnapshotNotices:
     """E39: a closing snapshot whose report is empty."""
     return SnapshotNotices((), shift_report("T05", "S010"), ())
+
+
+class FakeSnapshotWriter:
+    """A 'SnapshotWriter' over a plain 'NoticeDraft'; a judgment write only swaps in 'redecided' notices."""
+
+    def __init__(
+        self,
+        decision: SnapshotDecision,
+        max_chars: int = MAX_CHARS,
+        *,
+        redecided: SnapshotNotices | None = None,
+        failure: Exception | None = None,
+    ) -> None:
+        self._decision = decision
+        self._draft = NoticeDraft(decision.notices, max_chars)
+        self._redecided = redecided
+        self._failure = failure
+
+    def _judged(self) -> JudgmentResult:
+        changed: tuple[Notice, ...] = ()
+        if self._redecided is not None:
+            changed = self._draft.rebase(self._redecided)
+            self._decision = replace(self._decision, notices=self._redecided)
+        return JudgmentResult((), None, None, changed, self._draft.missing())
+
+    def set_cause(self, case_id: str, cause: Cause, evidence: Evidence) -> JudgmentResult:
+        """Swap in the re-decided notices."""
+        return self._judged()
+
+    def raise_severity(
+        self, categoria: CauseCategory, scope: CauseScope, evidence: Evidence
+    ) -> JudgmentResult:
+        """Swap in the re-decided notices."""
+        return self._judged()
+
+    def lift(self, active_cause_id: str, evidence: Evidence) -> JudgmentResult:
+        """Swap in the re-decided notices."""
+        return self._judged()
+
+    def write_alert(self, case_id: str, texto: str) -> str:
+        """Store an alert text through the draft."""
+        return self._draft.write_alert(case_id, texto)
+
+    def write_news(self, texts: Sequence[tuple[str, str]]) -> tuple[str, ...]:
+        """Store the report's texts through the draft."""
+        return self._draft.write_news(texts)
+
+    def missing(self) -> tuple[str, ...]:
+        """Required ids without a text."""
+        return self._draft.missing()
+
+    def required(self) -> tuple[str, ...]:
+        """Ids of the notices that need a text."""
+        return self._draft.required()
+
+    def written(self) -> tuple[str, ...]:
+        """Ids written so far."""
+        return self._draft.written()
+
+    def final(self) -> SnapshotDecision:
+        """The current decision with the draft's texts."""
+        return replace(self._decision, notices=self._draft.build())
+
+    def failure(self) -> Exception | None:
+        """The failure the test planted, if any."""
+        return self._failure
+
+
+def fake_judgment(
+    max_chars: int = MAX_CHARS,
+    *,
+    redecided: SnapshotNotices | None = None,
+    failure: Exception | None = None,
+) -> Callable[[SnapshotDecision], FakeSnapshotWriter]:
+    """A judgment factory building a 'FakeSnapshotWriter' per decision."""
+
+    def build(decision: SnapshotDecision) -> FakeSnapshotWriter:
+        return FakeSnapshotWriter(decision, max_chars, redecided=redecided, failure=failure)
+
+    return build
 
 
 def draft_frame(draft: NoticeDraft) -> SnapshotFrame:

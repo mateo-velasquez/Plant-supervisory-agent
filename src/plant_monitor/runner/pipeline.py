@@ -1,13 +1,16 @@
 """Threshold-only snapshot pipeline: metrics, lifecycle and notice decisions inside the unit of work."""
 
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Protocol
 
+from plant_monitor.cases.causes import Candidate
+from plant_monitor.cases.ledger import CauseLedger
 from plant_monitor.cases.notice_builder import ShiftClose, SnapshotNotices, build_snapshot_notices
 from plant_monitor.cases.registry import CaseRepository, SqliteRegistry
-from plant_monitor.cases.tracker import CaseTracker
+from plant_monitor.cases.tracker import CaseDelta, CaseTracker
 from plant_monitor.domain.cases import Case, CaseHistoryRow
+from plant_monitor.domain.causes import ActiveCause
 from plant_monitor.domain.enums import ShiftPosition
 from plant_monitor.domain.models import Combination, CombinationMetrics, ReleasedUnit, Shift, Snapshot
 from plant_monitor.domain.notices import Notice, ShiftReport
@@ -65,6 +68,9 @@ class SnapshotDecision:
     position: ShiftPosition
     metrics: Mapping[Combination, CombinationMetrics]
     notices: SnapshotNotices
+    delta: CaseDelta | None = None
+    candidates: tuple[Candidate, ...] = ()
+    in_force: tuple[tuple[ActiveCause, tuple[str, ...]], ...] = ()
 
 
 class ThresholdPipeline:
@@ -77,17 +83,60 @@ class ThresholdPipeline:
         cases: CaseRepository,
         reader: NoticeCaseReader,
         notices: NoticeSink,
+        ledger: CauseLedger | None = None,
     ) -> None:
         self._ctx = ctx
         self._releases = releases
+        self._cases = cases
         self._reader = reader
         self._notices = notices
+        self._ledger = ledger
         self._tracker = CaseTracker(cases, ctx.thresholds.resolucion)
 
     @classmethod
-    def from_registry(cls, registry: SqliteRegistry, ctx: PlantContext) -> ThresholdPipeline:
+    def from_registry(
+        cls, registry: SqliteRegistry, ctx: PlantContext, ledger: CauseLedger | None = None
+    ) -> ThresholdPipeline:
         """Wire the pipeline on the registry's shared collaborators."""
-        return cls(ctx, registry.releases, registry.cases, registry.cases, registry.notices)
+        return cls(ctx, registry.releases, registry.cases, registry.cases, registry.notices, ledger)
+
+    def _lifecycle(
+        self,
+        snapshot_id: str,
+        metrics: Mapping[Combination, CombinationMetrics],
+        cases: Sequence[Case],
+    ) -> tuple[CaseDelta, tuple[Candidate, ...]]:
+        """Track with the raises in force, link what enters a scope, and track again if a link was added."""
+        ledger = self._ledger
+        raises = frozenset[Combination]() if ledger is None else ledger.raised(cases)
+        delta = self._tracker.track(snapshot_id, metrics, raises)
+        candidates = self._candidates(delta)
+        if ledger is not None and ledger.recheck(snapshot_id, candidates):
+            delta = self._tracker.track(snapshot_id, metrics, ledger.raised(delta.cases))
+            candidates = self._candidates(delta)
+        return delta, candidates
+
+    def _candidates(self, delta: CaseDelta) -> tuple[Candidate, ...]:
+        rows = deviation_rows([case.case_id for case in delta.cases], self._reader)
+        return tuple(Candidate(case, rows[case.case_id].bottleneck) for case in delta.cases)
+
+    def _notices_for(
+        self,
+        decision: SnapshotDecision,
+        delta: CaseDelta,
+        candidates: tuple[Candidate, ...],
+    ) -> SnapshotDecision:
+        """Closing glue, cited causes and notices for a settled delta."""
+        close = shift_close(decision.shift, decision.position, self._reader)
+        ids = [case.case_id for case in delta.cases]
+        if close is not None:
+            ids += [case.case_id for case in close.resolved_unreported]
+        rows = deviation_rows(ids, self._reader)
+        ledger = self._ledger
+        cited = {} if ledger is None else ledger.cited(ids)
+        built = build_snapshot_notices(delta, decision.metrics, rows, close, cited)
+        in_force = () if ledger is None else ledger.in_force_view()
+        return replace(decision, notices=built, delta=delta, candidates=candidates, in_force=in_force)
 
     def decide(self, snapshot: Snapshot, shift: Shift, position: ShiftPosition) -> SnapshotDecision:
         """Metrics, lifecycle and notices.
@@ -97,14 +146,17 @@ class ThresholdPipeline:
         sid = snapshot.snapshot_id
         metrics = compute_metrics(snapshot, self._releases.released_so_far(), self._ctx)
         self._releases.record_releases(snapshot)
-        delta = self._tracker.track(sid, metrics, frozenset())
-        close = shift_close(shift, position, self._reader)
-        ids = [case.case_id for case in delta.cases]
-        if close is not None:
-            ids += [case.case_id for case in close.resolved_unreported]
-        rows = deviation_rows(ids, self._reader)
-        built = build_snapshot_notices(delta, metrics, rows, close)
-        return SnapshotDecision(snapshot, shift, position, metrics, built)
+        delta, candidates = self._lifecycle(sid, metrics, self._cases.active_cases())
+        empty = SnapshotDecision(snapshot, shift, position, metrics, SnapshotNotices((), None, ()))
+        return self._notices_for(empty, delta, candidates)
+
+    def redecide(self, decision: SnapshotDecision) -> SnapshotDecision:
+        """Re-run the lifecycle and notices after a judgment write; same metrics, no save, no mark."""
+        if decision.delta is None:
+            raise ValueError("redecide needs a decision from 'decide'")
+        sid = decision.snapshot.snapshot_id
+        delta, candidates = self._lifecycle(sid, decision.metrics, decision.delta.cases)
+        return self._notices_for(decision, delta, candidates)
 
     def finish(self, decision: SnapshotDecision) -> None:
         """Save the notices once, then mark the reported cases."""

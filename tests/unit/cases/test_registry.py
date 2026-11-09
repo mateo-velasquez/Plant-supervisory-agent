@@ -122,8 +122,8 @@ def user_version(path: Path) -> int:
 # --- T12 · Schema, session, ProcessedStore, anomalies ---
 
 
-def test_schema_version_is_two() -> None:
-    assert SCHEMA_VERSION == 2
+def test_schema_version_is_three() -> None:
+    assert SCHEMA_VERSION == 3
 
 
 def test_e20a_commit_anomaly_is_recorded(registry: SqliteRegistry) -> None:
@@ -645,7 +645,7 @@ def test_e24a_new_file_has_version_two_and_a_notices_table_and_reopens(tmp_path:
     path = tmp_path / "r.sqlite3"
     with SqliteRegistry(path):
         pass
-    assert user_version(path) == 2
+    assert user_version(path) == SCHEMA_VERSION
     assert "notices" in table_names(path)
     with SqliteRegistry(path) as again:
         assert again.get_hash("S001") is None
@@ -661,7 +661,7 @@ def test_e24b_other_version_names_file_found_version_and_two(tmp_path: Path) -> 
     assert path.name in message, message
     versions = message.replace(str(path), "").replace(path.name, "")
     assert re.search(r"\b7\b", versions), message
-    assert re.search(r"\b2\b", versions), message
+    assert re.search(rf"\b{SCHEMA_VERSION}\b", versions), message
 
 
 def test_e24c_version_one_file_is_rejected_and_left_untouched(tmp_path: Path) -> None:
@@ -675,7 +675,7 @@ def test_e24c_version_one_file_is_rejected_and_left_untouched(tmp_path: Path) ->
     assert path.name in message, message
     versions = message.replace(str(path), "").replace(path.name, "")
     assert re.search(r"\b1\b", versions), message
-    assert re.search(r"\b2\b", versions), message
+    assert re.search(rf"\b{SCHEMA_VERSION}\b", versions), message
     assert user_version(path) == 1
     assert table_names(path) == {"processed_snapshots"}
 
