@@ -31,7 +31,7 @@ Spec Driven Development plan from today to Demo Day. Every spec traces to requir
 | | [005 evaluator-v1](../specs/005-evaluator-v1/) | Golden-case format, alerts/news/cause/noise metrics, held-out guard, incident catalog, real-data smoke run of days 1–7 | 39, 40 | 12 | A1, A3, Q-33–Q-40, ADR-0011 | Must | 11-12 | Implemented |
 | 2 · The agent | [006 logbooks-and-mcp](../specs/006-logbooks-and-mcp/) | Logbook store (availability at shift close, verbatim check), MCP server and read tools | 17, 27 | — | Q-01, Q-12, Q-24 decided; ADR-0013 | Must | 11-14 | Implemented |
 | | [007 coordinator-agent](../specs/007-coordinator-agent/) | Own agent loop, single coordinator over one day, `emit_alert`/`emit_shift_report`, trace log, token accounting | 27, 37, 38 | 10 | D3 closed; Q-41–Q-46 decided; ADR-0014; days 1–3 real-run cost pending | Must | 11-15 | Implemented |
-| | [008 cited-cause-and-escalation](../specs/008-cited-cause-and-escalation/) | `set_cause`, `raise_severity`, `lift_severity_raise`, active-cause entity, `no_declarada` | 16–19 | 06, 07 | Q-02, Q-11, Q-12, Q-29, Q-30 | Must | 11-16 | Draft |
+| | [008 cited-cause-and-escalation](../specs/008-cited-cause-and-escalation/) | `set_cause`, `raise_severity`, `lift_severity_raise`, active-cause entity, `no_declarada` | 16–19 | 06, 07 | Q-02, Q-11, Q-29, Q-30, Q-47–Q-49 decided; Q-39, Q-40 confirmed; Q-41 amended (closing trigger); ADR-0015; Pickup-stop goldens (T18) and days 1–7 real run (R22) pending | Must | 11-16 | Implemented |
 | 3 · Multi-agent and control | [009 multi-agent](../specs/009-multi-agent/) | Gap, shipment-risk and bottleneck analysts (read-only); coordinator as single writer; deltas only; injection defense; cost of days 1–7 | 20, 28, 29, 37 | 08 | ADR-0009 | Must | 11-18 | Draft |
 | | [010 guardrails-and-unattended](../specs/010-guardrails-and-unattended/) | Hooks before, after and on stop; per-agent allowlists; criteria as MCP prompt; unattended shift closing | 30–33 | 09, 11 | — | Must | 11-19 | Draft |
 | 4 · Production | [011 structured-output-and-cache](../specs/011-structured-output-and-cache/) | Validated output with retry, cached prefix, idempotency hardening, Batch API assessment | 02, 34, 35 | — | D3 | Should | 11-21 | Draft |
@@ -113,9 +113,9 @@ Seed for the incident catalog (A1) and the first golden cases. Quotes verified v
 | `list_available_logbooks()` | Read | Implemented (006): shifts closed at the current snapshot (Q-01), held-out never listed |
 | `get_logbook(turno_id)` | Read | Implemented (006): delimited `<bitacora>` block; tool error if unknown, held out or not yet closed |
 | `get_delayed_units(modelo, mercado)` | Read | Implemented (006): FR-10 delayed units, bottleneck stage, shipments |
-| `set_cause` | Write | In components diagram |
-| `raise_severity` | Write | ADR-0002 |
-| `lift_severity_raise` | Write | New (Q-11) |
+| `set_cause(case_id, categoria, etapa, bitacora, fragmento)` | Write | Implemented (008): cited cause for a case evaluated at this snapshot; citation verified and readable (Q-01, Q-12); refuses `no_declarada` and changing a cause from an earlier snapshot (Q-38) |
+| `raise_severity(categoria, etapa, modelo, bitacora, fragmento, mercado?)` | Write | Implemented (008): opens an active cause; code links cases by scope (Q-02, Q-49) and gives them its cause (Q-48); allowed with no case (Q-39); a duplicate scope in force is refused |
+| `lift_severity_raise(active_cause_id, bitacora, fragmento)` | Write | Implemented (008): citation from a later readable logbook (Q-11); undoes only the severity effect (Q-30) |
 | `emit_alert(case_id, texto)` | Write | Implemented (007): writes one decided alert's `texto` into the snapshot's notice draft |
 | `emit_shift_report(textos)` | Write | Implemented (007): one `texto` per news item, atomic, every news item required |
 | `criteria` | MCP prompt | FR-30 |

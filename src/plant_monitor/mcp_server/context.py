@@ -7,8 +7,10 @@ from datetime import datetime
 from typing import Protocol
 
 from plant_monitor.domain.cases import Case, CaseHistoryRow
+from plant_monitor.domain.causes import Cause, CauseCategory, CauseScope, Evidence
 from plant_monitor.domain.errors import RejectedRequest
 from plant_monitor.domain.models import Combination, CombinationMetrics, Unit
+from plant_monitor.domain.notices import Notice
 from plant_monitor.logbooks.store import LogbookStore
 from plant_monitor.metrics.engine import PlantContext
 
@@ -30,14 +32,65 @@ class NoticeTextWriter(Protocol):
 
 
 @dataclass(frozen=True)
+class JudgmentResult:
+    """What a judgment write changed: cases, cause id, changed notices and pending ids."""
+
+    case_ids: tuple[str, ...]
+    active_cause_id: str | None
+    lifted_at: str | None
+    changed: tuple[Notice, ...]
+    pending: tuple[str, ...]
+
+
+class CauseWriter(Protocol):
+    """Where 'set_cause' records a case's cited cause (R3)."""
+
+    def set_cause(self, case_id: str, cause: Cause, evidence: Evidence) -> JudgmentResult:
+        """Store the cited cause of 'case_id' and re-decide the snapshot."""
+        ...
+
+
+class RaiseWriter(Protocol):
+    """Where the severity raises are opened and lifted (R5, R9)."""
+
+    def raise_severity(
+        self, categoria: CauseCategory, scope: CauseScope, evidence: Evidence
+    ) -> JudgmentResult:
+        """Open an active cause over 'scope' and re-decide the snapshot."""
+        ...
+
+    def lift(self, active_cause_id: str, evidence: Evidence) -> JudgmentResult:
+        """Lift an active cause and re-decide the snapshot."""
+        ...
+
+
+class FrameWriter(NoticeTextWriter, CauseWriter, RaiseWriter, Protocol):
+    """The three writers of one snapshot, held by a single object."""
+
+
+@dataclass(frozen=True)
 class SnapshotFrame:
-    """Snapshot being processed: its id, timestamp, metrics, units and notice writer."""
+    """Snapshot being processed: its id, timestamp, metrics, units and writers."""
 
     snapshot_id: str
     at: datetime
     metrics: Mapping[Combination, CombinationMetrics]
     units: tuple[Unit, ...]
     notices: NoticeTextWriter | None = None
+    causes: CauseWriter | None = None
+    raises: RaiseWriter | None = None
+
+    @classmethod
+    def with_writer(
+        cls,
+        snapshot_id: str,
+        at: datetime,
+        metrics: Mapping[Combination, CombinationMetrics],
+        units: tuple[Unit, ...],
+        writer: FrameWriter,
+    ) -> SnapshotFrame:
+        """A frame whose notice, cause and raise slots hold the same writer."""
+        return cls(snapshot_id, at, metrics, units, writer, writer, writer)
 
 
 class NoCurrentSnapshot(RejectedRequest):

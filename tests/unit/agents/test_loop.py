@@ -40,6 +40,27 @@ async def test_e3_done_right_after_the_batch_that_fills_the_last_text() -> None:
     assert tools.names == ["get_deviations", "emit_alert"]
 
 
+async def test_e18d_a_judgment_write_that_adds_a_text_keeps_the_loop_going_until_it_is_written() -> None:
+    """E18d: required and missing gain an alert after 'raise_severity'; two requests, no third."""
+    progress = FakeProgress(creates=(ALERT_ID,))
+    tools = FakeTools(progress)
+    raise_args = {"categoria": "parada_de_linea", "etapa": "montaje", "modelo": "Pickup"}
+    model = FakeModel([tool("raise_severity", raise_args), tool("emit_alert", ALERT_ARGS, "tu-2")])
+    outcome = await make_coordinator(model, tools).run("S010", "brief", progress, LoopLog())
+    assert outcome is LoopOutcome.DONE
+    assert len(model.requests) == 2
+    assert tools.names == ["raise_severity", "emit_alert"]
+
+
+async def test_r14_nothing_required_runs_until_end_turn_without_a_reminder() -> None:
+    """R14, E18a: a tool turn with no required text does not stop the loop; 'end_turn' is 'done'."""
+    progress = FakeProgress()
+    model = FakeModel([tool("get_logbook", {"turno_id": "T01"}), end("Sin causas.")])
+    outcome = await make_coordinator(model, FakeTools(progress)).run("S004", "brief", progress, LoopLog())
+    assert outcome is LoopOutcome.DONE
+    assert len(model.requests) == 2
+
+
 async def test_e7_turn_cap_ends_with_fallback() -> None:
     """E7: a script that never finishes stops at 'max_turns' requests."""
     progress = FakeProgress(ALERT_ID)
@@ -88,7 +109,7 @@ async def test_e4_error_results_pass_unchanged_and_unoffered_tools_never_run() -
     model = FakeModel(
         [
             tool("get_case", {"case_id": "S999-SUV-Local"}, "tu-1"),
-            tool("set_cause", {}, "tu-2"),
+            tool("delete_case", {}, "tu-2"),
             tool("emit_alert", ALERT_ARGS, "tu-3"),
         ]
     )
@@ -97,7 +118,7 @@ async def test_e4_error_results_pass_unchanged_and_unoffered_tools_never_run() -
         "user", (ToolResultBlock("tu-1", "unknown case S999-SUV-Local", True),)
     )
     assert model.requests[2].messages[-1] == Message(
-        "user", (ToolResultBlock("tu-2", "tool set_cause is not available", True),)
+        "user", (ToolResultBlock("tu-2", "tool delete_case is not available", True),)
     )
     assert tools.names == ["get_case", "emit_alert"]
     assert outcome is LoopOutcome.DONE

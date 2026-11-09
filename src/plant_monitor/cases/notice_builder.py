@@ -8,7 +8,7 @@ from plant_monitor.cases.facts import CaseFacts
 from plant_monitor.cases.novelty import active_rows, alerts_for, case_order, news_reasons, report_set
 from plant_monitor.cases.templates import alert_text, news_text, silent_text
 from plant_monitor.domain.cases import Case, CaseHistoryRow
-from plant_monitor.domain.causes import Cause, CauseCategory
+from plant_monitor.domain.causes import Cause, CauseCategory, CitedCause
 from plant_monitor.domain.enums import Severity, Stage
 from plant_monitor.domain.models import Combination, CombinationMetrics
 from plant_monitor.domain.notices import (
@@ -67,7 +67,8 @@ def case_notice(tipo: NoticeType, facts: CaseFacts, snapshot_id: str) -> Notice:
     if peak is None:
         raise ValueError(f"{case.case_id}: a notice needs a max severity")
     motivo = reasons_for(facts)
-    cause = default_cause(facts.cause_stage)
+    cited = facts.cited
+    cause = default_cause(facts.cause_stage) if cited is None else cited.cause
     if tipo is NoticeType.ALERT:
         text = alert_text(facts, snapshot_id, motivo, cause)
     elif tipo is NoticeType.SHIFT_REPORT:
@@ -87,7 +88,7 @@ def case_notice(tipo: NoticeType, facts: CaseFacts, snapshot_id: str) -> Notice:
         origen=origin_for(motivo),
         motivo=motivo,
         causa=cause,
-        evidencia=(),
+        evidencia=() if cited is None else (cited.evidence,),
         texto=text,
     )
 
@@ -110,12 +111,15 @@ class SnapshotNotices:
 
 
 def _facts(
-    case: Case, current: CombinationMetrics | None, cause_rows: Mapping[str, CaseHistoryRow]
+    case: Case,
+    current: CombinationMetrics | None,
+    cause_rows: Mapping[str, CaseHistoryRow],
+    cited: Mapping[str, CitedCause],
 ) -> CaseFacts:
     row = cause_rows.get(case.case_id)
     if row is None:
         raise ValueError(f"{case.case_id}: no cause row")
-    return CaseFacts(case, current, row)
+    return CaseFacts(case, current, row, cited=cited.get(case.case_id))
 
 
 def build_snapshot_notices(
@@ -123,15 +127,17 @@ def build_snapshot_notices(
     metrics: Mapping[Combination, CombinationMetrics],
     cause_rows: Mapping[str, CaseHistoryRow],
     close: ShiftClose | None,
+    cited: Mapping[str, CitedCause] | None = None,
 ) -> SnapshotNotices:
     """Decisions of one snapshot from its last delta, and the report at a closing snapshot."""
     sid = delta.snapshot_id
+    cited = {} if cited is None else cited
     facts: dict[str, CaseFacts] = {}
     for case in delta.cases:
         current = metrics.get(case.combination)
         if current is None:
             raise ValueError(f"{case.case_id}: no metrics at {sid}")
-        facts[case.case_id] = _facts(case, current, cause_rows)
+        facts[case.case_id] = _facts(case, current, cause_rows, cited)
     alerts = alerts_for(delta, metrics)
     alerted = {case.case_id for case in alerts}
     decisions = [case_notice(NoticeType.ALERT, facts[case.case_id], sid) for case in alerts]
@@ -141,7 +147,7 @@ def build_snapshot_notices(
     for case in sorted(targets, key=case_order):
         if close is None and case.case_id in alerted:
             continue
-        target = facts.get(case.case_id) or _facts(case, None, cause_rows)
+        target = facts.get(case.case_id) or _facts(case, None, cause_rows, cited)
         tipo = NoticeType.SHIFT_REPORT if news_reasons(case) else NoticeType.NO_NOTICE
         if tipo is NoticeType.NO_NOTICE and case.case_id in alerted:
             raise ValueError(f"{case.case_id}: alerted at {sid}, it cannot be sin_aviso (Q-14)")

@@ -560,3 +560,81 @@ def test_e22_client_re_exports_the_shared_types() -> None:
 
     assert client.ToolSpec is types.ToolSpec
     assert client.ToolOutcome is types.ToolOutcome
+
+
+# --- 008 cited cause and escalation (E32, R21) ---
+
+MCP_SERVER_FORBIDDEN = (
+    "plant_monitor.runner",
+    "plant_monitor.cases.draft",
+    "plant_monitor.cases.ledger",
+    "plant_monitor.cases.registry.causes_repo",
+)
+JUDGMENT_ALLOWED = (  # R21 plus its own package: 'runner.pipeline' types (assumption, see report)
+    "plant_monitor.domain",
+    "plant_monitor.cases",
+    "plant_monitor.mcp_server.context",
+    "plant_monitor.runner",
+)
+
+
+def imports_under(source: str, package: str, prefixes: tuple[str, ...]) -> set[str]:
+    """Project names the module imports that are one of 'prefixes' or inside one."""
+    return {
+        name
+        for name in project_modules(source, package)
+        if any(name == prefix or name.startswith(f"{prefix}.") for prefix in prefixes)
+    }
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("from plant_monitor.runner import judgment", {"plant_monitor.runner.judgment"}),
+        ("import plant_monitor.cases.ledger", {"plant_monitor.cases.ledger"}),
+        ("from plant_monitor.cases import ledger", {"plant_monitor.cases.ledger"}),
+        (
+            "from plant_monitor.cases.registry.causes_repo import CauseRepo",
+            {"plant_monitor.cases.registry.causes_repo.CauseRepo"},
+        ),
+        ("from plant_monitor.cases.draft import NoticeDraft", {"plant_monitor.cases.draft.NoticeDraft"}),
+        (
+            "from plant_monitor.cases.registry import causes_repo",
+            {"plant_monitor.cases.registry.causes_repo"},
+        ),
+        (
+            "from plant_monitor.cases.causes import scope\nfrom plant_monitor.domain.causes import Cause",
+            set(),
+        ),
+    ],
+)
+def test_e32_scanner_flags_mcp_server_imports_of_runner_draft_ledger_or_causes_repo(
+    source: str, expected: set[str]
+) -> None:
+    """E32 (R21): a fixture in 'mcp_server/write_tools.py' importing a forbidden module is flagged."""
+    assert imports_under(source, "plant_monitor.mcp_server", MCP_SERVER_FORBIDDEN) == expected
+
+
+def test_e32_scanner_flags_novelty_in_evaluation_causes() -> None:
+    """E32 (R21): 'import plant_monitor.cases.novelty' in 'evaluation/causes.py' is not allowed."""
+    source = "import plant_monitor.cases.novelty\nfrom plant_monitor.domain.causes import Evidence"
+    assert disallowed_modules(source, "plant_monitor.evaluation", EVALUATION_ALLOWED) == {
+        "plant_monitor.cases.novelty"
+    }
+
+
+def test_e32_mcp_server_never_imports_runner_draft_ledger_or_causes_repo() -> None:
+    """E32 (R21): 'mcp_server' knows the writer protocols only."""
+    offenders = {
+        p.name: sorted(found)
+        for p in modules_of("mcp_server")
+        if (found := imports_under(p.read_text(encoding="utf-8"), package_of(p), MCP_SERVER_FORBIDDEN))
+    }
+    assert offenders == {}
+
+
+def test_e32_runner_judgment_imports_only_domain_cases_and_mcp_server_context() -> None:
+    """E32 (R21): the judgment adapter reaches 'mcp_server' only through 'context'."""
+    path = PACKAGE / "runner" / "judgment.py"
+    source = path.read_text(encoding="utf-8")
+    assert disallowed_modules(source, package_of(path), JUDGMENT_ALLOWED) == set()

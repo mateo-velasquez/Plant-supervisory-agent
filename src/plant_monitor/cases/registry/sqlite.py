@@ -4,16 +4,34 @@ import sqlite3
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Self
+from typing import Final, Self
 
 from plant_monitor.domain.enums import AnomalyKind, Market, Model
 from plant_monitor.domain.models import Anomaly, Combination, SnapshotCommit
 
 from .cases_repo import SqliteCaseRepository
+from .causes_repo import SqliteCauseRepository
 from .notices import SqliteNoticeStore
 from .releases import SqliteReleaseStore
-from .schema import SCHEMA, SCHEMA_VERSION
+from .schema import MIGRATION_V2_TO_V3, SCHEMA, SCHEMA_VERSION
 from .session import Session
+
+_V2: Final = 2
+
+
+def _migrate_v2_to_v3(conn: sqlite3.Connection) -> None:
+    """Run the migration statement by statement in one transaction; any error rolls it back."""
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        # Split on ';': a migration statement must not contain ';' inside it.
+        for statement in MIGRATION_V2_TO_V3.split(";"):
+            if statement.strip():
+                conn.execute(statement)
+        conn.execute("COMMIT")
+    except BaseException:
+        if conn.in_transaction:
+            conn.execute("ROLLBACK")
+        raise
 
 
 class SqliteRegistry:
@@ -25,6 +43,8 @@ class SqliteRegistry:
             version = int(conn.execute("PRAGMA user_version").fetchone()[0])
             if version == 0:
                 conn.executescript(SCHEMA)
+            elif version == _V2:
+                _migrate_v2_to_v3(conn)
             elif version != SCHEMA_VERSION:
                 raise ValueError(f"{path}: schema version {version}, expected {SCHEMA_VERSION}")
             conn.execute("PRAGMA foreign_keys = ON")
@@ -35,6 +55,7 @@ class SqliteRegistry:
         self.cases = SqliteCaseRepository(self._session)
         self.releases = SqliteReleaseStore(self._session)
         self.notices = SqliteNoticeStore(self._session)
+        self.causes = SqliteCauseRepository(self._session)
 
     def close(self) -> None:
         self._session.conn.close()

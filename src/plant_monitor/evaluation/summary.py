@@ -1,16 +1,17 @@
 """Evaluation summary: gating errors, the metrics table, the JSON file and the exit code (005, Q-35)."""
 
 import json
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
 from plant_monitor.domain.models import Shift
+from plant_monitor.evaluation.causes import score_causes
 from plant_monitor.evaluation.golden import Capability, GoldenSet
 from plant_monitor.evaluation.noise import NoiseScore, count_noise
 from plant_monitor.evaluation.output import RunOutput
-from plant_monitor.evaluation.results import ALERT_ERRORS, NEWS_ERRORS, Result, errors, tally
+from plant_monitor.evaluation.results import ALERT_ERRORS, CAUSE_ERRORS, NEWS_ERRORS, Result, errors, tally
 from plant_monitor.evaluation.scoring import score_alerts, score_news
 
 _JSON_NAME = "eval-{stamp:%Y%m%dT%H%M%SZ}.json"
@@ -28,13 +29,15 @@ class EvalSummary:
     alerts: tuple[Result, ...]
     news: tuple[Result, ...]
     noise: NoiseScore
+    causes: tuple[Result, ...] = ()
 
     @property
     def gating_errors(self) -> int:
-        """Gated alert errors, gated news errors and noise repeats; the number that fails the run."""
+        """Gated alert, news and cause errors and noise repeats; the number that fails the run."""
         return (
             errors(tally(self.alerts, gated=True), ALERT_ERRORS)
             + errors(tally(self.news, gated=True), NEWS_ERRORS)
+            + errors(tally(self.causes, gated=True), CAUSE_ERRORS)
             + self.noise.errors
         )
 
@@ -47,6 +50,7 @@ class EvalSummary:
             "covered_shifts": list(self.covered_shifts),
             "alerts": _section_json(self.alerts),
             "news": _section_json(self.news),
+            "causes": _section_json(self.causes),
             "noise": {
                 "errors": self.noise.errors,
                 "repeats": [
@@ -70,8 +74,9 @@ def evaluate(
     capabilities: frozenset[Capability],
     registry: str,
     golden_dir: str,
+    logbooks: Mapping[str, str] | None = None,
 ) -> EvalSummary:
-    """Score the run's alerts, news and noise against the golden set."""
+    """Score the run's alerts, news, causes and noise against the golden set."""
     return EvalSummary(
         registry=registry,
         golden=golden_dir,
@@ -80,6 +85,7 @@ def evaluate(
         alerts=score_alerts(run, golden, shifts, capabilities),
         news=score_news(run, golden, capabilities),
         noise=count_noise(run),
+        causes=score_causes(run, golden, shifts, logbooks or {}, capabilities),
     )
 
 
@@ -91,7 +97,7 @@ def exit_code(summary: EvalSummary) -> int:
 def render_table(summary: EvalSummary) -> str:
     """Plain-text table: one row per section and per question, gated and not gated columns."""
     rows: list[tuple[str, str, str]] = [("section", "gated", "not gated")]
-    for name, results in (("alerts", summary.alerts), ("news", summary.news)):
+    for name, results in (("alerts", summary.alerts), ("news", summary.news), ("causes", summary.causes)):
         rows.append((name, _line(tally(results, gated=True)), _line(tally(results, gated=False))))
         for question in _questions(results):
             rows.append(

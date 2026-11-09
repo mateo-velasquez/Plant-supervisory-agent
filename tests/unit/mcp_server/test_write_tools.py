@@ -45,8 +45,8 @@ async def call(draft: NoticeDraft, calls: Sequence[tuple[str, dict[str, object]]
     return results
 
 
-async def test_coordinator_tools_are_the_read_tools_plus_the_two_write_tools() -> None:
-    """R8, R9, 006 E11: eight tools offered with 'tools=', and the constant matches the server names."""
+async def test_coordinator_tools_are_the_read_tools_plus_the_five_write_tools() -> None:
+    """R8, R9, 006 E11: eleven tools offered with 'tools=', and the constant matches the server names."""
     assert (*READ_TOOLS, *WRITE_TOOLS) == COORDINATOR_TOOLS
     ctx, frames = tool_context()
     async with ToolClient(build_server(ctx, frames, tools=COORDINATOR_TOOLS)) as client:

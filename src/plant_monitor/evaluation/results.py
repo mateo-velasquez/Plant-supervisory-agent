@@ -12,6 +12,7 @@ class Section(StrEnum):
 
     ALERTS = "alerts"
     NEWS = "news"
+    CAUSES = "causes"
 
 
 @dataclass(frozen=True)
@@ -21,7 +22,7 @@ class Result:
     section: Section
     label: str | None  # None for extra, unscored, missing_report and unscored_report
     case_id: str | None
-    where: str  # snapshot_id for alerts, turno_id for news
+    where: str  # snapshot_id for alerts and causes, turno_id for news
     contributions: Mapping[str, int]
     depends_on: tuple[str, ...] = ()
     gated: bool = True
@@ -30,6 +31,17 @@ class Result:
 
 ALERT_ERRORS: Final = frozenset({"missing", "wrong_snapshot", "duplicates", "extra"})
 NEWS_ERRORS: Final = frozenset({"missing", "extra", "missing_report"})
+CAUSE_ERRORS: Final = frozenset(
+    {
+        "target_missing",
+        "categoria_mismatch",
+        "etapa_mismatch",
+        "evidence_missing",
+        "evidence_not_loaded",
+        "evidence_not_available",
+        "evidence_not_verbatim",
+    }
+)
 
 
 def tally(

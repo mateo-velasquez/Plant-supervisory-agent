@@ -17,6 +17,9 @@ COORDINATOR_TOOLS: Final[tuple[str, ...]] = (
     "get_active_cases",
     "get_case",
     "get_delayed_units",
+    "set_cause",
+    "raise_severity",
+    "lift_severity_raise",
     "emit_alert",
     "emit_shift_report",
 )

@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 
 from plant_monitor.domain.cases import Case, CaseHistoryRow
+from plant_monitor.domain.causes import CitedCause
 from plant_monitor.domain.enums import Stage, is_deviation
 from plant_monitor.domain.models import CombinationMetrics
 
@@ -14,6 +15,7 @@ class CaseFacts:
     case: Case
     current: CombinationMetrics | None  # this snapshot's metrics; None for a case not evaluated at it
     cause_row: CaseHistoryRow  # the case's last history row with a deviation (Q-32)
+    cited: CitedCause | None = None  # the case's cited cause, if a logbook named one
 
     def __post_init__(self) -> None:
         case_id = self.case.case_id

@@ -38,7 +38,9 @@ class ToolPort(Protocol):
 
 
 class TextProgress(Protocol):
-    """Notice ids whose text is still unwritten."""
+    """Notice ids that need a text and those still unwritten."""
+
+    def required(self) -> tuple[str, ...]: ...
 
     def missing(self) -> tuple[str, ...]: ...
 
@@ -146,7 +148,7 @@ class Coordinator:
                 if not results:
                     return LoopOutcome.UNEXPECTED_STOP
                 messages = (*messages, Message("user", results))
-                if not progress.missing():
+                if progress.required() and not progress.missing():
                     return LoopOutcome.DONE
             elif reply.stop_reason == "end_turn":
                 missing = progress.missing()

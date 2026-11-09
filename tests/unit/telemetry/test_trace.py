@@ -42,6 +42,8 @@ def _line(
     status: str = "committed",
     outcome: str = "done",
     calls: int = 2,
+    decision: str = "call",
+    decision_reason: str | None = "text_needed",
 ) -> TraceLine:
     tools = [
         ToolCallRecord(
@@ -58,7 +60,8 @@ def _line(
         snapshot_id=snapshot_id,
         turno_id="T01",
         status=status,
-        decision="call",
+        decision=decision,
+        decision_reason=decision_reason,
         outcome=outcome,
         required=[ALERT_ID],
         model_calls=[_call(n) for n in range(1, calls + 1)],
@@ -78,6 +81,45 @@ def test_e18a_build_line_costs_each_call_and_totals() -> None:
     assert float(line.totals.usd) == pytest.approx(0.0008)
     assert (line.status, line.decision, line.decision_reason) == ("committed", "call", "text_needed")
     assert (line.outcome, line.report_id, line.hooks) == ("done", None, [])
+
+
+@pytest.mark.parametrize(
+    ("decision", "reason"),
+    [
+        pytest.param("call", "text_needed", id="text_needed"),
+        pytest.param("call", "closing_review", id="closing_review"),
+        pytest.param("skip", "no_text_needed", id="no_text_needed"),
+        pytest.param("skip", None, id="none"),
+    ],
+)
+def test_r14_build_line_stores_each_decision_reason_and_none(decision: str, reason: str | None) -> None:
+    """R14: 'decision_reason' is a stored field, so it survives a write and read, 'None' included."""
+    line = _line(decision=decision, decision_reason=reason)
+    assert line.decision_reason == reason
+    assert TraceLine.model_validate_json(line.model_dump_json()).decision_reason == reason
+
+
+def test_r14_a_007_trace_line_still_parses() -> None:
+    """R14: a line written by 007, with its serialized computed reason, reads back."""
+    old: dict[str, object] = {
+        "snapshot_id": "S001",
+        "turno_id": "T01",
+        "status": "committed",
+        "decision": "skip",
+        "decision_reason": "no_text_needed",
+        "outcome": "skipped",
+        "required": [],
+        "model_calls": [],
+        "tool_calls": [],
+        "thinking": [],
+        "notices_agent": [],
+        "notices_template": [],
+        "report_id": None,
+        "totals": {"input_tokens": 0, "output_tokens": 0, "usd": 0.0},
+        "hooks": [],
+    }
+    line = TraceLine.model_validate_json(json.dumps(old))
+    assert (line.decision, line.decision_reason) == ("skip", "no_text_needed")
 
 
 def test_trace_path_is_named_after_the_utc_start(tmp_path: Path) -> None:

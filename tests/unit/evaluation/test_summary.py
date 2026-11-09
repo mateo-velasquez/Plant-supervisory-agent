@@ -165,6 +165,7 @@ def test_e34a_write_summary_names_the_file_in_utc_and_keeps_the_bytes_clean(tmp_
         "covered_shifts",
         "alerts",
         "news",
+        "causes",
         "noise",
         "gating_errors",
         "exit_code",

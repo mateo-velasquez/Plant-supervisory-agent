@@ -8,7 +8,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, JsonValue, computed_field, field_serializer
+from pydantic import BaseModel, ConfigDict, JsonValue, field_serializer
 
 from plant_monitor.telemetry.usage import PriceCard, Usage, cost_usd
 
@@ -39,8 +39,7 @@ class ToolCallRecord:
 logger = logging.getLogger(__name__)
 
 USD_DECIMALS = Decimal(1).scaleb(-8)
-NO_TEXT_REASON = "no_text_needed"
-TEXT_REASON = "text_needed"
+DecisionReason = Literal["text_needed", "closing_review", "no_text_needed"]
 
 
 def _usd(value: Decimal) -> Decimal:
@@ -103,6 +102,7 @@ class TraceLine(BaseModel):
     turno_id: str
     status: Literal["committed", "aborted"]
     decision: Literal["call", "skip"]
+    decision_reason: DecisionReason | None
     outcome: str
     required: list[str]
     model_calls: list[TraceModelCall]
@@ -113,11 +113,6 @@ class TraceLine(BaseModel):
     report_id: str | None
     totals: TraceTotals
     hooks: list[str] = []
-
-    @computed_field  # type: ignore[prop-decorator]
-    @property
-    def decision_reason(self) -> str:
-        return TEXT_REASON if self.decision == "call" else NO_TEXT_REASON
 
 
 class RunTotals(BaseModel):
@@ -139,6 +134,7 @@ def build_line(
     turno_id: str,
     status: str,
     decision: str,
+    decision_reason: str | None,
     outcome: str,
     required: Sequence[str],
     model_calls: Sequence[ModelCallRecord],
@@ -174,6 +170,7 @@ def build_line(
             "turno_id": turno_id,
             "status": status,
             "decision": decision,
+            "decision_reason": decision_reason,
             "outcome": outcome,
             "required": list(required),
             "model_calls": calls,

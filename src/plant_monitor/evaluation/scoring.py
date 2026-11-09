@@ -105,7 +105,7 @@ def _expected_alert(
         item.snapshot_id,
         contributions,
         item.depends_on,
-        gated=_gated(item, capabilities),
+        gated=is_gated(item, capabilities),
     )
 
 
@@ -132,18 +132,18 @@ def _expected_news(
         item.turno_id,
         contributions,
         item.depends_on,
-        gated=_gated(item, capabilities),
+        gated=is_gated(item, capabilities),
     )
 
 
-def _gated(item: GoldenItem, capabilities: frozenset[Capability]) -> bool:
+def is_gated(item: GoldenItem, capabilities: frozenset[Capability]) -> bool:
     """True when every capability the item requires is available."""
     return frozenset(item.requires) <= capabilities
 
 
 def _unmet_cases(golden: GoldenSet, capabilities: frozenset[Capability]) -> frozenset[str]:
     """Case ids with any golden item whose 'requires' the capabilities do not meet (E39)."""
-    return frozenset(case.case_id for case, item in _keyed_items(golden) if not _gated(item, capabilities))
+    return frozenset(case.case_id for case, item in _keyed_items(golden) if not is_gated(item, capabilities))
 
 
 def _keyed_items(golden: GoldenSet) -> Iterator[tuple[CaseKey, GoldenItem]]:
