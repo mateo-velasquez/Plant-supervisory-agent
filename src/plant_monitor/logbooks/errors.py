@@ -36,3 +36,10 @@ class FragmentNotFound(RejectedRequest):
 
     def __init__(self, turno_id: str) -> None:
         super().__init__(f"fragment not found in {turno_id}")
+
+
+class LogbookMissing(RejectedRequest):
+    """The shift's logbook file is absent; the review is retried later."""
+
+    def __init__(self, turno_id: str) -> None:
+        super().__init__(f"logbook {turno_id} is missing")

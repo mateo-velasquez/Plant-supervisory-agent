@@ -1,4 +1,4 @@
-"""007 T14: E41 series through the agent pipeline, file-backed registry, trace and resume (E20, E21)."""
+"""007 T14, 009 T15b: E41 series through the agent pipeline, file registry, trace and resume (E20, E21)."""
 
 import sqlite3
 from collections.abc import Sequence
@@ -9,6 +9,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from agent_builders import out
 from draft_builders import agent_text
 
 from plant_monitor.agents.fake_model import FakeModel
@@ -94,16 +95,19 @@ def news_args(snapshot_id: str, case_ids: Sequence[str]) -> dict[str, object]:
 
 def s002_script() -> list[ModelReply | Exception]:
     return [
+        out(usage=USAGE),
         call_reply("get_active_cases", {}, "tu-1", ThinkingBlock("Reviso los casos activos.", "sig-1")),
         call_reply("emit_shift_report", news_args("S002", (SEL, SUV, PL, PB)), "tu-2"),
     ]
 
 
 def healthy_script() -> list[ModelReply | Exception]:
-    """The S003 and S004 replies of E20."""
+    """The S003 and S004 replies of E20, with the investigator's empty output before each (R2b, R2)."""
     return [
+        out(usage=USAGE),
         call_reply("get_case", {"case_id": SEL}, "tu-1"),
         call_reply("emit_alert", {"case_id": SEL, "texto": agent_text(ALERT_ID)}, "tu-2"),
+        out(usage=USAGE),
         call_reply("get_deviations", {}, "tu-1"),
         call_reply("emit_shift_report", news_args("S004", (SEL, PL, PB)), "tu-2"),
     ]
@@ -205,9 +209,9 @@ def e20(tmp_path: Path, arrivals: list[Arrival], settings: Settings) -> Outcome:
 def test_e20_series_with_the_agent_rewrites_only_the_texts_and_traces_every_snapshot(
     e20: Outcome, baseline: dict[str, tuple[Item, ...]]
 ) -> None:
-    """E20: 6 requests, 17 rows equal to E41's except 'texto', delivered agent texts, 4 trace lines."""
+    """E20: 9 requests, 17 rows equal to E41's except 'texto', delivered agent texts, 4 trace lines."""
     assert e20.summary.processed == SERIES
-    assert (len(e20.model.requests), len(e20.model.counted)) == (6, 6)
+    assert (len(e20.model.requests), len(e20.model.counted)) == (9, 9)
 
     stored = items_of(e20.path, SERIES)
     assert sum(len(items) for items in stored.values()) == 17
@@ -248,13 +252,21 @@ def test_e20_series_with_the_agent_rewrites_only_the_texts_and_traces_every_snap
         f"S003-informe_de_turno-{PL}",
         f"S003-informe_de_turno-{PB}",
     ]
-    assert (s003.report_id, s003.totals.usd, s003.hooks) == (None, Decimal("0.0008"), [])
+    assert (s003.report_id, s003.totals.usd, s003.hooks) == (None, Decimal("0.0012"), [])
+    assert s003.agents_run == ["investigator", "coordinator"]
+    assert s003.investigator is not None
+    assert (s003.investigator.trigger, s003.investigator.outcome) == ("cause_lookup", "done")
+    assert (s003.investigator.logbooks, s003.investigator.marks) == ([], {})
     assert s004.notices_agent == list(S004_NEWS)
     assert s004.notices_template == [f"S004-sin_aviso-{SUV}"]
     assert s004.report_id == "T02-informe"
+    assert s001.investigator is None
+    for line, turno in ((s002, "T01"), (s004, "T02")):
+        assert line.investigator is not None
+        assert (line.investigator.outcome, line.investigator.marks) == ("done", {turno: "revisada"})
     totals = run_totals(read_trace(e20.trace))
-    assert (totals.snapshots, totals.called, totals.model_calls) == (4, 3, 6)
-    assert (totals.input_tokens, totals.output_tokens, totals.usd) == (18_000, 1_200, Decimal("0.0024"))
+    assert (totals.snapshots, totals.called, totals.model_calls) == (4, 3, 9)
+    assert (totals.input_tokens, totals.output_tokens, totals.usd) == (27_000, 1_800, Decimal("0.0036"))
 
 
 def test_e21_model_outage_aborts_at_the_snapshot_and_a_second_run_resumes_to_the_same_result(
@@ -277,15 +289,16 @@ def test_e21_model_outage_aborts_at_the_snapshot_and_a_second_run_resumes_to_the
     assert [(ln.snapshot_id, ln.status, ln.outcome) for ln in lines] == [
         ("S001", "committed", "skipped"),
         ("S002", "committed", "done"),
-        ("S003", "aborted", "aborted:ModelCallFailed"),
+        ("S003", "aborted", "skipped"),
     ]
     assert (lines[2].notices_agent, lines[2].notices_template) == ([], [])
+    assert [line.agents_run for line in lines] == [[], ["investigator", "coordinator"], ["investigator"]]
 
     second = Recorder()
     model = FakeModel(healthy_script())
     summary = run_agent(root, arrivals, settings, model, second, SECOND_START)
     assert (summary.processed, summary.skipped) == (("S003", "S004"), ("S001", "S002"))
-    assert len(model.requests) == 4
+    assert len(model.requests) == 6
     assert second.calls == [("alert", ALERT_ID), ("report", "T02")]
     assert [ln.snapshot_id for ln in read_trace(root / "traces" / "trace-20260302T233000Z.jsonl")] == [
         "S003",

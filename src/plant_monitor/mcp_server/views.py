@@ -2,21 +2,19 @@
 
 from collections.abc import Sequence
 from datetime import datetime
-from typing import Final
 
 from plant_monitor.cases.novelty import active_rows
 from plant_monitor.domain.cases import Case, CaseHistoryRow, CaseState
 from plant_monitor.domain.enums import Market, Model, Severity, Stage
 from plant_monitor.domain.models import Combination, CombinationMetrics, FrozenModel, Unit, all_combinations
 from plant_monitor.domain.notices import ActiveCaseRow
+from plant_monitor.domain.numbers import round_display as _round
+from plant_monitor.domain.numbers import round_optional as _round_optional
 from plant_monitor.mcp_server.context import SnapshotFrame
 from plant_monitor.metrics.bottleneck import is_delayed
 from plant_monitor.metrics.delay import projected_yard_arrival, reachable_shipment, unit_delay_days
 from plant_monitor.metrics.engine import PlantContext
 from plant_monitor.metrics.tables import is_repainting
-
-DECIMALS: Final = 1
-"""Decimal places of every float in a view (R12)."""
 
 
 class AvailableLogbook(FrozenModel):
@@ -125,16 +123,6 @@ class DelayedUnitsView(FrozenModel):
     etapa_cuello: Stage | None
     unidades: tuple[DelayedUnit, ...]
     omitidas: int = 0
-
-
-def _round(value: float) -> float:
-    """'value' rounded to 'DECIMALS' places."""
-    return round(value, DECIMALS)
-
-
-def _round_optional(value: float | None) -> float | None:
-    """'value' rounded to 'DECIMALS' places, or None."""
-    return None if value is None else _round(value)
 
 
 def _keep[T](items: tuple[T, ...], kept: int | None) -> tuple[tuple[T, ...], int]:

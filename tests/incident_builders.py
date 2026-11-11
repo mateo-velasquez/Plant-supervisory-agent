@@ -1,5 +1,6 @@
 """Builders for the 008 incident fixture (IF): snapshot payloads from gaps and delayed units."""
 
+import shutil
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -144,3 +145,12 @@ def write_incident_series(
         received = datetime.fromisoformat(str(payload["timestamp"]))
         arrivals.append(Arrival(orden=orden, snapshot_id=snapshot_id, archivo=path, recibido=received))
     return arrivals
+
+
+def copy_incident_logbooks(directory: Path, omit: Sequence[str] = ()) -> Path:
+    """Copy the IF logbooks into 'directory' except the shifts in 'omit'; return 'directory'."""
+    directory.mkdir(parents=True, exist_ok=True)
+    for source in sorted((INCIDENTS / "bitacoras").glob("*.txt")):
+        if source.stem not in omit:
+            shutil.copy(source, directory / source.name)
+    return directory

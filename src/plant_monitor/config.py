@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     agent_max_turns: int = Field(default=8, ge=1)
     notice_text_max_chars: int = Field(default=1500, gt=0)
 
+    # Multi-agent limits (009 R15).
+    investigator_max_turns: int = Field(default=4, ge=1)
+    proposal_output_max_chars: int = Field(default=2000, gt=0)
+    logbook_review_max_attempts: int = Field(default=2, ge=1)
+
     # Prices in USD per million tokens (007 R16).
     price_input_per_mtok: Decimal = Field(default=Decimal("0.10"), ge=0)
     price_cache_write_5m_per_mtok: Decimal = Field(default=Decimal("0.125"), ge=0)

@@ -1,4 +1,4 @@
-"""Paid agent run over days 1-7 (008, R22): S001-S042 through the coordinator; never run by CI."""
+"""Paid run of days 1-7 (008 R22, 009 R17): S001-S042 through investigator and coordinator; never in CI."""
 
 import sqlite3
 import sys
@@ -86,13 +86,18 @@ def main() -> int:
 
 
 def _print_cost(trace_file: Path, clock: float) -> None:
-    """Print the trace path, the run totals and the duration."""
+    """Print the trace path, the run totals, the per-agent split and the duration."""
     totals = run_totals(read_trace(trace_file))
     print(f"trace: {trace_file}")
     print(
         f"snapshots={totals.snapshots} called={totals.called} model_calls={totals.model_calls} "
         f"input_tokens={totals.input_tokens} output_tokens={totals.output_tokens} usd={totals.usd}"
     )
+    for agent, share in totals.by_agent.items():
+        print(
+            f"  {agent}: runs={share.runs} model_calls={share.model_calls} "
+            f"input_tokens={share.input_tokens} output_tokens={share.output_tokens} usd={share.usd}"
+        )
     print(f"duration: {time.monotonic() - clock:.1f}s")
 
 

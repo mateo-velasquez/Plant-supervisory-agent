@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 
 from plant_monitor.cases.registry import CauseStore, SqliteRegistry
-from plant_monitor.cases.registry import sqlite as sqlite_module
-from plant_monitor.cases.registry.schema import MIGRATION_V2_TO_V3, SCHEMA_V2_BODY, SCHEMA_VERSION
+from plant_monitor.cases.registry import schema as schema_module
+from plant_monitor.cases.registry.schema import MIGRATION_V2_TO_V3_BODY, SCHEMA_V2_BODY, SCHEMA_VERSION
 from plant_monitor.domain.cases import CaseState
 from plant_monitor.domain.causes import ActiveCause, CauseCategory, CauseScope, CitedCause, Evidence
 from plant_monitor.domain.enums import Market, Model, Severity, Stage
@@ -92,11 +92,11 @@ def make_v2_file(path: Path) -> None:
         )
 
 
-def test_e2a_new_file_is_version_three_with_the_cause_tables_and_reopens(tmp_path: Path) -> None:
+def test_e2a_new_file_is_version_four_with_the_cause_tables_and_reopens(tmp_path: Path) -> None:
     path = tmp_path / "r.sqlite3"
     with SqliteRegistry(path):
         pass
-    assert user_version(path) == 3 == SCHEMA_VERSION
+    assert user_version(path) == 4 == SCHEMA_VERSION
     assert table_names(path) >= NEW_TABLES
     with SqliteRegistry(path) as again:
         assert again.causes.in_force() == ()
@@ -108,7 +108,7 @@ def test_e2b_version_two_file_is_migrated_in_place_keeping_its_rows(tmp_path: Pa
     before = {t: dump(path, t) for t in ("cases", "case_history", "notices")}
     with SqliteRegistry(path):
         pass
-    assert user_version(path) == 3
+    assert user_version(path) == 4
     assert {t: dump(path, t) for t in before} == before
     assert table_names(path) >= NEW_TABLES
     assert all(dump(path, t) == [] for t in NEW_TABLES)
@@ -117,7 +117,7 @@ def test_e2b_version_two_file_is_migrated_in_place_keeping_its_rows(tmp_path: Pa
 
 
 @pytest.mark.parametrize("version", [1, 7])
-def test_e2cd_other_versions_raise_naming_file_found_and_three_and_leave_the_file(
+def test_e2cd_other_versions_raise_naming_file_found_and_four_and_leave_the_file(
     tmp_path: Path, version: int
 ) -> None:
     path = tmp_path / "r.sqlite3"
@@ -129,12 +129,12 @@ def test_e2cd_other_versions_raise_naming_file_found_and_three_and_leave_the_fil
     message = str(error.value).replace(str(path), "")
     assert path.name in str(error.value)
     assert str(version) in message
-    assert "3" in message
+    assert "4" in message
     assert user_version(path) == version
     assert table_names(path) == {"processed_snapshots"}
 
 
-def test_e2e_fresh_v3_file_and_migrated_v2_file_have_the_same_schema(tmp_path: Path) -> None:
+def test_e2e_fresh_file_and_migrated_v2_file_have_the_same_schema(tmp_path: Path) -> None:
     fresh, migrated = tmp_path / "fresh.sqlite3", tmp_path / "migrated.sqlite3"
     with SqliteRegistry(fresh):
         pass
@@ -149,9 +149,10 @@ def test_e2f_failing_migration_statement_rolls_back_and_leaves_version_two(
 ) -> None:
     path = tmp_path / "r.sqlite3"
     make_v2_file(path)
-    statements = [s for s in MIGRATION_V2_TO_V3.split(";") if s.strip()]
+    statements = [s for s in MIGRATION_V2_TO_V3_BODY.split(";") if s.strip()]
     statements[1] = "SELECT * FROM table_that_does_not_exist"
-    monkeypatch.setattr(sqlite_module, "MIGRATION_V2_TO_V3", ";\n".join(statements) + ";")
+    failing = ";\n".join(statements) + ";"
+    monkeypatch.setattr(schema_module, "STEPS", {**schema_module.STEPS, 2: failing})
     with pytest.raises(sqlite3.Error):
         SqliteRegistry(path)
     assert user_version(path) == 2

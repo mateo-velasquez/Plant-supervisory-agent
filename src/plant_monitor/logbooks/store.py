@@ -7,11 +7,12 @@ from pathlib import Path
 from plant_monitor.domain.calendar import HeldOutPolicy, closed_shifts
 from plant_monitor.domain.models import Shift
 from plant_monitor.domain.verbatim import contains_verbatim, normalize_whitespace
-from plant_monitor.ingestion.logbooks import read_logbook_texts
+from plant_monitor.ingestion.logbooks import LogbookFileMissing, read_logbook_texts
 from plant_monitor.logbooks.errors import (
     EmptyFragment,
     FragmentNotFound,
     LogbookHeldOut,
+    LogbookMissing,
     LogbookNotAvailable,
     UnknownLogbook,
 )
@@ -69,8 +70,21 @@ class LogbookStore:
         if turno_id not in {shift.turno_id for shift in closed_shifts(self._shifts, snapshot_id)}:
             raise LogbookNotAvailable(turno_id, snapshot_id, closes_at)
         if turno_id not in self._texts:
-            self._texts.update(self._loader(self._directory, [turno_id], self._policy))
+            try:
+                self._texts.update(self._loader(self._directory, [turno_id], self._policy))
+            except LogbookFileMissing as error:
+                raise LogbookMissing(turno_id) from error
         return Logbook(turno_id, closes_at, self._texts[turno_id])
+
+    def missing(self, turno_ids: Iterable[str], snapshot_id: str) -> tuple[str, ...]:
+        """Ids among 'turno_ids' whose logbook file is absent."""
+        absent: list[str] = []
+        for turno_id in turno_ids:
+            try:
+                self.get(turno_id, snapshot_id)
+            except LogbookMissing:
+                absent.append(turno_id)
+        return tuple(absent)
 
     def verify_citation(self, turno_id: str, fragment: str, snapshot_id: str) -> None:
         """Raise unless 'fragment' is verbatim in the logbook readable at 'snapshot_id' (R5)."""

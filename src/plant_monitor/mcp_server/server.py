@@ -25,6 +25,7 @@ WRITE_TOOLS: Final[tuple[str, ...]] = (
     "set_cause",
     "raise_severity",
     "lift_severity_raise",
+    "apply_proposal",
     "emit_alert",
     "emit_shift_report",
 )
@@ -98,6 +99,10 @@ def build_server(ctx: ToolContext, frames: FrameHolder, tools: Collection[str] =
             lambda: write_tools.lift_severity_raise(ctx, frames, active_cause_id, bitacora, fragmento)
         )
 
+    async def apply_proposal(propuesta: str) -> str:
+        """Apply one validated proposal of this snapshot by its id."""
+        return _refusals(lambda: write_tools.apply_proposal(ctx, frames, propuesta))
+
     async def emit_alert(case_id: str, texto: str) -> str:
         """Write the text of this snapshot's immediate alert for one case."""
         return _refusals(lambda: write_tools.emit_alert(ctx, frames, case_id, texto))
@@ -116,6 +121,7 @@ def build_server(ctx: ToolContext, frames: FrameHolder, tools: Collection[str] =
         "set_cause": set_cause,
         "raise_severity": raise_severity,
         "lift_severity_raise": lift_severity_raise,
+        "apply_proposal": apply_proposal,
         "emit_alert": emit_alert,
         "emit_shift_report": emit_shift_report,
     }

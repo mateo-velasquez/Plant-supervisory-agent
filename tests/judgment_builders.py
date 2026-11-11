@@ -2,6 +2,7 @@
 
 from collections.abc import Sequence
 from datetime import datetime
+from pathlib import Path
 
 from incident_builders import INCIDENTS, incident_context
 from incident_runs import EV_T05
@@ -19,14 +20,14 @@ PB_CASE = "S010-Pickup-Brasil"
 AC2 = "S010-causa-1"
 
 
-def incident_tool_context() -> tuple[ToolContext, FrameHolder]:
-    """Tool context over the IF calendar (T01-T06) and its logbooks, open policy, empty frame holder."""
+def incident_tool_context(directory: Path = INCIDENTS / "bitacoras") -> tuple[ToolContext, FrameHolder]:
+    """Tool context over the IF calendar (T01-T06) and the logbooks in 'directory', open policy."""
     plant = incident_context()
     policy = HeldOutPolicy.from_calendar(plant.shifts, "T06", True)
     ctx = ToolContext(
         plant=plant,
         cases=EmptyCases(),
-        logbooks=LogbookStore(INCIDENTS / "bitacoras", plant.shifts, policy, read_logbook_texts),
+        logbooks=LogbookStore(directory, plant.shifts, policy, read_logbook_texts),
         view_max_chars=4000,
         logbook_max_chars=100_000,
     )

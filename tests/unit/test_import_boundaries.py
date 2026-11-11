@@ -633,6 +633,83 @@ def test_e32_mcp_server_never_imports_runner_draft_ledger_or_causes_repo() -> No
     assert offenders == {}
 
 
+AGENT_PIPELINE_LAYERS = {
+    "domain",
+    "runner",
+    "cases",
+    "metrics",
+    "agents",
+    "mcp_server",
+    "telemetry",
+    "logbooks",
+    "config",
+}
+
+
+@pytest.mark.parametrize(
+    ("source", "package", "allowed", "expected"),
+    [
+        (
+            "from plant_monitor.logbooks import store",
+            "plant_monitor.agents",
+            (*AGENTS_ALLOWED, AGENTS_TYPES),
+            {"plant_monitor.logbooks.store"},
+        ),
+        (
+            "from plant_monitor.agents import loop",
+            "plant_monitor.mcp_server",
+            tuple(f"plant_monitor.{layer}" for layer in MCP_SERVER_ALLOWED),
+            {"plant_monitor.agents.loop"},
+        ),
+    ],
+)
+def test_e23_scanner_flags_logbooks_in_agents_control_and_agents_in_mcp_server_write_tools(
+    source: str, package: str, allowed: tuple[str, ...], expected: set[str]
+) -> None:
+    """E23 (R16): a fixture importing 'logbooks' from 'agents' or 'agents' from 'mcp_server' is flagged."""
+    assert disallowed_modules(source, package, allowed) == expected
+
+
+def test_e23_new_modules_follow_their_layer_rules() -> None:
+    """E23 (R16): the 009 modules import only the layers their package rule allows."""
+    domain = [PACKAGE / "domain" / f"{name}.py" for name in ("proposals", "perspectives", "numbers")]
+    cases = [PACKAGE / "cases" / "reviews.py", PACKAGE / "cases" / "perspectives.py"]
+    cases.append(PACKAGE / "cases" / "registry" / "reviews_repo.py")
+    agents = [PACKAGE / "agents" / "investigator.py", PACKAGE / "agents" / "control.py"]
+    steps = [
+        PACKAGE / "runner" / f"{name}.py" for name in ("review_step", "coordinator_step", "perspectives")
+    ]
+    steps.append(PACKAGE / "runner" / "bridge.py")
+    agents_allowed = (*AGENTS_ALLOWED, AGENTS_TYPES)
+    offenders = {
+        **layer_offenders(domain, {"domain"}),
+        **layer_offenders([PACKAGE / "metrics" / "shipment.py"], {"domain", "metrics"}),
+        **layer_offenders(steps, AGENT_PIPELINE_LAYERS),
+        **{
+            str(path.relative_to(PACKAGE)): sorted(extra)
+            for path in cases
+            if (
+                extra := disallowed_modules(path.read_text(encoding="utf-8"), package_of(path), CASES_ALLOWED)
+            )
+        },
+        **{
+            str(path.relative_to(PACKAGE)): sorted(extra)
+            for path in agents
+            if (
+                extra := disallowed_modules(
+                    path.read_text(encoding="utf-8"), package_of(path), agents_allowed
+                )
+            )
+        },
+    }
+    assert offenders == {}
+
+
+def test_e23_importing_the_investigator_loads_neither_anthropic_nor_mcp(tmp_path: Path) -> None:
+    """E23 (R16): the investigator module stays SDK-free at import time."""
+    assert loaded_by_import(tmp_path, "plant_monitor.agents.investigator", ("anthropic", "mcp")) == []
+
+
 def test_e32_runner_judgment_imports_only_domain_cases_and_mcp_server_context() -> None:
     """E32 (R21): the judgment adapter reaches 'mcp_server' only through 'context'."""
     path = PACKAGE / "runner" / "judgment.py"

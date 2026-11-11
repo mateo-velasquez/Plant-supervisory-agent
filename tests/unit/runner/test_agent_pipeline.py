@@ -1,4 +1,4 @@
-"""007 T13: 'AgentPipeline' over fake steps, a scripted model and the real tools (E15, E16, E18c)."""
+"""007 T13, 009 T15b: 'AgentPipeline' over fake steps and review, a scripted model and the real tools."""
 
 import logging
 from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -8,7 +8,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
-from agent_builders import end, tool
+from agent_builders import set_cause_proposal, tool, validated
 from draft_builders import (
     agent_text,
     empty_close_notices,
@@ -24,21 +24,26 @@ from mcp_builders import tool_context
 
 from plant_monitor.agents.factory import COORDINATOR_TOOLS, build_coordinator
 from plant_monitor.agents.fake_model import FakeModel
-from plant_monitor.agents.loop import ToolPort
+from plant_monitor.agents.investigator import ReviewLog
+from plant_monitor.agents.loop import LoopLog, LoopOutcome, ToolPort
 from plant_monitor.agents.model import ModelCallFailed, ModelReply
 from plant_monitor.cases.ledger import CaseLookup, CauseLedger
 from plant_monitor.cases.notice_builder import SnapshotNotices
 from plant_monitor.cases.registry import CauseStore, SqliteRegistry
+from plant_monitor.cases.reviews import ReviewMark
 from plant_monitor.config import Settings
 from plant_monitor.domain.calendar import snapshot_position
 from plant_monitor.domain.enums import ShiftPosition
 from plant_monitor.domain.models import Anomaly, Combination, Shift, Snapshot, SnapshotCommit
+from plant_monitor.domain.proposals import ValidatedProposal
 from plant_monitor.mcp_server.client import ToolClient
 from plant_monitor.mcp_server.context import FrameHolder, NoCurrentSnapshot
 from plant_monitor.mcp_server.server import build_server
 from plant_monitor.runner import agent_pipeline
 from plant_monitor.runner.agent_pipeline import AgentPipeline
+from plant_monitor.runner.coordinator_step import CoordinatorOutcome, CoordinatorStep
 from plant_monitor.runner.pipeline import SnapshotDecision
+from plant_monitor.runner.review_step import ReviewOutcome, ReviewPlan
 from plant_monitor.runner.series import RunAborted, run_series
 from plant_monitor.telemetry.trace import TraceWriter, read_trace, run_totals
 from plant_monitor.telemetry.usage import PriceCard
@@ -118,6 +123,41 @@ class CommitFailingStore:
         raise RuntimeError("commit failed")
 
 
+class FakeReview:
+    """'LogbookReviewStep' with a fixed plan: 'run' answers or raises, 'record' keeps its calls."""
+
+    def __init__(
+        self,
+        plan: ReviewPlan | None = None,
+        accepted: tuple[ValidatedProposal, ...] = (),
+        failure: Exception | None = None,
+    ) -> None:
+        self._plan = plan or ReviewPlan((), ())
+        self._accepted = accepted
+        self._failure = failure
+        self.recorded: list[tuple[LoopOutcome | None, str, tuple[str, ...]]] = []
+
+    def plan(self, decision: SnapshotDecision) -> ReviewPlan:
+        return self._plan
+
+    def run(
+        self, plan: ReviewPlan, decision: SnapshotDecision, log: LoopLog, review_log: ReviewLog
+    ) -> ReviewOutcome:
+        if self._failure is not None:
+            raise self._failure
+        return ReviewOutcome(plan, True, LoopOutcome.DONE, self._accepted)
+
+    def record(
+        self,
+        outcome: ReviewOutcome,
+        coordinator: LoopOutcome | None,
+        snapshot_id: str,
+        applied: Sequence[str] = (),
+    ) -> Mapping[str, ReviewMark]:
+        self.recorded.append((coordinator, snapshot_id, tuple(applied)))
+        return {turno: ReviewMark.REVIEWED for turno in outcome.plan.pending}
+
+
 @dataclass
 class Rig:
     """The pipeline under test and the doubles it runs on."""
@@ -128,6 +168,7 @@ class Rig:
     trace: TraceWriter
     path: Path
     decision: SnapshotDecision
+    review: FakeReview
 
 
 def decision_for(
@@ -169,6 +210,7 @@ def make_rig(
     redecided: SnapshotNotices | None = None,
     failure: Exception | None = None,
     incident: bool = False,
+    review: FakeReview | None = None,
 ) -> Rig:
     """An 'AgentPipeline' over the real tool server, a scripted model and a trace under 'tmp_path'."""
     isolate_settings_env(monkeypatch, tmp_path)
@@ -179,16 +221,19 @@ def make_rig(
     steps = FakeSteps(decision, frames)
     path = trace_path or tmp_path / "traces" / "trace.jsonl"
     trace = TraceWriter(path)
+    review = review or FakeReview()
+    coordinator = build_coordinator(settings, model, tool_factory(server))
     pipeline = AgentPipeline(
         steps=steps,
         unit=FakeUnit(current),
         frames=frames,
-        coordinator=build_coordinator(settings, model, tool_factory(server)),
         trace=trace,
         prices=price_card(settings),
         judgment=fake_judgment(settings.notice_text_max_chars, redecided=redecided, failure=failure),
+        review=review,
+        coordinator=CoordinatorStep(coordinator, frames, lambda decision, required: ()),
     )
-    return Rig(pipeline, steps, model, trace, path, decision)
+    return Rig(pipeline, steps, model, trace, path, decision, review)
 
 
 def run_process(rig: Rig) -> None:
@@ -328,20 +373,23 @@ def closing_decision(notices: SnapshotNotices) -> SnapshotDecision:
     return decision_for("S010", notices, "S004", ShiftPosition.CLOSING)
 
 
-def test_e18a_closing_snapshot_with_an_empty_report_is_called_for_a_review(
+def test_e18a_closing_snapshot_with_no_news_calls_only_the_investigator(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """E18a, R14: 'closing_review'; the tool turn does not stop the loop, so two requests, 'done'."""
+    """008 E18a, R9: 'investigator_only'; no coordinator request; the mark is recorded without one."""
     decision = closing_decision(empty_close_notices())
-    script = [tool("get_logbook", {"turno_id": "T01"}), end("Sin causas.")]
-    rig = make_rig(tmp_path, monkeypatch, decision, script, current="S010")
+    review = FakeReview(ReviewPlan(("T05",), ()))
+    rig = make_rig(tmp_path, monkeypatch, decision, [], current="S010", review=review)
     run_process(rig)
-    assert len(rig.model.requests) == 2
+    assert rig.model.requests == []
     assert len(rig.steps.finished) == 1
+    assert review.recorded == [(None, "S010", ())]
     rig.trace.after_commit()
     (line,) = read_trace(rig.path)
-    assert (line.status, line.decision, line.decision_reason) == ("committed", "call", "closing_review")
-    assert (line.outcome, line.required) == ("done", [])
+    assert (line.status, line.decision, line.decision_reason) == ("committed", "call", "investigator_only")
+    assert (line.outcome, line.required, line.agents_run) == ("skipped", [], ["investigator"])
+    assert line.investigator is not None
+    assert (line.investigator.outcome, line.investigator.marks) == ("done", {"T05": "revisada"})
 
 
 def test_e18c_closing_snapshot_with_one_news_item_is_called_for_text_needed(
@@ -375,17 +423,39 @@ def test_s7_an_abort_in_decide_is_a_skip_with_no_reason(
     assert line.outcome == "aborted:RuntimeError"
 
 
-def test_s7_an_abort_after_a_closing_review_keeps_call_and_its_reason(
+def test_s7_an_investigator_abort_keeps_call_and_its_reason_with_a_skipped_top_outcome(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """R14, S7: a model failure in a review with nothing required logs 'call', 'closing_review'."""
+    """008 S7, R9, R14: a model failure in the investigator logs 'call', 'investigator_only', 'skipped'."""
     decision = closing_decision(empty_close_notices())
-    rig = make_rig(tmp_path, monkeypatch, decision, [ModelCallFailed("create", 500)], current="S010")
+    review = FakeReview(ReviewPlan(("T05",), ()), failure=ModelCallFailed("create", 500))
+    rig = make_rig(tmp_path, monkeypatch, decision, [], current="S010", review=review)
     with pytest.raises(ModelCallFailed):
         run_process(rig)
     (line,) = read_trace(rig.path)
-    assert (line.status, line.decision, line.decision_reason) == ("aborted", "call", "closing_review")
-    assert (line.required, rig.steps.finished) == ([], [])
+    assert (line.status, line.decision, line.decision_reason) == ("aborted", "call", "investigator_only")
+    assert (line.outcome, line.agents_run, line.required) == ("skipped", ["investigator"], [])
+    assert line.investigator is not None
+    assert (line.investigator.outcome, line.investigator.marks) == ("aborted:ModelCallFailed", {})
+    assert (rig.steps.finished, review.recorded) == ([], [])
+
+
+def test_risk_a_coordinator_step_failing_before_its_loop_is_not_counted_as_a_coordinator_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Risk: 'agents_run' and 'by_agent' bill a coordinator run whose loop never started (R14)."""
+
+    def failing_run(*_: object) -> CoordinatorOutcome:
+        raise ValueError("perspectives down")
+
+    rig = make_rig(tmp_path, monkeypatch, s003_decision(), [], current="S003")
+    monkeypatch.setattr(CoordinatorStep, "run", failing_run)
+    with pytest.raises(ValueError, match="perspectives down"):
+        run_process(rig)
+    (line,) = read_trace(rig.path)
+    assert line.status == "aborted"
+    assert line.agents_run == []
+    assert run_totals([line]).by_agent["coordinator"].runs == 0
 
 
 def test_x4_a_stored_judgment_failure_is_raised_before_finish(
@@ -404,39 +474,127 @@ def test_x4_a_stored_judgment_failure_is_raised_before_finish(
     assert line.required == [ALERT_S003]
 
 
-def test_e18_the_line_and_the_save_use_the_final_notices_after_a_judgment_write(
+def test_e18_the_line_and_the_save_use_the_final_notices_after_an_applied_proposal(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """R14, R10: a review that records a cause and gains three texts saves and traces the final ids."""
+    """008 E18, R9, R11: an accepted proposal makes the reason 'proposals'; final ids saved and traced."""
     decision = closing_decision(empty_close_notices())
     textos = [
         {"case_id": SEL10, "texto": agent_text(REQUIRED_S010[1])},
         {"case_id": "S007-Pickup-Brasil", "texto": agent_text(REQUIRED_S010[2])},
     ]
-    cause = {
-        "case_id": SEL10,
-        "categoria": "parada_de_linea",
-        "etapa": "montaje",
-        "bitacora": "T05",
-        "fragmento": F5,
-    }
+    proposal = validated("S010-p1", set_cause_proposal(SEL10, "parada_de_linea", "T05", F5, "con_fecha"))
     script = [
-        tool("set_cause", cause),
+        tool("apply_proposal", {"propuesta": "S010-p1"}),
         tool("emit_alert", {"case_id": SEL10, "texto": agent_text(ALERT_S010)}, "tu-2"),
         tool("emit_shift_report", {"textos": textos}, "tu-3"),
     ]
+    review = FakeReview(ReviewPlan(("T05",), ()), accepted=(proposal,))
     rig = make_rig(
-        tmp_path, monkeypatch, decision, script, current="S010", redecided=s010_notices(), incident=True
+        tmp_path,
+        monkeypatch,
+        decision,
+        script,
+        current="S010",
+        redecided=s010_notices(),
+        incident=True,
+        review=review,
     )
     run_process(rig)
     (final,) = rig.steps.finished
     assert final.notices.decisions[0].texto == agent_text(ALERT_S010)
+    assert '<propuestas snapshot_id="S010">' in str(rig.model.requests[0].messages[0].content)
+    assert review.recorded == [(LoopOutcome.DONE, "S010", ("S010-p1",))]
     rig.trace.after_commit()
     (line,) = read_trace(rig.path)
-    assert (line.decision, line.decision_reason, line.outcome) == ("call", "closing_review", "done")
+    assert (line.decision, line.decision_reason, line.outcome) == ("call", "proposals", "done")
+    assert line.agents_run == ["investigator", "coordinator"]
+    assert (line.proposals_applied, line.proposals_declined) == (["S010-p1"], [])
     assert line.required == list(REQUIRED_S010)
     assert line.notices_agent == list(REQUIRED_S010)
     assert line.notices_template == [final.notices.decisions[2].notice_id]
+
+
+class FailedLookupReview(FakeReview):
+    """A review whose cause lookup ends 'invalid_output' with nothing accepted."""
+
+    def run(
+        self, plan: ReviewPlan, decision: SnapshotDecision, log: LoopLog, review_log: ReviewLog
+    ) -> ReviewOutcome:
+        return ReviewOutcome(plan, True, LoopOutcome.INVALID_OUTPUT, ())
+
+
+def test_e27_a_a_cause_lookup_is_traced_applies_the_proposal_and_writes_no_review_mark(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """E27 (a), R2b, R14: 'trigger' 'cause_lookup', proposal applied, reason 'text_needed', no 'record'."""
+    textos = [
+        {"case_id": SEL10, "texto": agent_text(REQUIRED_S010[1])},
+        {"case_id": "S007-Pickup-Brasil", "texto": agent_text(REQUIRED_S010[2])},
+    ]
+    proposal = validated("S010-p1", set_cause_proposal(SEL10, "parada_de_linea", "T05", F5, "con_fecha"))
+    script = [
+        tool("apply_proposal", {"propuesta": "S010-p1"}),
+        tool("emit_alert", {"case_id": SEL10, "texto": agent_text(ALERT_S010)}, "tu-2"),
+        tool("emit_shift_report", {"textos": textos}, "tu-3"),
+    ]
+    review = FakeReview(ReviewPlan((), (), lookup=(SEL10,)), accepted=(proposal,))
+    rig = make_rig(
+        tmp_path,
+        monkeypatch,
+        closing_decision(s010_notices()),
+        script,
+        current="S010",
+        redecided=s010_notices(),
+        incident=True,
+        review=review,
+    )
+    run_process(rig)
+    assert '<propuestas snapshot_id="S010">' in str(rig.model.requests[0].messages[0].content)
+    assert review.recorded == []
+    rig.trace.after_commit()
+    (line,) = read_trace(rig.path)
+    assert (line.decision_reason, line.outcome, line.agents_run) == (
+        "text_needed",
+        "done",
+        ["investigator", "coordinator"],
+    )
+    assert line.proposals_applied == ["S010-p1"]
+    assert line.investigator is not None
+    assert (line.investigator.trigger, line.investigator.logbooks, line.investigator.marks) == (
+        "cause_lookup",
+        [],
+        {},
+    )
+
+
+def test_e27_b_a_failed_cause_lookup_is_traced_with_no_proposal_and_no_review_mark(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """E27 (b), R2b: 'fallback:invalid_output' in the investigator entry, nothing applied, 'marks' '{}'."""
+    review = FailedLookupReview(ReviewPlan((), (), lookup=(SEL10,)))
+    textos = [
+        {"case_id": SEL10, "texto": agent_text(REQUIRED_S010[1])},
+        {"case_id": "S007-Pickup-Brasil", "texto": agent_text(REQUIRED_S010[2])},
+    ]
+    script = [
+        tool("emit_alert", {"case_id": SEL10, "texto": agent_text(ALERT_S010)}),
+        tool("emit_shift_report", {"textos": textos}, "tu-2"),
+    ]
+    rig = make_rig(
+        tmp_path, monkeypatch, closing_decision(s010_notices()), script, current="S010", review=review
+    )
+    run_process(rig)
+    assert review.recorded == []
+    rig.trace.after_commit()
+    (line,) = read_trace(rig.path)
+    assert line.investigator is not None
+    assert (line.investigator.trigger, line.investigator.outcome, line.investigator.marks) == (
+        "cause_lookup",
+        "fallback:invalid_output",
+        {},
+    )
+    assert (line.proposals_applied, line.proposals_declined) == ([], [])
 
 
 def test_risk_the_composition_root_builds_one_ledger_for_the_steps_and_the_judgment(

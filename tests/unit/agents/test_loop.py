@@ -215,6 +215,58 @@ async def test_e6_budget_guard_sends_at_the_limit_and_not_above(
     assert "95000" in warnings[0]
 
 
+class FakeReview:
+    """An 'EndReview' that answers 'note' to the first 'rejects' texts and accepts the rest."""
+
+    def __init__(self, rejects: int, note: str = "N1") -> None:
+        self.rejects = rejects
+        self.note = note
+        self.texts: list[str] = []
+
+    @property
+    def exhausted(self) -> LoopOutcome:
+        """The outcome after a second note."""
+        return LoopOutcome.INVALID_OUTPUT
+
+    def review(self, text: str) -> str | None:
+        """Record the text; return the note while rejecting."""
+        self.texts.append(text)
+        return self.note if len(self.texts) <= self.rejects else None
+
+
+@pytest.mark.parametrize(
+    ("script", "rejects", "expected", "texts", "noted"),
+    [
+        pytest.param([end("x"), end("y")], 1, "done", ["x", "y"], True, id="a-note-then-accept"),
+        pytest.param(
+            [end("x"), end("y")], 2, "fallback:invalid_output", ["x", "y"], True, id="b-rejects-every-text"
+        ),
+        pytest.param(
+            [tool("get_logbook", {"turno_id": "T05"}), end("z")], 0, "done", ["z"], False, id="c-accepts"
+        ),
+    ],
+)
+async def test_e5_end_of_turn_goes_through_the_review(
+    script: list[ModelReply], rejects: int, expected: str, texts: list[str], noted: bool
+) -> None:
+    """E5: a note is appended once as a user turn; a second one ends with the review's outcome."""
+    progress = FakeProgress()
+    model = FakeModel(script)
+    review = FakeReview(rejects)
+    outcome = await make_coordinator(model, FakeTools(progress)).run(
+        "S010", "task", progress, LoopLog(), review
+    )
+    one, two = model.requests
+    assert outcome == expected
+    assert review.texts == texts
+    if noted:
+        assert two.messages == (
+            *one.messages,
+            Message("assistant", script[0].content),
+            Message("user", (TextBlock("N1"),)),
+        )
+
+
 async def test_t4_allowed_tool_missing_from_the_server_is_a_wiring_error() -> None:
     """T4: a server without an allowed tool raises 'ValueError' instead of offering fewer tools."""
     progress = FakeProgress(ALERT_ID)
