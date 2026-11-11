@@ -87,8 +87,8 @@ async def test_e7_injected_closing_tag_is_neutralized() -> None:
     assert outcome.text.lower().count("</bitacora") == 1
 
 
-async def test_e16_missing_file_is_a_generic_crash_without_path(tmp_path: Path) -> None:
-    """E16: a vanished logbook file gives only the bare crash text."""
+async def test_e16_missing_file_is_a_refusal_without_path(tmp_path: Path) -> None:
+    """E16 (changed by 009 R8, E14d): a vanished logbook file is the 'missing' refusal, with no path."""
     directory = tmp_path / "bitacoras"
     shutil.copytree(LOGBOOKS, directory)
     ctx, frames = tool_context(directory=directory)
@@ -97,4 +97,5 @@ async def test_e16_missing_file_is_a_generic_crash_without_path(tmp_path: Path) 
         async with ToolClient(build_server(ctx, frames)) as client:
             outcome = await client.call("get_logbook", {"turno_id": "T02"})
     assert outcome.is_error
-    assert outcome.text == "Error executing tool get_logbook"
+    assert outcome.text == "Error executing tool get_logbook: logbook T02 is missing"
+    assert str(directory) not in outcome.text

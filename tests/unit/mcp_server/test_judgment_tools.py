@@ -38,10 +38,10 @@ def err(tool: str, message: str) -> str:
 
 
 async def call_in(frame: SnapshotFrame, name: str, arguments: Mapping[str, object]) -> tuple[str, bool]:
-    """Call one coordinator tool inside 'frame'; return '(text, is_error)'."""
+    """Call one registered tool inside 'frame'; return '(text, is_error)'."""
     ctx, frames = incident_tool_context()
     with frames.entered(frame):
-        async with ToolClient(build_server(ctx, frames, tools=COORDINATOR_TOOLS)) as client:
+        async with ToolClient(build_server(ctx, frames, tools=(*READ_TOOLS, *WRITE_TOOLS))) as client:
             outcome = await client.call(name, arguments)
     return outcome.text, outcome.is_error
 
@@ -167,9 +167,16 @@ async def test_e7d_a_raise_without_market_calls_the_writer_with_a_null_market_sc
 
 async def test_e20_tools_are_the_read_tools_then_the_five_write_tools_and_the_default_stays_six() -> None:
     """E20: the offered order, the constant equal to the server's names, six tools by default."""
-    expected = ("set_cause", "raise_severity", "lift_severity_raise", "emit_alert", "emit_shift_report")
+    expected = (
+        "set_cause",
+        "raise_severity",
+        "lift_severity_raise",
+        "apply_proposal",
+        "emit_alert",
+        "emit_shift_report",
+    )
     assert expected == WRITE_TOOLS
-    assert (*READ_TOOLS, *WRITE_TOOLS) == COORDINATOR_TOOLS
+    assert set(COORDINATOR_TOOLS) <= {*READ_TOOLS, *WRITE_TOOLS}
     ctx, frames = incident_tool_context()
     async with ToolClient(build_server(ctx, frames)) as client:
         assert [spec.name for spec in await client.list_tools()] == list(READ_TOOLS)

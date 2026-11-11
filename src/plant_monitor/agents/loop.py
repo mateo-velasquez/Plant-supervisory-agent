@@ -55,7 +55,34 @@ class LoopOutcome(StrEnum):
     REFUSAL = "fallback:refusal"
     MAX_TOKENS = "fallback:max_tokens"
     MISSING_TEXTS = "fallback:missing_texts"
+    INVALID_OUTPUT = "fallback:invalid_output"
     UNEXPECTED_STOP = "fallback:unexpected_stop"
+
+
+class EndReview(Protocol):
+    """Judges the text of an 'end_turn' reply: a note to send back, or None to accept."""
+
+    @property
+    def exhausted(self) -> LoopOutcome:
+        """The outcome when a second note would be needed."""
+        ...
+
+    def review(self, text: str) -> str | None: ...
+
+
+class MissingTexts:
+    """The coordinator's review: remind of the notice texts still unwritten."""
+
+    def __init__(self, progress: TextProgress) -> None:
+        self._progress = progress
+
+    @property
+    def exhausted(self) -> LoopOutcome:
+        return LoopOutcome.MISSING_TEXTS
+
+    def review(self, text: str) -> str | None:
+        missing = self._progress.missing()
+        return render_reminder(missing) if missing else None
 
 
 @dataclass(frozen=True)
@@ -98,11 +125,21 @@ class Coordinator:
         self._config = config
         self._clock = clock
 
-    async def run(self, snapshot_id: str, brief: str, progress: TextProgress, log: LoopLog) -> LoopOutcome:
-        """Run the loop for one snapshot and set 'log.outcome'."""
+    async def run(
+        self,
+        snapshot_id: str,
+        brief: str,
+        progress: TextProgress,
+        log: LoopLog,
+        review: EndReview | None = None,
+    ) -> LoopOutcome:
+        """Run the loop for one snapshot and set 'log.outcome'; no 'review' means 'MissingTexts'."""
+        end_review = MissingTexts(progress) if review is None else review
         async with self._model.session() as session, self._tools() as port:
             offered = await self._offered(port)
-            log.outcome = await self._loop(session, port, offered, snapshot_id, brief, progress, log)
+            log.outcome = await self._loop(
+                session, port, offered, snapshot_id, brief, progress, log, end_review
+            )
         return log.outcome
 
     async def _offered(self, port: ToolPort) -> tuple[ToolSpec, ...]:
@@ -121,6 +158,7 @@ class Coordinator:
         brief: str,
         progress: TextProgress,
         log: LoopLog,
+        end_review: EndReview,
     ) -> LoopOutcome:
         config = self._config
         messages: tuple[Message, ...] = (Message("user", (TextBlock(brief),)),)
@@ -151,13 +189,14 @@ class Coordinator:
                 if progress.required() and not progress.missing():
                     return LoopOutcome.DONE
             elif reply.stop_reason == "end_turn":
-                missing = progress.missing()
-                if not missing:
+                text = "\n".join(b.text for b in reply.content if isinstance(b, TextBlock))
+                note = end_review.review(text)
+                if note is None:
                     return LoopOutcome.DONE
                 if reminded:
-                    return LoopOutcome.MISSING_TEXTS
+                    return end_review.exhausted
                 reminded = True
-                messages = (*messages, Message("user", (TextBlock(render_reminder(missing)),)))
+                messages = (*messages, Message("user", (TextBlock(note),)))
             else:
                 return _STOP_FALLBACKS.get(reply.stop_reason, LoopOutcome.UNEXPECTED_STOP)
         return LoopOutcome.TURN_CAP

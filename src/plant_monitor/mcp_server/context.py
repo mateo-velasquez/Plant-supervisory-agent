@@ -11,6 +11,7 @@ from plant_monitor.domain.causes import Cause, CauseCategory, CauseScope, Eviden
 from plant_monitor.domain.errors import RejectedRequest
 from plant_monitor.domain.models import Combination, CombinationMetrics, Unit
 from plant_monitor.domain.notices import Notice
+from plant_monitor.domain.proposals import Proposal, ValidatedProposal
 from plant_monitor.logbooks.store import LogbookStore
 from plant_monitor.metrics.engine import PlantContext
 
@@ -68,9 +69,53 @@ class FrameWriter(NoticeTextWriter, CauseWriter, RaiseWriter, Protocol):
     """The three writers of one snapshot, held by a single object."""
 
 
+class UnknownProposal(RejectedRequest):
+    """A proposal id that is not in the snapshot's book."""
+
+    def __init__(self, proposal_id: str, snapshot_id: str) -> None:
+        super().__init__(f"unknown proposal {proposal_id} at {snapshot_id}")
+
+
+class ProposalApplied(RejectedRequest):
+    """A proposal that was already applied."""
+
+    def __init__(self, proposal_id: str) -> None:
+        super().__init__(f"proposal {proposal_id} is already applied")
+
+
+class ProposalBook:
+    """The validated proposals of one snapshot, in memory, and which of them were applied (R11)."""
+
+    def __init__(self, proposals: Sequence[ValidatedProposal]) -> None:
+        self._order = tuple(p.id for p in proposals)
+        self._by_id = {p.id: p.proposal for p in proposals}
+        self._applied: set[str] = set()
+
+    def get(self, proposal_id: str, snapshot_id: str) -> Proposal:
+        """The proposal still to apply; refuses an unknown or an already applied id."""
+        proposal = self._by_id.get(proposal_id)
+        if proposal is None:
+            raise UnknownProposal(proposal_id, snapshot_id)
+        if proposal_id in self._applied:
+            raise ProposalApplied(proposal_id)
+        return proposal
+
+    def mark_applied(self, proposal_id: str) -> None:
+        """Record that the writer accepted 'proposal_id'."""
+        self._applied.add(proposal_id)
+
+    def applied(self) -> tuple[str, ...]:
+        """Applied ids in book order."""
+        return tuple(i for i in self._order if i in self._applied)
+
+    def declined(self) -> tuple[str, ...]:
+        """Ids not applied, in book order."""
+        return tuple(i for i in self._order if i not in self._applied)
+
+
 @dataclass(frozen=True)
 class SnapshotFrame:
-    """Snapshot being processed: its id, timestamp, metrics, units and writers."""
+    """Snapshot being processed: its id, timestamp, metrics, units, writers and proposal book."""
 
     snapshot_id: str
     at: datetime
@@ -79,6 +124,7 @@ class SnapshotFrame:
     notices: NoticeTextWriter | None = None
     causes: CauseWriter | None = None
     raises: RaiseWriter | None = None
+    proposals: ProposalBook | None = None
 
     @classmethod
     def with_writer(
@@ -88,9 +134,10 @@ class SnapshotFrame:
         metrics: Mapping[Combination, CombinationMetrics],
         units: tuple[Unit, ...],
         writer: FrameWriter,
+        proposals: ProposalBook | None = None,
     ) -> SnapshotFrame:
         """A frame whose notice, cause and raise slots hold the same writer."""
-        return cls(snapshot_id, at, metrics, units, writer, writer, writer)
+        return cls(snapshot_id, at, metrics, units, writer, writer, writer, proposals)
 
 
 class NoCurrentSnapshot(RejectedRequest):

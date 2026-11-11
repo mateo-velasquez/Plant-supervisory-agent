@@ -71,6 +71,7 @@ class SnapshotDecision:
     delta: CaseDelta | None = None
     candidates: tuple[Candidate, ...] = ()
     in_force: tuple[tuple[ActiveCause, tuple[str, ...]], ...] = ()
+    cited: frozenset[str] = frozenset()
 
 
 class ThresholdPipeline:
@@ -136,7 +137,14 @@ class ThresholdPipeline:
         cited = {} if ledger is None else ledger.cited(ids)
         built = build_snapshot_notices(delta, decision.metrics, rows, close, cited)
         in_force = () if ledger is None else ledger.in_force_view()
-        return replace(decision, notices=built, delta=delta, candidates=candidates, in_force=in_force)
+        return replace(
+            decision,
+            notices=built,
+            delta=delta,
+            candidates=candidates,
+            in_force=in_force,
+            cited=frozenset(cited),
+        )
 
     def decide(self, snapshot: Snapshot, shift: Shift, position: ShiftPosition) -> SnapshotDecision:
         """Metrics, lifecycle and notices.

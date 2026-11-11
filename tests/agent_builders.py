@@ -1,11 +1,16 @@
 """Minimal doubles and reply builders for 007 loop tests (fake tool port, progress, scripted replies)."""
 
+import json
 from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
+
+from incident_runs import F2, F5
+from pydantic import TypeAdapter
 
 from plant_monitor.agents.fake_model import FakeModel
 from plant_monitor.agents.loop import Coordinator, LoopConfig, ToolPort
 from plant_monitor.agents.model import ModelReply, TextBlock, ToolUseBlock
+from plant_monitor.domain.proposals import Proposal, ValidatedProposal
 from plant_monitor.mcp_server.server import READ_TOOLS
 from plant_monitor.mcp_server.types import ToolOutcome, ToolSpec
 from plant_monitor.telemetry.usage import Usage
@@ -13,7 +18,7 @@ from plant_monitor.telemetry.usage import Usage
 JUDGMENT_NAMES = ("set_cause", "raise_severity", "lift_severity_raise")
 EMIT_NAMES = ("emit_alert", "emit_shift_report")
 WRITE_NAMES = (*JUDGMENT_NAMES, *EMIT_NAMES)
-OFFERED = (*READ_TOOLS, *WRITE_NAMES)
+OFFERED = (*READ_TOOLS, *WRITE_NAMES, "apply_proposal")
 ALERT_ID = "S003-alerta_inmediata-S001-Sedán-Local"
 USAGE = Usage(input_tokens=100, output_tokens=20)
 
@@ -93,6 +98,74 @@ def tools_reply(
 def end(text: str, usage: Usage = USAGE) -> ModelReply:
     """A reply that ends the turn with text."""
     return ModelReply((TextBlock(text),), "end_turn", usage)
+
+
+RAISE2: dict[str, object] = {
+    "tipo": "raise",
+    "categoria": "retencion_de_calidad",
+    "etapa": "calidad",
+    "modelo": "SUV",
+    "mercado": "Europa",
+    "bitacora": "T02",
+    "fragmento": F2,
+    "estado_causa": "activa_sin_fecha",
+}
+RAISE5: dict[str, object] = {
+    "tipo": "raise",
+    "categoria": "parada_de_linea",
+    "etapa": "montaje",
+    "modelo": "Pickup",
+    "mercado": None,
+    "bitacora": "T05",
+    "fragmento": F5,
+    "estado_causa": "activa_sin_fecha",
+}
+
+
+def set_cause_proposal(
+    case_id: str,
+    categoria: str,
+    bitacora: str,
+    fragmento: str,
+    estado_causa: str,
+    etapa: str = "montaje",
+) -> dict[str, object]:
+    """A 'set_cause' proposal payload."""
+    return {
+        "tipo": "set_cause",
+        "case_id": case_id,
+        "categoria": categoria,
+        "etapa": etapa,
+        "bitacora": bitacora,
+        "fragmento": fragmento,
+        "estado_causa": estado_causa,
+    }
+
+
+def lift_proposal(causa_activa: str, bitacora: str, fragmento: str, estado_causa: str) -> dict[str, object]:
+    """A 'lift' proposal payload."""
+    return {
+        "tipo": "lift",
+        "causa_activa": causa_activa,
+        "bitacora": bitacora,
+        "fragmento": fragmento,
+        "estado_causa": estado_causa,
+    }
+
+
+def output_text(*proposals: Mapping[str, object]) -> str:
+    """The investigator's final text for 'proposals'."""
+    return json.dumps({"propuestas": list(proposals)}, ensure_ascii=False)
+
+
+def out(*proposals: Mapping[str, object], usage: Usage = USAGE) -> ModelReply:
+    """A reply that ends the turn with the investigator's JSON output."""
+    return end(output_text(*proposals), usage)
+
+
+def validated(proposal_id: str, payload: Mapping[str, object]) -> ValidatedProposal:
+    """A 'ValidatedProposal' parsed from a payload."""
+    return ValidatedProposal(id=proposal_id, proposal=TypeAdapter(Proposal).validate_python(payload))
 
 
 def stopped(reason: str) -> ModelReply:

@@ -189,3 +189,31 @@ def test_e19_env_example_has_one_line_per_agent_env_name() -> None:
     lines = example.read_text(encoding="utf-8").splitlines()
     for name in AGENT_ENV_NAMES:
         assert sum(line.startswith(f"{name}=") for line in lines) == 1
+
+
+MULTI_AGENT_ENV_NAMES = ("INVESTIGATOR_MAX_TURNS", "PROPOSAL_OUTPUT_MAX_CHARS", "LOGBOOK_REVIEW_MAX_ATTEMPTS")
+
+
+def test_e13a_multi_agent_defaults() -> None:
+    """E13 (a) of spec 009: the R15 defaults."""
+    settings = Settings(anthropic_api_key="k")
+    assert settings.investigator_max_turns == 4
+    assert settings.proposal_output_max_chars == 2000
+    assert settings.logbook_review_max_attempts == 2
+
+
+@pytest.mark.parametrize("name", MULTI_AGENT_ENV_NAMES)
+def test_e13b_multi_agent_zero_is_rejected(monkeypatch: pytest.MonkeyPatch, name: str) -> None:
+    """E13 (b) of spec 009: each setting refuses 0."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    monkeypatch.setenv(name, "0")
+    with pytest.raises(ValidationError):
+        Settings()
+
+
+def test_e13c_env_example_has_one_line_per_multi_agent_name() -> None:
+    """E13 (c) of spec 009: '.env.example' has exactly one line per R15 name."""
+    example = Path(__file__).resolve().parents[1] / ".env.example"
+    lines = example.read_text(encoding="utf-8").splitlines()
+    for name in MULTI_AGENT_ENV_NAMES:
+        assert sum(line.startswith(f"{name}=") for line in lines) == 1

@@ -1,8 +1,10 @@
 """SQLite schema and its version."""
 
+from collections.abc import Mapping
 from typing import Final
 
-SCHEMA_VERSION: Final = 3
+SCHEMA_VERSION: Final = 4
+_FIRST_VERSION: Final = 2
 
 SCHEMA_V2_BODY: Final = """
 CREATE TABLE processed_snapshots (
@@ -120,15 +122,30 @@ CREATE TABLE case_causes (
 );
 """
 
+MIGRATION_V3_TO_V4_BODY: Final = """
+CREATE TABLE logbook_reviews (
+    turno_id        TEXT PRIMARY KEY,
+    attempts        INTEGER NOT NULL CHECK (attempts >= 1),
+    last_attempt_at TEXT NOT NULL,
+    reviewed_at     TEXT,
+    given_up_at     TEXT,
+    CHECK (reviewed_at IS NULL OR given_up_at IS NULL)
+);
+"""
+
+# Step that takes a file from the key version to the next one.
+STEPS: Final[Mapping[int, str]] = {2: MIGRATION_V2_TO_V3_BODY, 3: MIGRATION_V3_TO_V4_BODY}
+
+
+def migration_from(version: int) -> str:
+    """The steps from 'version' up, then the version pragma; only for keys of 'STEPS'."""
+    steps = "\n".join(body for v, body in sorted(STEPS.items()) if v >= version)
+    return f"{steps}\nPRAGMA user_version = {SCHEMA_VERSION};\n"
+
+
 SCHEMA: Final = f"""
 BEGIN;
 {SCHEMA_V2_BODY}
-{MIGRATION_V2_TO_V3_BODY}
-PRAGMA user_version = {SCHEMA_VERSION};
+{migration_from(_FIRST_VERSION)}
 COMMIT;
-"""
-
-MIGRATION_V2_TO_V3: Final = f"""
-{MIGRATION_V2_TO_V3_BODY}
-PRAGMA user_version = {SCHEMA_VERSION};
 """

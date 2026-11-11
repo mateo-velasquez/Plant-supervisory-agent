@@ -1,12 +1,15 @@
 import json
 import logging
+from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from agent_builders import RAISE5, validated
 
 from plant_monitor.telemetry.trace import (
+    InvestigatorRecord,
     ModelCallRecord,
     ToolCallRecord,
     TraceLine,
@@ -44,6 +47,8 @@ def _line(
     calls: int = 2,
     decision: str = "call",
     decision_reason: str | None = "text_needed",
+    agents_run: tuple[str, ...] = (),
+    investigator: InvestigatorRecord | None = None,
 ) -> TraceLine:
     tools = [
         ToolCallRecord(
@@ -71,6 +76,24 @@ def _line(
         notices_template=[],
         report_id=None,
         card=CARD,
+        agents_run=agents_run,
+        investigator=investigator,
+        proposals_applied=["S010-p1"] if investigator and investigator.proposals else [],
+        proposals_declined=[],
+    )
+
+
+def _investigator(calls: int = 2) -> InvestigatorRecord:
+    return InvestigatorRecord(
+        outcome="done",
+        logbooks=["T05"],
+        missing=[],
+        marks={"T05": "revisada"},
+        proposals=[validated("S010-p1", RAISE5).item()],
+        control_errors=[],
+        model_calls=[_call(n) for n in range(1, calls + 1)],
+        tool_calls=[],
+        thinking=[],
     )
 
 
@@ -88,6 +111,8 @@ def test_e18a_build_line_costs_each_call_and_totals() -> None:
     [
         pytest.param("call", "text_needed", id="text_needed"),
         pytest.param("call", "closing_review", id="closing_review"),
+        pytest.param("call", "proposals", id="proposals"),
+        pytest.param("call", "investigator_only", id="investigator_only"),
         pytest.param("skip", "no_text_needed", id="no_text_needed"),
         pytest.param("skip", None, id="none"),
     ],
@@ -194,3 +219,90 @@ def test_e20_run_totals_sum_every_line_including_aborted(tmp_path: Path) -> None
     assert (totals.snapshots, totals.called, totals.model_calls) == (3, 2, 3)
     assert (totals.input_tokens, totals.output_tokens) == (9_000, 600)
     assert float(totals.usd) == pytest.approx(0.0012)
+
+
+def test_e17a_a_line_with_an_investigator_costs_both_agents_and_round_trips() -> None:
+    """E17a: investigator totals 6000 / 400 / 0.0008; the line totals add the coordinator's call."""
+    line = _line(calls=1, agents_run=("investigator", "coordinator"), investigator=_investigator())
+    assert line.investigator is not None
+    assert (line.investigator.totals.input_tokens, line.investigator.totals.output_tokens) == (6_000, 400)
+    assert float(line.investigator.totals.usd) == pytest.approx(0.0008)
+    assert (line.totals.input_tokens, line.totals.output_tokens) == (9_000, 600)
+    assert float(line.totals.usd) == pytest.approx(0.0012)
+    assert line.agents_run == ["investigator", "coordinator"]
+    assert (line.investigator.outcome, line.investigator.logbooks, line.investigator.marks) == (
+        "done",
+        ["T05"],
+        {"T05": "revisada"},
+    )
+    assert line.investigator.proposals[0]["id"] == "S010-p1"
+    assert (line.proposals_applied, line.proposals_declined) == (["S010-p1"], [])
+    assert TraceLine.model_validate_json(line.model_dump_json()) == line
+
+
+@pytest.mark.parametrize(
+    ("decision", "ran"),
+    [pytest.param("call", ["coordinator"], id="call"), pytest.param("skip", [], id="skip")],
+)
+def test_e17b_a_008_line_without_the_new_keys_parses(decision: str, ran: list[str]) -> None:
+    """E17b: no 'investigator', empty proposal lists, and 'agents_run' read from the decision."""
+    old: dict[str, object] = {
+        "snapshot_id": "S001",
+        "turno_id": "T01",
+        "status": "committed",
+        "decision": decision,
+        "decision_reason": "text_needed" if decision == "call" else "no_text_needed",
+        "outcome": "done" if decision == "call" else "skipped",
+        "required": [],
+        "model_calls": [],
+        "tool_calls": [],
+        "thinking": [],
+        "notices_agent": [],
+        "notices_template": [],
+        "report_id": None,
+        "totals": {"input_tokens": 0, "output_tokens": 0, "usd": 0.0},
+        "hooks": [],
+    }
+    line = TraceLine.model_validate_json(json.dumps(old))
+    assert line.investigator is None
+    assert (line.proposals_applied, line.proposals_declined) == ([], [])
+    assert list(line.ran) == ran
+
+
+def test_r14_the_investigator_entry_keeps_its_trigger_and_an_older_line_reads_as_review() -> None:
+    """R14, R2b: 'trigger' round trips; an entry written without it reads as 'review'."""
+    lookup = replace(_investigator(), trigger="cause_lookup", logbooks=[], marks={})
+    line = _line(agents_run=("investigator",), investigator=lookup)
+    assert line.investigator is not None
+    assert line.investigator.trigger == "cause_lookup"
+    assert TraceLine.model_validate_json(line.model_dump_json()) == line
+    old = _line(agents_run=("investigator",), investigator=_investigator()).model_dump(mode="json")
+    del old["investigator"]["trigger"]
+    parsed = TraceLine.model_validate_json(json.dumps(old))
+    assert parsed.investigator is not None
+    assert parsed.investigator.trigger == "review"
+
+
+def test_e17c_run_totals_split_the_cost_by_agent() -> None:
+    """E17c: totals sum both agents; 'by_agent' counts runs from 'agents_run'."""
+    both = _line("S001", calls=1, agents_run=("investigator", "coordinator"), investigator=_investigator())
+    skipped = _line("S002", calls=0, outcome="skipped", decision="skip", decision_reason="no_text_needed")
+    only_inv = _line(
+        "S003",
+        calls=0,
+        outcome="skipped",
+        decision_reason="investigator_only",
+        agents_run=("investigator",),
+        investigator=_investigator(),
+    )
+    totals = run_totals([both, skipped, only_inv])
+    assert (totals.snapshots, totals.called, totals.model_calls) == (3, 2, 5)
+    assert (totals.input_tokens, totals.output_tokens) == (15_000, 1_000)
+    assert float(totals.usd) == pytest.approx(0.002)
+    coordinator, investigator = totals.by_agent["coordinator"], totals.by_agent["investigator"]
+    assert (coordinator.runs, coordinator.model_calls) == (1, 1)
+    assert (coordinator.input_tokens, coordinator.output_tokens) == (3_000, 200)
+    assert float(coordinator.usd) == pytest.approx(0.0004)
+    assert (investigator.runs, investigator.model_calls) == (2, 4)
+    assert (investigator.input_tokens, investigator.output_tokens) == (12_000, 800)
+    assert float(investigator.usd) == pytest.approx(0.0016)

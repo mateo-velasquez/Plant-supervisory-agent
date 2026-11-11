@@ -39,7 +39,10 @@ class ToolCallRecord:
 logger = logging.getLogger(__name__)
 
 USD_DECIMALS = Decimal(1).scaleb(-8)
-DecisionReason = Literal["text_needed", "closing_review", "no_text_needed"]
+DecisionReason = Literal["text_needed", "proposals", "investigator_only", "no_text_needed", "closing_review"]
+InvestigatorTrigger = Literal["review", "cause_lookup"]
+AgentName = Literal["investigator", "coordinator"]
+AGENTS: tuple[AgentName, ...] = ("investigator", "coordinator")
 
 
 def _usd(value: Decimal) -> Decimal:
@@ -93,8 +96,42 @@ class TraceTotals(BaseModel):
         return float(_usd(value))
 
 
+@dataclass(frozen=True)
+class InvestigatorRecord:
+    """What the investigator step hands to the trace, uncosted (009 R14)."""
+
+    outcome: str
+    logbooks: Sequence[str]
+    missing: Sequence[str]
+    marks: Mapping[str, str]
+    proposals: Sequence[Mapping[str, JsonValue]]
+    control_errors: Sequence[Sequence[str]]
+    model_calls: Sequence[ModelCallRecord]
+    tool_calls: Sequence[ToolCallRecord]
+    thinking: Sequence[str]
+    trigger: InvestigatorTrigger = "review"
+
+
+class TraceInvestigator(BaseModel):
+    """The investigator's entry in a trace line, costed."""
+
+    model_config = ConfigDict(frozen=True)
+
+    outcome: str
+    logbooks: list[str]
+    missing: list[str]
+    marks: dict[str, str]
+    proposals: list[dict[str, JsonValue]]
+    control_errors: list[list[str]]
+    model_calls: list[TraceModelCall]
+    tool_calls: list[TraceToolCall]
+    thinking: list[str]
+    totals: TraceTotals
+    trigger: InvestigatorTrigger = "review"
+
+
 class TraceLine(BaseModel):
-    """One snapshot's line in the run trace (R14)."""
+    """One snapshot's line in the run trace; 'totals' sums every agent and may differ from 'model_calls'."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -113,10 +150,33 @@ class TraceLine(BaseModel):
     report_id: str | None
     totals: TraceTotals
     hooks: list[str] = []
+    agents_run: list[AgentName] | None = None
+    investigator: TraceInvestigator | None = None
+    proposals_applied: list[str] = []
+    proposals_declined: list[str] = []
+
+    @property
+    def ran(self) -> list[AgentName]:
+        """The agents that ran; lines without 'agents_run' fall back on 'decision'."""
+        if self.agents_run is not None:
+            return self.agents_run
+        return ["coordinator"] if self.decision == "call" else []
+
+
+class AgentRunTotals(BaseModel):
+    """One agent's share of a run: lines that ran it, calls, tokens and cost."""
+
+    model_config = ConfigDict(frozen=True)
+
+    runs: int = 0
+    model_calls: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    usd: Decimal = Decimal(0)
 
 
 class RunTotals(BaseModel):
-    """Sums over a run's trace lines, aborted ones included (R13)."""
+    """Sums over a run's trace lines, aborted ones included; 'model_calls' counts both agents."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -126,6 +186,78 @@ class RunTotals(BaseModel):
     input_tokens: int
     output_tokens: int
     usd: Decimal
+    by_agent: dict[AgentName, AgentRunTotals] = {}
+
+
+def _costed(calls: Sequence[ModelCallRecord], card: PriceCard) -> tuple[list[TraceModelCall], TraceTotals]:
+    """Each call costed, and their totals."""
+    costed = [
+        TraceModelCall(
+            turn=c.turn,
+            stop_reason=c.stop_reason,
+            usage=c.usage,
+            usd=cost_usd(c.usage, card),
+            latency_ms=c.latency_ms,
+        )
+        for c in calls
+    ]
+    totals = TraceTotals(
+        input_tokens=sum(c.usage.input_tokens for c in costed),
+        output_tokens=sum(c.usage.output_tokens for c in costed),
+        cache_read_tokens=sum(c.usage.cache_read_tokens for c in costed),
+        cache_write_5m_tokens=sum(c.usage.cache_write_5m_tokens for c in costed),
+        cache_write_1h_tokens=sum(c.usage.cache_write_1h_tokens for c in costed),
+        usd=sum((c.usd for c in costed), Decimal(0)),
+    )
+    return costed, totals
+
+
+def _sum_totals(first: TraceTotals, second: TraceTotals) -> TraceTotals:
+    """Field-wise sum of two totals."""
+    return TraceTotals(
+        input_tokens=first.input_tokens + second.input_tokens,
+        output_tokens=first.output_tokens + second.output_tokens,
+        cache_read_tokens=first.cache_read_tokens + second.cache_read_tokens,
+        cache_write_5m_tokens=first.cache_write_5m_tokens + second.cache_write_5m_tokens,
+        cache_write_1h_tokens=first.cache_write_1h_tokens + second.cache_write_1h_tokens,
+        usd=first.usd + second.usd,
+    )
+
+
+def _tool_calls(calls: Sequence[ToolCallRecord]) -> list[TraceToolCall]:
+    """Tool calls as written to the trace."""
+    return [
+        TraceToolCall.model_validate(
+            {
+                "turn": t.turn,
+                "name": t.name,
+                "arguments": dict(t.arguments),
+                "is_error": t.is_error,
+                "result_chars": t.result_chars,
+                "error": t.error,
+                "latency_ms": t.latency_ms,
+            }
+        )
+        for t in calls
+    ]
+
+
+def _trace_investigator(record: InvestigatorRecord, card: PriceCard) -> TraceInvestigator:
+    """The record costed."""
+    calls, totals = _costed(record.model_calls, card)
+    return TraceInvestigator(
+        outcome=record.outcome,
+        logbooks=list(record.logbooks),
+        missing=list(record.missing),
+        marks=dict(record.marks),
+        proposals=[dict(p) for p in record.proposals],
+        control_errors=[list(e) for e in record.control_errors],
+        model_calls=calls,
+        tool_calls=_tool_calls(record.tool_calls),
+        thinking=list(record.thinking),
+        totals=totals,
+        trigger=record.trigger,
+    )
 
 
 def build_line(
@@ -144,26 +276,16 @@ def build_line(
     notices_template: Sequence[str],
     report_id: str | None,
     card: PriceCard,
+    agents_run: Sequence[str] = (),
+    investigator: InvestigatorRecord | None = None,
+    proposals_applied: Sequence[str] = (),
+    proposals_declined: Sequence[str] = (),
 ) -> TraceLine:
-    """Cost each call and total the line here; the loop knows no prices (R13)."""
-    calls = [
-        TraceModelCall(
-            turn=c.turn,
-            stop_reason=c.stop_reason,
-            usage=c.usage,
-            usd=cost_usd(c.usage, card),
-            latency_ms=c.latency_ms,
-        )
-        for c in model_calls
-    ]
-    totals = TraceTotals(
-        input_tokens=sum(c.usage.input_tokens for c in calls),
-        output_tokens=sum(c.usage.output_tokens for c in calls),
-        cache_read_tokens=sum(c.usage.cache_read_tokens for c in calls),
-        cache_write_5m_tokens=sum(c.usage.cache_write_5m_tokens for c in calls),
-        cache_write_1h_tokens=sum(c.usage.cache_write_1h_tokens for c in calls),
-        usd=sum((c.usd for c in calls), Decimal(0)),
-    )
+    """Cost each call and total every agent here; the loop knows no prices (R13, R14)."""
+    calls, totals = _costed(model_calls, card)
+    traced = None if investigator is None else _trace_investigator(investigator, card)
+    if traced is not None:
+        totals = _sum_totals(totals, traced.totals)
     return TraceLine.model_validate(
         {
             "snapshot_id": snapshot_id,
@@ -174,23 +296,16 @@ def build_line(
             "outcome": outcome,
             "required": list(required),
             "model_calls": calls,
-            "tool_calls": [
-                TraceToolCall(
-                    turn=t.turn,
-                    name=t.name,
-                    arguments=dict(t.arguments),
-                    is_error=t.is_error,
-                    result_chars=t.result_chars,
-                    error=t.error,
-                    latency_ms=t.latency_ms,
-                )
-                for t in tool_calls
-            ],
+            "tool_calls": _tool_calls(tool_calls),
             "thinking": list(thinking),
             "notices_agent": list(notices_agent),
             "notices_template": list(notices_template),
             "report_id": report_id,
             "totals": totals,
+            "agents_run": list(agents_run),
+            "investigator": traced,
+            "proposals_applied": list(proposals_applied),
+            "proposals_declined": list(proposals_declined),
         }
     )
 
@@ -243,10 +358,32 @@ def read_trace(path: Path) -> tuple[TraceLine, ...]:
 def run_totals(lines: Iterable[TraceLine]) -> RunTotals:
     """Sum over the lines, aborted ones included."""
     rows = tuple(lines)
+    by_agent: dict[AgentName, AgentRunTotals] = {}
+    for agent in AGENTS:
+        costs = [
+            call
+            for row in rows
+            for call in (
+                row.model_calls
+                if agent == "coordinator"
+                else (row.investigator.model_calls if row.investigator else [])
+            )
+        ]
+        by_agent[agent] = AgentRunTotals(
+            runs=sum(agent in row.ran for row in rows),
+            model_calls=len(costs),
+            input_tokens=sum(call.usage.input_tokens for call in costs),
+            output_tokens=sum(call.usage.output_tokens for call in costs),
+            usd=sum((call.usd for call in costs), Decimal(0)),
+        )
     return RunTotals(
         snapshots=len(rows),
         called=sum(row.decision == "call" for row in rows),
-        model_calls=sum(len(row.model_calls) for row in rows),
+        model_calls=sum(
+            len(row.model_calls) + (0 if row.investigator is None else len(row.investigator.model_calls))
+            for row in rows
+        ),
+        by_agent=by_agent,
         input_tokens=sum(row.totals.input_tokens for row in rows),
         output_tokens=sum(row.totals.output_tokens for row in rows),
         usd=sum((row.totals.usd for row in rows), Decimal(0)),

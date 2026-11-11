@@ -1,4 +1,4 @@
-"""008 T12: IF series through the agent pipeline with judgment and a file-backed registry (E21, E22, E33)."""
+"""008 T12, 009 T15b: IF series through the agent pipeline, investigator and coordinator (E21, E22, E33)."""
 
 import sqlite3
 from collections.abc import Sequence
@@ -9,10 +9,10 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
-from agent_builders import end, tools_reply
+from agent_builders import RAISE2, RAISE5, end, lift_proposal, out, tools_reply
 from draft_builders import agent_text
 from incident_builders import INCIDENTS, incident_context, incident_shifts, write_incident_series
-from incident_runs import AC1, AC2, EV_T02, EV_T05, F2, F4, F5, F6
+from incident_runs import AC1, AC2, EV_T02, EV_T05, F4, F6
 
 from plant_monitor.agents.fake_model import FakeModel
 from plant_monitor.agents.model import ModelCallFailed, ModelReply, ToolResultBlock
@@ -48,21 +48,6 @@ PB = "S010-Pickup-Brasil"
 PE = "S011-Pickup-Europa"
 QUALITY_HOLD = Cause(categoria=CauseCategory.QUALITY_HOLD, etapa=Stage.QUALITY)
 LINE_STOP = Cause(categoria=CauseCategory.LINE_STOP, etapa=Stage.ASSEMBLY)
-RAISE_AC1: dict[str, object] = {
-    "categoria": "retencion_de_calidad",
-    "etapa": "calidad",
-    "modelo": "SUV",
-    "mercado": "Europa",
-    "bitacora": "T02",
-    "fragmento": F2,
-}
-RAISE_AC2: dict[str, object] = {
-    "categoria": "parada_de_linea",
-    "etapa": "montaje",
-    "modelo": "Pickup",
-    "bitacora": "T05",
-    "fragmento": F5,
-}
 
 type Call = tuple[str, dict[str, object]]
 type Delivery = tuple[str, str]
@@ -90,13 +75,8 @@ def report(snapshot_id: str, *case_ids: str) -> Call:
     return ("emit_shift_report", {"textos": textos})
 
 
-def lift(active_cause_id: str, bitacora: str, fragmento: str) -> Call:
-    args: dict[str, object] = {
-        "active_cause_id": active_cause_id,
-        "bitacora": bitacora,
-        "fragmento": fragmento,
-    }
-    return ("lift_severity_raise", args)
+def apply(proposal_id: str) -> Call:
+    return ("apply_proposal", {"propuesta": proposal_id})
 
 
 def turn(number: int, *calls: Call) -> ModelReply | Exception:
@@ -104,19 +84,18 @@ def turn(number: int, *calls: Call) -> ModelReply | Exception:
     return tools_reply(*calls, prefix=f"tu{number}", usage=USAGE)
 
 
-def raise_call(arguments: dict[str, object]) -> Call:
-    return ("raise_severity", arguments)
-
-
-S002 = [turn(1, logbook("T01")), end("Sin causas.", USAGE)]
-S004 = [turn(1, logbook("T02")), turn(2, raise_call(RAISE_AC1)), end("Causa registrada.", USAGE)]
+NONE = out(usage=USAGE)
+LIFT4 = out(lift_proposal(AC1, "T04", F4, "resuelta"), usage=USAGE)
+LIFT6 = out(lift_proposal(AC2, "T06", F6, "resuelta"), usage=USAGE)
+S002 = [turn(1, logbook("T01")), NONE]
+S004 = [turn(1, logbook("T02")), out(RAISE2, usage=USAGE), turn(1, apply("S004-p1")), end("Aplicada.", USAGE)]
 S005 = [turn(1, alert("S005", SE))]
-S006 = [turn(1, logbook("T03")), turn(2, report("S006", SE))]
-S008 = [turn(1, logbook("T04")), turn(2, lift(AC1, "T04", F4)), turn(3, report("S008", SE))]
-S010_JUDGE = [turn(1, logbook("T05")), turn(2, raise_call(RAISE_AC2))]
-S010_EMIT = [turn(3, alert("S010", PL), alert("S010", PB), report("S010", PL, PB))]
+S006 = [turn(1, logbook("T03")), NONE, turn(1, report("S006", SE))]
+S008 = [turn(1, logbook("T04")), LIFT4, turn(1, apply("S008-p1")), turn(2, report("S008", SE))]
+S010_JUDGE = [turn(1, logbook("T05")), out(RAISE5, usage=USAGE), turn(1, apply("S010-p1"))]
+S010_EMIT = [turn(2, alert("S010", PL), alert("S010", PB), report("S010", PL, PB))]
 S011 = [turn(1, alert("S011", PE))]
-S012 = [turn(1, logbook("T06")), turn(2, lift(AC2, "T06", F6), report("S012", PE))]
+S012 = [turn(1, logbook("T06")), LIFT6, turn(1, apply("S012-p1"), report("S012", PE))]
 HEAD = [*S002, *S004, *S005, *S006, *S008]
 TAIL = [*S011, *S012]
 
@@ -235,8 +214,8 @@ def e21(tmp_path: Path, arrivals: list[Arrival], settings: Settings) -> Outcome:
 
 
 def test_e21_incident_series_raises_and_lifts_causes_and_cites_them_in_the_notices(e21: Outcome) -> None:
-    """E21: 17 requests, no tool error; cited notices, rows, deliveries, registry state and trace."""
-    assert len(e21.model.requests) == 17
+    """E21: 22 requests, no tool error; cited notices, rows, deliveries, registry state and trace."""
+    assert len(e21.model.requests) == 22
     seen = [b for r in e21.model.requests for m in r.messages for b in m.content]
     assert [b for b in seen if isinstance(b, ToolResultBlock) and b.is_error] == []
 
@@ -326,33 +305,34 @@ def test_e21_incident_series_raises_and_lifts_causes_and_cites_them_in_the_notic
     lines = read_trace(e21.trace)
     assert [ln.snapshot_id for ln in lines] == list(SIDS)
     reasons = {ln.snapshot_id: (ln.decision, ln.decision_reason) for ln in lines}
-    called = {"S002", "S004", "S005", "S006", "S008", "S010", "S011", "S012"}
-    closing_review = {"S002", "S004", "S008"}
+    investigator_only, proposals = {"S002"}, {"S004", "S008"}
+    text_needed = {"S005", "S006", "S010", "S011", "S012"}
     for sid, (decision, reason) in reasons.items():
-        if sid in closing_review:
-            assert (decision, reason) == ("call", "closing_review")
-        elif sid in called:
+        if sid in investigator_only:
+            assert (decision, reason) == ("call", "investigator_only")
+        elif sid in proposals:
+            assert (decision, reason) == ("call", "proposals")
+        elif sid in text_needed:
             assert (decision, reason) == ("call", "text_needed")
         else:
-            assert decision == "skip"
+            assert (decision, reason) == ("skip", "no_text_needed")
     s010 = lines[9]
     assert [t.name for t in s010.tool_calls] == [
-        "get_logbook",
-        "raise_severity",
+        "apply_proposal",
         "emit_alert",
         "emit_alert",
         "emit_shift_report",
     ]
-    assert s010.tool_calls[1].arguments == RAISE_AC2
+    assert s010.tool_calls[0].arguments == {"propuesta": "S010-p1"}
     totals = run_totals(lines)
-    assert (totals.snapshots, totals.called, totals.model_calls) == (12, 8, 17)
-    assert (totals.input_tokens, totals.output_tokens, totals.usd) == (51_000, 3_400, Decimal("0.0068"))
+    assert (totals.snapshots, totals.called, totals.model_calls) == (12, 8, 22)
+    assert (totals.input_tokens, totals.output_tokens, totals.usd) == (66_000, 4_400, Decimal("0.0088"))
 
 
 def test_e22_model_outage_mid_snapshot_rolls_it_back_and_a_second_run_resumes_to_e21(
     tmp_path: Path, arrivals: list[Arrival], settings: Settings, e21: Outcome
 ) -> None:
-    """E22: S010 aborts at its third request with no cause rows; the rerun equals E21 (X3)."""
+    """E22: S010 aborts at the coordinator's second request with no cause rows; the rerun equals E21."""
     root = tmp_path / "e22"
     outage: list[ModelReply | Exception] = [*HEAD, *S010_JUDGE, ModelCallFailed("create", 529)]
     with pytest.raises(RunAborted) as info:
@@ -372,7 +352,7 @@ def test_e22_model_outage_mid_snapshot_rolls_it_back_and_a_second_run_resumes_to
         "aborted",
         "aborted:ModelCallFailed",
     )
-    assert [t.name for t in lines[-1].tool_calls] == ["get_logbook", "raise_severity"]
+    assert [t.name for t in lines[-1].tool_calls] == ["apply_proposal"]
 
     model = FakeModel([*S010_JUDGE, *S010_EMIT, *TAIL])
     run_agent(root, arrivals, settings, model, Recorder(), SECOND_START)
@@ -396,7 +376,7 @@ def test_e33_internal_failure_in_a_judgment_write_closes_writes_and_aborts_the_s
             raise RuntimeError("boom")
         return original(self, decision)
 
-    emit = turn(3, report("S010", PL, PB))
+    emit = turn(2, report("S010", PL, PB))
     script = [*HEAD, *S010_JUDGE, emit, end("Listo.", USAGE), end("Sin textos.", USAGE)]
     model = FakeModel(script)
     with monkeypatch.context() as patch:
@@ -408,7 +388,7 @@ def test_e33_internal_failure_in_a_judgment_write_closes_writes_and_aborts_the_s
     assert str(info.value.cause) == "boom"
 
     raise_result, emit_result = tool_results(model)[-2:]
-    assert (raise_result.is_error, raise_result.content) == (True, "Error executing tool raise_severity")
+    assert (raise_result.is_error, raise_result.content) == (True, "Error executing tool apply_proposal")
     assert (emit_result.is_error, emit_result.content) == (
         True,
         "Error executing tool emit_shift_report: writes are closed at S010 after an internal error",
@@ -426,7 +406,7 @@ def test_e33_internal_failure_in_a_judgment_write_closes_writes_and_aborts_the_s
         "call",
         "text_needed",
     )
-    assert [t.name for t in last.tool_calls] == ["get_logbook", "raise_severity", "emit_shift_report"]
+    assert [t.name for t in last.tool_calls] == ["apply_proposal", "emit_shift_report"]
 
     rerun = FakeModel([*S010_JUDGE, *S010_EMIT, *TAIL])
     run_agent(root, arrivals, settings, rerun, Recorder(), SECOND_START)

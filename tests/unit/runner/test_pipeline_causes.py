@@ -344,3 +344,17 @@ def test_x2_a_pipeline_without_a_ledger_ignores_a_stored_active_cause() -> None:
         assert d10.in_force == ()
         assert not stored(run, PL_CASE).raised
         assert stored(run, PL_CASE).state is CaseState.OPEN
+
+
+def test_risk_decision_cited_holds_the_cases_whose_cause_is_cited() -> None:
+    """Risk: the investigator task would list a case that already has its cause as still without one."""
+    with incident_run() as run:
+        run.through(9)
+
+        def cite(decision: SnapshotDecision) -> SnapshotDecision:
+            cause = Cause(categoria=CauseCategory.LINE_STOP, etapa=Stage.ASSEMBLY)
+            run.ledger.set_cause("S010", PL_CASE, cause, EV_T05, decision.candidates)
+            return run.pipeline.redecide(decision)
+
+        decision = run.step(10, cite)
+    assert decision.cited == frozenset({PL_CASE})

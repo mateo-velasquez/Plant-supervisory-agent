@@ -2,6 +2,7 @@
 
 import json
 from collections.abc import Sequence
+from typing import assert_never
 
 from pydantic import BaseModel
 
@@ -9,6 +10,7 @@ from plant_monitor.domain.causes import Cause, CauseCategory, CauseScope, Eviden
 from plant_monitor.domain.enums import Market, Model, Stage
 from plant_monitor.domain.errors import RejectedRequest
 from plant_monitor.domain.notices import notice_brief_item
+from plant_monitor.domain.proposals import LiftProposal, RaiseProposal, SetCauseProposal
 from plant_monitor.mcp_server.context import (
     FrameHolder,
     JudgmentResult,
@@ -37,6 +39,13 @@ class NoJudgmentWriter(RejectedRequest):
 
     def __init__(self) -> None:
         super().__init__("no judgment is being recorded at this snapshot")
+
+
+class NoProposalBook(RejectedRequest):
+    """The frame carries no proposal book or no judgment writer, so nothing can be applied."""
+
+    def __init__(self) -> None:
+        super().__init__("no proposals are being applied at this snapshot")
 
 
 class CauseIsDefault(RejectedRequest):
@@ -122,6 +131,34 @@ def lift_severity_raise(
     return _json(
         {"causa_activa": result.active_cause_id, "levantada_en": result.lifted_at, **_outcome(result)}
     )
+
+
+def apply_proposal(ctx: ToolContext, frames: FrameHolder, propuesta: str) -> str:
+    """Apply one validated proposal: code fills category, stage, scope and citation (R11)."""
+    frame = frames.current()
+    book, causes, raises = frame.proposals, frame.causes, frame.raises
+    if book is None or causes is None or raises is None:
+        raise NoProposalBook()
+    proposal = book.get(propuesta, frame.snapshot_id)
+    evidence = _cited(ctx, frame, proposal.bitacora, proposal.fragmento)
+    body: dict[str, object]
+    match proposal:
+        case SetCauseProposal():
+            result = causes.set_cause(
+                proposal.case_id, Cause(categoria=proposal.categoria, etapa=proposal.etapa), evidence
+            )
+            cause: dict[str, object] = {"categoria": proposal.categoria.value, "etapa": proposal.etapa.value}
+            body = {"caso": proposal.case_id, "causa": cause}
+        case RaiseProposal():
+            result = raises.raise_severity(proposal.categoria, proposal.scope, evidence)
+            body = {"causa_activa": result.active_cause_id, "casos": list(result.case_ids)}
+        case LiftProposal():
+            result = raises.lift(proposal.causa_activa, evidence)
+            body = {"causa_activa": result.active_cause_id, "levantada_en": result.lifted_at}
+        case _ as unreachable:
+            assert_never(unreachable)
+    book.mark_applied(propuesta)
+    return _json({"propuesta": propuesta, **body, **_outcome(result)})
 
 
 def _writer(frames: FrameHolder) -> NoticeTextWriter:

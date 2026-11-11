@@ -122,8 +122,8 @@ def user_version(path: Path) -> int:
 # --- T12 · Schema, session, ProcessedStore, anomalies ---
 
 
-def test_schema_version_is_three() -> None:
-    assert SCHEMA_VERSION == 3
+def test_schema_version_is_four() -> None:
+    assert SCHEMA_VERSION == 4
 
 
 def test_e20a_commit_anomaly_is_recorded(registry: SqliteRegistry) -> None:
