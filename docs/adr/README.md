@@ -12,6 +12,7 @@ One file per significant decision: `NNNN-short-title.md`, numbered in order, nev
 | [0006](0006-claude-code-dev-workflow.md) | Claude Code workflow: scoped subagents, skills and guard hooks | Accepted |
 | [0007](0007-own-agent-loop-with-mcp-client.md) | Own agent loop on the Anthropic SDK, connected to our MCP server | Accepted (revised by 0013) |
 | [0008](0008-series-runner-resilience.md) | Series runner resilience: content-hash idempotency, unit of work, non-fatal anomalies | Accepted |
+| [0009](0009-pipeline-read-only-investigator-single-writer.md) | Code-driven pipeline: read-only cause investigator, code control and a single-writer coordinator | Accepted |
 | [0010](0010-notice-outbox-delivery-after-commit.md) | Deliver notices after commit through a registry outbox (at-least-once) | Accepted |
 | [0011](0011-evaluator-reads-outbox-independent-noise.md) | Evaluator reads the registry outbox, re-derives noise independently, and gates golden items by capability | Accepted |
 | [0012](0012-lean-spec-workflow.md) | Lean spec workflow: anchored reading, spec size budget, delta re-review and test budget | Accepted |
