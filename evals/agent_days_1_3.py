@@ -64,7 +64,8 @@ def main() -> int:
         trace = TraceWriter(trace_file)
         model = AnthropicModel.from_settings(settings)
         with SqliteRegistry(out / _REGISTRY_FILE) as registry:
-            pipeline = build_agent_pipeline(settings, registry, ctx, policy, model, trace)
+            criteria = settings.criteria_path.read_text("utf-8-sig")
+            pipeline = build_agent_pipeline(settings, registry, ctx, policy, model, trace, criteria)
             outbox = OutboxDispatcher(registry.notices, FileNotifier(out / "notices"))
             summary = run_series(
                 arrivals, shifts, registry, pipeline, post_commit=PostCommitChain([trace, outbox])

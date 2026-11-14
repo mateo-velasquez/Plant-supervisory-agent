@@ -34,7 +34,7 @@ from plant_monitor.runner.series import RunAborted, run_series
 from plant_monitor.telemetry.trace import TraceWriter, read_trace, run_totals, trace_path
 from plant_monitor.telemetry.usage import Usage
 
-from builders import isolate_settings_env
+from builders import CRIT, isolate_settings_env
 
 SIDS = tuple(f"S{n:03d}" for n in range(1, 13))
 CLOCK_TIME = datetime(2026, 3, 2, 23, 0, tzinfo=UTC)
@@ -143,6 +143,7 @@ def run_agent(
             HeldOutPolicy.from_calendar(incident_shifts(), "T06", is_open=True),
             model,
             trace,
+            criteria=CRIT,
         )
         outbox = OutboxDispatcher(
             registry.notices, CompositeNotifier((FileNotifier(root / "out"), recorder)), lambda: CLOCK_TIME

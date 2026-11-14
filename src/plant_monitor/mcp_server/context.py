@@ -203,3 +203,4 @@ class ToolContext:
     logbooks: LogbookStore
     view_max_chars: int
     logbook_max_chars: int
+    criteria: str | None = None

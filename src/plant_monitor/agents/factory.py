@@ -3,28 +3,19 @@
 from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
 from importlib import resources
-from typing import Final, Literal
+from typing import Literal
 
+from plant_monitor.agents.allowlists import ALLOWLISTS
+from plant_monitor.agents.brief import render_reminder
 from plant_monitor.agents.loop import Coordinator, LoopConfig, ToolPort
 from plant_monitor.agents.model import ModelPort
 from plant_monitor.config import Settings
-
-# Copied as literals so 'agents' never imports 'mcp_server.server'; a test checks they match.
-COORDINATOR_TOOLS: Final[tuple[str, ...]] = (
-    "get_deviations",
-    "get_active_cases",
-    "get_case",
-    "get_delayed_units",
-    "apply_proposal",
-    "emit_alert",
-    "emit_shift_report",
-)
-INVESTIGATOR_TOOLS: Final[tuple[str, ...]] = (
-    "list_available_logbooks",
-    "get_logbook",
-    "get_case",
-    "get_delayed_units",
-)
+from plant_monitor.hooks.cause import CauseHook
+from plant_monitor.hooks.chain import HookChain
+from plant_monitor.hooks.completeness import CompletenessHook
+from plant_monitor.hooks.floor import FloorCheck, TextFloorHook
+from plant_monitor.hooks.novelty import NoveltyHook
+from plant_monitor.mcp_server.types import CRITERIA_PROMPT
 
 
 def load_prompt(name: Literal["coordinator", "investigator"] = "coordinator") -> str:
@@ -41,14 +32,33 @@ def _config(settings: Settings, max_turns: int) -> LoopConfig:
     )
 
 
+def coordinator_hooks() -> HookChain:
+    """The coordinator chain: novelty, floor, cause before; floor check after; completeness at stop."""
+    return HookChain(
+        pre=(NoveltyHook(), TextFloorHook(), CauseHook()),
+        post=(FloorCheck(),),
+        stop=(CompletenessHook(render_reminder),),
+    )
+
+
 def build_coordinator(
     settings: Settings,
     model: ModelPort,
     tools: Callable[[], AbstractAsyncContextManager[ToolPort]],
+    *,
+    hooks: HookChain,
 ) -> Coordinator:
     """A coordinator with the packaged prompt and the loop limits from 'settings'."""
     config = _config(settings, settings.agent_max_turns)
-    return Coordinator(model, tools, load_prompt(), COORDINATOR_TOOLS, config)
+    return Coordinator(
+        model,
+        tools,
+        load_prompt(),
+        ALLOWLISTS["coordinator"],
+        config,
+        hooks=hooks,
+        criteria_prompt=CRITERIA_PROMPT,
+    )
 
 
 def build_investigator(
@@ -58,4 +68,12 @@ def build_investigator(
 ) -> Coordinator:
     """The read-only investigator: its own prompt, tools and turn cap."""
     config = _config(settings, settings.investigator_max_turns)
-    return Coordinator(model, tools, load_prompt("investigator"), INVESTIGATOR_TOOLS, config)
+    return Coordinator(
+        model,
+        tools,
+        load_prompt("investigator"),
+        ALLOWLISTS["investigator"],
+        config,
+        agent="investigator",
+        criteria_prompt=CRITERIA_PROMPT,
+    )

@@ -11,9 +11,13 @@ from plant_monitor.agents.fake_model import FakeModel
 from plant_monitor.agents.loop import Coordinator, LoopConfig, ToolPort
 from plant_monitor.agents.model import ModelReply, TextBlock, ToolUseBlock
 from plant_monitor.domain.proposals import Proposal, ValidatedProposal
+from plant_monitor.hooks.chain import HookChain
 from plant_monitor.mcp_server.server import READ_TOOLS
 from plant_monitor.mcp_server.types import ToolOutcome, ToolSpec
+from plant_monitor.telemetry.trace import AgentName
 from plant_monitor.telemetry.usage import Usage
+
+from builders import CRIT
 
 JUDGMENT_NAMES = ("set_cause", "raise_severity", "lift_severity_raise")
 EMIT_NAMES = ("emit_alert", "emit_shift_report")
@@ -56,6 +60,12 @@ class FakeTools:
         self.answers = dict(answers or {})
         self.offered = tuple(offered)
         self.calls: list[tuple[str, Mapping[str, object]]] = []
+        self.prompt_calls: list[str] = []
+
+    async def get_prompt(self, name: str) -> str:
+        """Record the name and serve CRIT."""
+        self.prompt_calls.append(name)
+        return CRIT
 
     async def list_tools(self) -> tuple[ToolSpec, ...]:
         return tuple(ToolSpec(name, f"{name} tool", {"type": "object"}) for name in self.offered)
@@ -181,6 +191,18 @@ def make_coordinator(
     limit: int = 95_000,
     allowed: tuple[str, ...] = OFFERED,
     system: str = "SYSTEM",
+    hooks: HookChain | None = None,
+    agent: AgentName = "coordinator",
+    criteria_prompt: str | None = None,
 ) -> Coordinator:
     config = LoopConfig(max_turns=max_turns, prompt_token_limit=limit, max_tokens=16_000, effort="medium")
-    return Coordinator(model, tools.opener(), system, allowed, config)
+    return Coordinator(
+        model,
+        tools.opener(),
+        system,
+        allowed,
+        config,
+        agent=agent,
+        hooks=hooks,
+        criteria_prompt=criteria_prompt,
+    )

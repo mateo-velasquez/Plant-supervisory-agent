@@ -117,8 +117,9 @@ async def test_e4_error_results_pass_unchanged_and_unoffered_tools_never_run() -
     assert model.requests[1].messages[-1] == Message(
         "user", (ToolResultBlock("tu-1", "unknown case S999-SUV-Local", True),)
     )
+    # Changed by 010 (E5b): the allowlist hook replaces 007 E4's 'tool delete_case is not available'.
     assert model.requests[2].messages[-1] == Message(
-        "user", (ToolResultBlock("tu-2", "tool delete_case is not available", True),)
+        "user", (ToolResultBlock("tu-2", "tool delete_case is not allowed for the coordinator", True),)
     )
     assert tools.names == ["get_case", "emit_alert"]
     assert outcome is LoopOutcome.DONE

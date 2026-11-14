@@ -21,8 +21,11 @@ from plant_monitor.agents.model import (
     ToolResultBlock,
     ToolUseBlock,
 )
+from plant_monitor.hooks.allowlist import AllowlistHook
+from plant_monitor.hooks.chain import HookChain, HookContext, ToolCall
+from plant_monitor.hooks.view import SnapshotView
 from plant_monitor.mcp_server.types import ToolOutcome, ToolSpec
-from plant_monitor.telemetry.trace import ModelCallRecord, ToolCallRecord
+from plant_monitor.telemetry.trace import AgentName, HookRecord, ModelCallRecord, ToolCallRecord
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +38,13 @@ class ToolPort(Protocol):
     async def list_tools(self) -> tuple[ToolSpec, ...]: ...
 
     async def call(self, name: str, arguments: Mapping[str, object]) -> ToolOutcome: ...
+
+    async def get_prompt(self, name: str) -> str: ...
+
+
+def compose_system(role: str, criteria: str) -> str:
+    """The role prompt followed by the criteria in a '<criterios>' block."""
+    return f"{role.rstrip()}\n\n<criterios>\n{criteria.strip()}\n</criterios>"
 
 
 class TextProgress(Protocol):
@@ -101,6 +111,7 @@ class LoopLog:
     model_calls: list[ModelCallRecord] = field(default_factory=list)
     tool_calls: list[ToolCallRecord] = field(default_factory=list)
     thinking: list[str] = field(default_factory=list)
+    hooks: list[HookRecord] = field(default_factory=list)
 
 
 _STOP_FALLBACKS = {"refusal": LoopOutcome.REFUSAL, "max_tokens": LoopOutcome.MAX_TOKENS}
@@ -117,6 +128,10 @@ class Coordinator:
         allowed: tuple[str, ...],
         config: LoopConfig,
         clock: Callable[[], float] = time.perf_counter,
+        *,
+        agent: AgentName = "coordinator",
+        hooks: HookChain | None = None,
+        criteria_prompt: str | None = None,
     ) -> None:
         self._model = model
         self._tools = tools
@@ -124,6 +139,9 @@ class Coordinator:
         self._allowed = allowed
         self._config = config
         self._clock = clock
+        self._agent = agent
+        self._criteria_prompt = criteria_prompt
+        self._hooks = (hooks or HookChain()).with_first(AllowlistHook(agent, allowed))
 
     async def run(
         self,
@@ -132,13 +150,18 @@ class Coordinator:
         progress: TextProgress,
         log: LoopLog,
         review: EndReview | None = None,
+        *,
+        view: SnapshotView | None = None,
     ) -> LoopOutcome:
         """Run the loop for one snapshot and set 'log.outcome'; no 'review' means 'MissingTexts'."""
         end_review = MissingTexts(progress) if review is None else review
         async with self._model.session() as session, self._tools() as port:
             offered = await self._offered(port)
+            system = self._system
+            if self._criteria_prompt is not None:
+                system = compose_system(system, await port.get_prompt(self._criteria_prompt))
             log.outcome = await self._loop(
-                session, port, offered, snapshot_id, brief, progress, log, end_review
+                session, port, offered, system, snapshot_id, brief, progress, log, end_review, view
             )
         return log.outcome
 
@@ -154,17 +177,19 @@ class Coordinator:
         session: ModelSession,
         port: ToolPort,
         offered: tuple[ToolSpec, ...],
+        system: str,
         snapshot_id: str,
         brief: str,
         progress: TextProgress,
         log: LoopLog,
         end_review: EndReview,
+        view: SnapshotView | None,
     ) -> LoopOutcome:
         config = self._config
         messages: tuple[Message, ...] = (Message("user", (TextBlock(brief),)),)
         reminded = False
         for turn in range(1, config.max_turns + 1):
-            request = ModelRequest(self._system, offered, messages, config.max_tokens, config.effort)
+            request = ModelRequest(system, offered, messages, config.max_tokens, config.effort)
             count = await session.count_tokens(request)
             if count > config.prompt_token_limit:
                 logger.warning(
@@ -175,6 +200,7 @@ class Coordinator:
                     config.prompt_token_limit,
                 )
                 return LoopOutcome.BUDGET_EXCEEDED
+            ctx = HookContext(self._agent, turn, view)
             started = self._clock()
             reply = await session.create(request)
             latency = self._ms_since(started)
@@ -182,7 +208,7 @@ class Coordinator:
             log.thinking.extend(b.thinking for b in reply.content if isinstance(b, ThinkingBlock))
             messages = (*messages, Message("assistant", reply.content))
             if reply.stop_reason == "tool_use":
-                results = await self._run_tools(port, offered, reply, turn, log)
+                results = await self._run_tools(port, reply, ctx, log)
                 if not results:
                     return LoopOutcome.UNEXPECTED_STOP
                 messages = (*messages, Message("user", results))
@@ -190,7 +216,12 @@ class Coordinator:
                     return LoopOutcome.DONE
             elif reply.stop_reason == "end_turn":
                 text = "\n".join(b.text for b in reply.content if isinstance(b, TextBlock))
-                note = end_review.review(text)
+                block = self._hooks.on_stop(text, ctx)
+                if block is not None:
+                    log.hooks.append(HookRecord(self._agent, "on_stop", block.hook, None, turn, block.reason))
+                    note: str | None = block.reason
+                else:
+                    note = end_review.review(text)
                 if note is None:
                     return LoopOutcome.DONE
                 if reminded:
@@ -204,24 +235,27 @@ class Coordinator:
     async def _run_tools(
         self,
         port: ToolPort,
-        offered: tuple[ToolSpec, ...],
         reply: ModelReply,
-        turn: int,
+        ctx: HookContext,
         log: LoopLog,
     ) -> tuple[ToolResultBlock, ...]:
-        names = {spec.name for spec in offered}
         results: list[ToolResultBlock] = []
         for block in reply.content:
             if not isinstance(block, ToolUseBlock):
                 continue
             started = self._clock()
-            if block.name in names:
+            call = ToolCall(block.name, block.input)
+            refusal = self._hooks.pre_tool(call, ctx)
+            if refusal is None:
                 outcome = await port.call(block.name, block.input)
             else:
-                outcome = ToolOutcome(f"tool {block.name} is not available", True)
+                outcome = ToolOutcome(refusal.reason, True)
+                log.hooks.append(
+                    HookRecord(self._agent, "pre_tool", refusal.hook, block.name, ctx.turn, refusal.reason)
+                )
             log.tool_calls.append(
                 ToolCallRecord(
-                    turn=turn,
+                    turn=ctx.turn,
                     name=block.name,
                     arguments=block.input,
                     is_error=outcome.is_error,
@@ -230,6 +264,8 @@ class Coordinator:
                     latency_ms=self._ms_since(started),
                 )
             )
+            if refusal is None:
+                self._hooks.post_tool(call, outcome, ctx)
             results.append(ToolResultBlock(block.id, outcome.text, outcome.is_error))
         return tuple(results)
 

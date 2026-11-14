@@ -1,11 +1,13 @@
 """The coordinator step: brief, proposal book and loop in one frame with the snapshot writer (009 R1, R10)."""
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from functools import partial
 
 from plant_monitor.agents.brief import render_brief
 from plant_monitor.agents.loop import Coordinator, LoopLog, LoopOutcome
-from plant_monitor.domain.notices import NoticeType
+from plant_monitor.domain.enums import Severity
+from plant_monitor.domain.notices import Notice, NoticeType
 from plant_monitor.domain.perspectives import CasePerspective
 from plant_monitor.domain.proposals import ValidatedProposal
 from plant_monitor.mcp_server.context import FrameHolder, ProposalBook, SnapshotFrame
@@ -23,6 +25,31 @@ class CoordinatorOutcome:
     outcome: LoopOutcome
     applied: tuple[str, ...]
     declined: tuple[str, ...]
+
+
+class DecisionView:
+    """What the hooks may know of the snapshot, read from the writer's decision (structural, R1)."""
+
+    def __init__(self, writer: SnapshotWriter) -> None:
+        self._writer = writer
+
+    def alerts(self) -> tuple[Notice, ...]:
+        """The alert notices code decided."""
+        return tuple(n for n in self._writer.final().notices.decisions if n.tipo is NoticeType.ALERT)
+
+    def news(self) -> tuple[Notice, ...]:
+        """The shift report's news, or none."""
+        report = self._writer.final().notices.report
+        return () if report is None else tuple(report.novedades)
+
+    def floors(self) -> Mapping[str, Severity]:
+        """Computed minimum severity per case id."""
+        delta = self._writer.final().delta
+        return {} if delta is None else {c.case_id: c.minimum_severity for c in delta.cases}
+
+    def missing(self) -> tuple[str, ...]:
+        """Notice ids still without a text."""
+        return self._writer.missing()
 
 
 class _ProposalGate:
@@ -82,6 +109,12 @@ class CoordinatorStep:
             on_start()
         progress = _ProposalGate(writer, book)
         outcome = run_in_frame(
-            self._frames, frame, self._coordinator.run, snapshot.snapshot_id, brief, progress, log
+            self._frames,
+            frame,
+            partial(self._coordinator.run, view=DecisionView(writer)),
+            snapshot.snapshot_id,
+            brief,
+            progress,
+            log,
         )
         return CoordinatorOutcome(outcome, book.applied(), book.declined())

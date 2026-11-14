@@ -9,7 +9,8 @@ from agent_builders import FakeProgress, FakeTools, output_text, tool
 from control_builders import S010_TASK, incident_logbooks
 from judgment_builders import incident_tool_context
 
-from plant_monitor.agents.factory import INVESTIGATOR_TOOLS, build_investigator, load_prompt
+from plant_monitor.agents.allowlists import INVESTIGATOR_TOOLS
+from plant_monitor.agents.factory import build_investigator, load_prompt
 from plant_monitor.agents.fake_model import FakeModel
 from plant_monitor.agents.investigator import (
     CORRECTION_HEADER,
@@ -18,14 +19,14 @@ from plant_monitor.agents.investigator import (
     ReviewLog,
     render_task,
 )
-from plant_monitor.agents.loop import LoopLog, LoopOutcome
+from plant_monitor.agents.loop import LoopLog, LoopOutcome, compose_system
 from plant_monitor.config import Settings
 from plant_monitor.domain.causes import CauseCategory
 from plant_monitor.domain.proposals import CauseState
 from plant_monitor.mcp_server.client import ToolClient
 from plant_monitor.mcp_server.server import WRITE_TOOLS, build_server
 
-from builders import isolate_settings_env
+from builders import CRIT, isolate_settings_env
 
 pytestmark = pytest.mark.anyio
 
@@ -71,7 +72,8 @@ def test_e7_prompt_v1_has_the_headings_the_values_and_no_per_snapshot_ids() -> N
     packaged = resources.files("plant_monitor.agents").joinpath("prompts", "investigator.md")
     prompt = load_prompt("investigator")
     assert prompt == packaged.read_text(encoding="utf-8")
-    assert prompt.startswith("# Investigator prompt v1")
+    # Changed by 010 (009 E7 -> R12): the prompt is v2.
+    assert prompt.startswith("# Investigator prompt v2")
     assert re.findall(r"^## .+$", prompt, flags=re.MULTILINE) == HEADINGS
     assert [v for v in (*CauseCategory, *CauseState) if v.value not in prompt] == []
     assert re.search(r"S\d{3}|T\d{2}", prompt) is None
@@ -91,7 +93,8 @@ async def test_risk_build_investigator_uses_its_prompt_tools_and_turn_cap(
     )
     assert outcome is LoopOutcome.TURN_CAP
     assert len(model.requests) == 2
-    assert model.requests[0].system == load_prompt("investigator")
+    # Changed by 010 (009 E7 -> R11): the system carries the criteria block.
+    assert model.requests[0].system == compose_system(load_prompt("investigator"), CRIT)
     assert tuple(spec.name for spec in model.requests[0].tools) == INVESTIGATOR_TOOLS
 
 

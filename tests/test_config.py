@@ -88,7 +88,9 @@ def test_e36_derived_paths_come_from_data_dir_and_output_dir() -> None:
     assert settings.logbooks_dir == Path("d") / "bitacoras"
     assert settings.rules_dir == Path("d") / "reglas"
     assert settings.evals_dir == Path("o") / "evals"
-    derived = {"plant_dir", "snapshots_dir", "logbooks_dir", "rules_dir", "evals_dir"}
+    # Changed by 010 (Settings E36 -> E19a): 'criteria_path' joins the derived set.
+    assert settings.criteria_path == Path("d") / "reglas" / "criterio.md"
+    derived = {"plant_dir", "snapshots_dir", "logbooks_dir", "rules_dir", "evals_dir", "criteria_path"}
     assert derived.isdisjoint(Settings.model_fields)
 
 

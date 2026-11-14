@@ -6,12 +6,8 @@ from dataclasses import dataclass, field
 from functools import partial
 from typing import Literal, Protocol
 
-from plant_monitor.agents.factory import (
-    COORDINATOR_TOOLS,
-    INVESTIGATOR_TOOLS,
-    build_coordinator,
-    build_investigator,
-)
+from plant_monitor.agents.allowlists import ALLOWLISTS, check_allowlists
+from plant_monitor.agents.factory import build_coordinator, build_investigator, coordinator_hooks
 from plant_monitor.agents.investigator import ReviewLog
 from plant_monitor.agents.loop import LoopLog, ToolPort
 from plant_monitor.agents.model import ModelPort
@@ -225,6 +221,7 @@ class AgentPipeline:
             investigator=self._investigator(run, None),
             proposals_applied=() if coordinator is None else coordinator.applied,
             proposals_declined=() if coordinator is None else coordinator.declined,
+            hooks=[*run.inv_log.hooks, *log.hooks],
         )
         self._trace.stage(line)
 
@@ -247,6 +244,7 @@ class AgentPipeline:
             card=self._prices,
             agents_run=run.agents_run,
             investigator=self._investigator(run, error),
+            hooks=[*run.inv_log.hooks, *run.log.hooks],
         )
 
 
@@ -257,8 +255,10 @@ def build_agent_pipeline(
     policy: HeldOutPolicy,
     model: ModelPort,
     trace: TraceWriter,
+    criteria: str,
 ) -> AgentPipeline:
     """Composition root of the agent run: steps, two tool servers, both agents and prices."""
+    check_allowlists(ALLOWLISTS)
     frames = FrameHolder()
     logbooks = LogbookStore(settings.logbooks_dir, ctx.shifts, policy)
     tool_ctx = ToolContext(
@@ -267,9 +267,10 @@ def build_agent_pipeline(
         logbooks=logbooks,
         view_max_chars=settings.tool_output_max_chars,
         logbook_max_chars=settings.logbook_max_chars,
+        criteria=criteria,
     )
-    investigator_server = build_server(tool_ctx, frames, tools=INVESTIGATOR_TOOLS)
-    coordinator_server = build_server(tool_ctx, frames, tools=COORDINATOR_TOOLS)
+    investigator_server = build_server(tool_ctx, frames, tools=ALLOWLISTS["investigator"])
+    coordinator_server = build_server(tool_ctx, frames, tools=ALLOWLISTS["coordinator"])
 
     def investigator_tools() -> AbstractAsyncContextManager[ToolPort]:
         return ToolClient(investigator_server)
@@ -297,7 +298,7 @@ def build_agent_pipeline(
         settings.proposal_output_max_chars,
     )
     coordinator = CoordinatorStep(
-        build_coordinator(settings, model, coordinator_tools),
+        build_coordinator(settings, model, coordinator_tools, hooks=coordinator_hooks()),
         frames,
         partial(_perspectives, registry, ctx),
     )

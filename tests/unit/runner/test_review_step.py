@@ -19,7 +19,8 @@ from incident_runs import F5, Act, IncidentRun, incident_run
 from judgment_builders import PL_CASE, incident_tool_context
 from mcp.server.mcpserver import MCPServer
 
-from plant_monitor.agents.factory import INVESTIGATOR_TOOLS, build_investigator
+from plant_monitor.agents.allowlists import INVESTIGATOR_TOOLS
+from plant_monitor.agents.factory import build_investigator
 from plant_monitor.agents.fake_model import FakeModel
 from plant_monitor.agents.investigator import ReviewLog
 from plant_monitor.agents.loop import LoopLog, LoopOutcome, ToolPort

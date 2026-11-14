@@ -35,17 +35,21 @@ sequenceDiagram
         L->>DB: open / transition cases (threshold-driven)
         L-->>P: delta (the last one wins, Q-27)
         opt delta is not empty (spec 007 onward)
-            P->>C: delta + snapshot context
+            P->>C: delta + snapshot context (system: role + criteria prompt)
             loop until done
-                C->>H: tool call
-                H->>H: allowlist, floor, novelty checks
+                C->>H: pre-tool: tool call
+                H->>H: allowlist, novelty, text floor, cause (against the decision view)
                 alt allowed
                     H->>S: forward
                     S-->>C: result
+                    C->>H: post-tool: floor check after apply_proposal
+                    H-->>R: violation = code bug, abort snapshot (resumable)
                 else blocked
-                    H-->>C: tool error with reason
+                    H-->>C: tool error with reason (recorded in trace hooks)
                 end
             end
+            C->>H: on-stop: completeness
+            H-->>C: note naming missing texts, or end of turn
         end
         P->>N: build decisions from the last delta (+ report at closing, see shift-close)
         N-->>P: alerts, per-case decisions, report
@@ -66,3 +70,4 @@ sequenceDiagram
 - If the delta is empty and it is not a closing snapshot, no model call is made. Silence costs nothing. Until spec 007 the pipeline runs without the agent.
 - Notices are stored inside the snapshot's transaction and delivered only after the commit (ADR-0010). A crash after the commit leaves them pending, and the next run delivers them first. A notice can be resent only if the process dies between a send and its delivered mark.
 - Marking the snapshot as processed is atomic with its writes, which makes reruns safe (FR-02, NFR-10).
+- The investigator goes through the same loop with the allowlist hook only. Hooks read the code's decision through `DecisionView` and never recompute a rule. Repeated blocks end in the turn cap fallback (spec 010, ADR-0016).

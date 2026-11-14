@@ -1,7 +1,7 @@
 """Builders for the 008 incident fixture (IF): snapshot payloads from gaps and delayed units."""
 
 import shutil
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -147,10 +147,18 @@ def write_incident_series(
     return arrivals
 
 
-def copy_incident_logbooks(directory: Path, omit: Sequence[str] = ()) -> Path:
-    """Copy the IF logbooks into 'directory' except the shifts in 'omit'; return 'directory'."""
+def copy_incident_logbooks(
+    directory: Path, omit: Sequence[str] = (), append: Mapping[str, Sequence[str]] | None = None
+) -> Path:
+    """Copy the IF logbooks into 'directory' except 'omit', adding the 'append' lines per shift."""
     directory.mkdir(parents=True, exist_ok=True)
     for source in sorted((INCIDENTS / "bitacoras").glob("*.txt")):
-        if source.stem not in omit:
-            shutil.copy(source, directory / source.name)
+        if source.stem in omit:
+            continue
+        target = directory / source.name
+        shutil.copy(source, target)
+        extra = (append or {}).get(source.stem, ())
+        if extra:
+            with target.open("a", encoding="utf-8", newline="") as handle:
+                handle.write("".join(f"{line}\n" for line in extra))
     return directory

@@ -7,7 +7,7 @@ import pytest
 from draft_builders import MAX_CHARS, draft_frame, s003_notices, s004_notices
 from mcp_builders import tool_context
 
-from plant_monitor.agents.factory import COORDINATOR_TOOLS
+from plant_monitor.agents.allowlists import COORDINATOR_TOOLS
 from plant_monitor.cases.draft import NoticeDraft
 from plant_monitor.mcp_server.client import ToolClient
 from plant_monitor.mcp_server.server import READ_TOOLS, WRITE_TOOLS, build_server
@@ -120,6 +120,24 @@ async def test_e13_report_refusals_write_nothing(arguments: dict[str, object], m
         (err("emit_shift_report", message), True)
     ]
     assert draft.missing() == NEWS_IDS
+
+
+@pytest.mark.parametrize(
+    ("tool", "arguments"),
+    [
+        pytest.param("emit_alert", {"case_id": 5}, id="alert-case-id-not-a-string"),
+        pytest.param("emit_shift_report", {"textos": "x"}, id="report-textos-not-a-list"),
+    ],
+)
+async def test_e13_malformed_arguments_come_back_as_a_tool_error(
+    tool: str, arguments: dict[str, object]
+) -> None:
+    """E13, X4: a malformed call is the server's validation error, not an exception."""
+    draft = NoticeDraft(s003_notices(), MAX_CHARS)
+    [(text, is_error)] = await call(draft, [(tool, arguments)])
+    assert is_error is True
+    assert text.startswith(f"Error executing tool {tool}:")
+    assert draft.missing() == (ALERT_ID,)
 
 
 async def test_e13_a_valid_report_is_written_once() -> None:

@@ -19,5 +19,6 @@ One file per significant decision: `NNNN-short-title.md`, numbered in order, nev
 | [0013](0013-in-process-mcp-transport-and-tool-client.md) | In-process MCP transport, ToolClient adapter and in-unit-of-work writes | Accepted |
 | [0014](0014-coordinator-loop-contract.md) | Coordinator loop contract: template fallback, notice draft writer, budget guard and sync-to-async bridge | Accepted |
 | [0015](0015-closing-review-active-cause-ledger-judgment-adapter.md) | Closing-snapshot review trigger, active-cause ledger and runner-side judgment adapter | Accepted |
+| [0016](0016-guardrail-hook-chain-code-allowlists-criteria-prompt.md) | Guardrail hook chain, code allowlists and criteria MCP prompt | Accepted |
 
 Template: [template.md](template.md)

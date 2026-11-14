@@ -33,7 +33,7 @@ Spec Driven Development plan from today to Demo Day. Every spec traces to requir
 | | [007 coordinator-agent](../specs/007-coordinator-agent/) | Own agent loop, single coordinator over one day, `emit_alert`/`emit_shift_report`, trace log, token accounting | 27, 37, 38 | 10 | D3 closed; Q-41–Q-46 decided; ADR-0014; days 1–3 real-run cost pending | Must | 11-15 | Implemented |
 | | [008 cited-cause-and-escalation](../specs/008-cited-cause-and-escalation/) | `set_cause`, `raise_severity`, `lift_severity_raise`, active-cause entity, `no_declarada` | 16–19 | 06, 07 | Q-02, Q-11, Q-29, Q-30, Q-47–Q-49 decided; Q-39, Q-40 confirmed; Q-41 amended (closing trigger); ADR-0015; Pickup-stop goldens (T18) and days 1–7 real run (R22) pending | Must | 11-16 | Implemented |
 | 3 · Multi-agent and control | [009 multi-agent](../specs/009-multi-agent/) | Code-driven pipeline (ADR-0009): read-only cause investigator → code control (schema, `estado_causa`, citation) → single-writer coordinator that never reads logbooks and applies proposals by id (`apply_proposal`); gap, shipment and bottleneck perspectives in code; reviewed-logbook registry (schema v4); deltas only; cost per agent | 28, 29, 37 | — | ADR-0009; Q-50–Q-54 decided; Q-41 amended; injection tests (US-08, FR-20) moved to 010; days 1–7 real run (with 008 R22) pending | Must | 11-18 | Implemented |
-| | [010 guardrails-and-unattended](../specs/010-guardrails-and-unattended/) | Hooks before, after and on stop; per-agent allowlists; criteria as MCP prompt; unattended shift closing | 30–33 | 09, 11 | — | Must | 11-19 | Draft |
+| | [010 guardrails-and-unattended](../specs/010-guardrails-and-unattended/) | Hooks before, after and on stop (`hooks` package: allowlist, novelty, text floor, cause, post floor check, completeness); per-agent allowlists in code; criteria as MCP prompt in both agents; unattended run (fail-closed, resumable); hook records in the trace | 15, 20, 30–33 | 08, 09, 11 | ADR-0016; Q-44, Q-46 amended; Q-55 decided; injection tests (US-08, FR-20) moved from 009 | Must | 11-19 | Implemented |
 | 4 · Production | [011 structured-output-and-cache](../specs/011-structured-output-and-cache/) | Validated output with retry, cached prefix, idempotency hardening, Batch API assessment | 02, 34, 35 | — | D3 | Should | 11-21 | Draft |
 | | *(process)* held-out run | Open days 8–10 (`CLAUDE_ALLOW_HELDOUT=1`), run once as-is, log failures before any change | 40 | 12 | — | Must | 11-21 | — |
 | | [012 full-series-cli](../specs/012-full-series-cli/) | One command for the 61 arrivals, with cost and duration | 36, 37 | 11 | — | Must | 11-22 | Draft |
@@ -103,9 +103,9 @@ Seed for the incident catalog (A1) and the first golden cases. Quotes verified v
 - Day 1 is silence in both the golden and the run: no alert or news in T01–T03.
 - Both differences come from §5 (the T07 raise), which only the agent can apply: they are expected to close in spec 008, not a system bug. No `fix/` branch needed.
 
-## MCP tool inventory (006–009)
+## MCP tool inventory (006–010)
 
-Since 009 the 008 judgment tools (`set_cause`, `raise_severity`, `lift_severity_raise`) stay registered and tested but are offered to no agent; spec 010's allowlist excludes them. Per-agent lists: [agent-capabilities.md](agent-capabilities.md).
+Since 009 the 008 judgment tools (`set_cause`, `raise_severity`, `lift_severity_raise`) stay registered and tested but are offered to no agent; since 010 the code allowlists exclude them (`agents/allowlists.py`, three barriers). Per-agent lists: [agent-capabilities.md](agent-capabilities.md).
 
 | Tool | Kind | Status |
 |---|---|---|
@@ -121,4 +121,4 @@ Since 009 the 008 judgment tools (`set_cause`, `raise_severity`, `lift_severity_
 | `apply_proposal(propuesta)` | Write | Implemented (009): the coordinator's only judgment tool; applies a validated investigator proposal by id (code fills category, stage, scope and citation, re-verifies it and calls the 008 writers) |
 | `emit_alert(case_id, texto)` | Write | Implemented (007): writes one decided alert's `texto` into the snapshot's notice draft |
 | `emit_shift_report(textos)` | Write | Implemented (007): one `texto` per news item, atomic, every news item required |
-| `criteria` | MCP prompt | FR-30 |
+| `criteria` | MCP prompt | Implemented (010): full `criterio.md`, both agents |
