@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 
 FIXTURE_PLANT = Path(__file__).resolve().parent / "fixtures" / "plant"
 PICKUP_BRAZIL = Combination(modelo=Model.PICKUP, mercado=Market.BRAZIL)
+CRIT = "# Criterio de prueba\n\nLa severidad mínima es un piso: se puede subir, nunca bajar.\n"
 
 
 def combination_of(case_id: str) -> Combination:

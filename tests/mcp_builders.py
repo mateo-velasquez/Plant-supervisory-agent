@@ -11,7 +11,7 @@ from plant_monitor.ingestion.logbooks import read_logbook_texts
 from plant_monitor.logbooks.store import LogbookLoader, LogbookStore
 from plant_monitor.mcp_server.context import CaseReader, FrameHolder, SnapshotFrame, ToolContext
 
-from builders import held_out_policy
+from builders import CRIT, held_out_policy
 from notice_builders import plant_context
 
 LOGBOOKS = Path(__file__).resolve().parent / "fixtures" / "bitacoras"
@@ -100,5 +100,6 @@ def tool_context(
         logbooks=LogbookStore(directory, plant.shifts, chosen, loader),
         view_max_chars=4000,
         logbook_max_chars=logbook_max_chars,
+        criteria=CRIT,
     )
     return ctx, FrameHolder()

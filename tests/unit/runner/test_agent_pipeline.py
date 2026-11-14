@@ -22,7 +22,8 @@ from judgment_builders import incident_tool_context
 from mcp.server.mcpserver import MCPServer
 from mcp_builders import tool_context
 
-from plant_monitor.agents.factory import COORDINATOR_TOOLS, build_coordinator
+from plant_monitor.agents.allowlists import COORDINATOR_TOOLS
+from plant_monitor.agents.factory import build_coordinator, coordinator_hooks
 from plant_monitor.agents.fake_model import FakeModel
 from plant_monitor.agents.investigator import ReviewLog
 from plant_monitor.agents.loop import LoopLog, LoopOutcome, ToolPort
@@ -48,7 +49,7 @@ from plant_monitor.runner.series import RunAborted, run_series
 from plant_monitor.telemetry.trace import TraceWriter, read_trace, run_totals
 from plant_monitor.telemetry.usage import PriceCard
 
-from builders import held_out_policy, isolate_settings_env
+from builders import CRIT, held_out_policy, isolate_settings_env
 from notice_builders import (
     news_notice,
     plant_context,
@@ -222,7 +223,7 @@ def make_rig(
     path = trace_path or tmp_path / "traces" / "trace.jsonl"
     trace = TraceWriter(path)
     review = review or FakeReview()
-    coordinator = build_coordinator(settings, model, tool_factory(server))
+    coordinator = build_coordinator(settings, model, tool_factory(server), hooks=coordinator_hooks())
     pipeline = AgentPipeline(
         steps=steps,
         unit=FakeUnit(current),
@@ -619,6 +620,7 @@ def test_risk_the_composition_root_builds_one_ledger_for_the_steps_and_the_judgm
             held_out_policy(is_open=True),
             FakeModel([]),
             TraceWriter(tmp_path / "trace.jsonl"),
+            criteria=CRIT,
         )
     assert len(created) == 1
 

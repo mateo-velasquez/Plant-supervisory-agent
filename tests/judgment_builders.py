@@ -15,6 +15,8 @@ from plant_monitor.ingestion.logbooks import read_logbook_texts
 from plant_monitor.logbooks.store import LogbookStore
 from plant_monitor.mcp_server.context import FrameHolder, JudgmentResult, SnapshotFrame, ToolContext
 
+from builders import CRIT
+
 PL_CASE = "S010-Pickup-Local"
 PB_CASE = "S010-Pickup-Brasil"
 AC2 = "S010-causa-1"
@@ -30,6 +32,7 @@ def incident_tool_context(directory: Path = INCIDENTS / "bitacoras") -> tuple[To
         logbooks=LogbookStore(directory, plant.shifts, policy, read_logbook_texts),
         view_max_chars=4000,
         logbook_max_chars=100_000,
+        criteria=CRIT,
     )
     return ctx, FrameHolder()
 

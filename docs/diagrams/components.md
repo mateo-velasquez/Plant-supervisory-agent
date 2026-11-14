@@ -26,7 +26,7 @@ flowchart TB
     subgraph mcp[Own MCP server · two servers, one frame holder]
         invtools[Investigator server<br/>list_available_logbooks · get_logbook · get_case · get_delayed_units]
         coordtools[Coordinator server<br/>get_deviations · get_active_cases · get_case · get_delayed_units<br/>apply_proposal · emit_alert · emit_shift_report]
-        prompt[Criteria prompt · 010]
+        prompt[Criteria prompt · 010<br/>full criterio.md]
     end
 
     subgraph agents[Agent layer · Anthropic API]
@@ -34,7 +34,7 @@ flowchart TB
         coordinator[Coordinator<br/>single writer, never reads logbooks]
     end
 
-    hooks{{Hooks + tool allowlists · 010<br/>pre-tool · post-tool · on-stop}}
+    hooks{{hooks package + tool allowlists · 010<br/>pre-tool · post-tool · on-stop}}
 
     runner --> ingest --> metrics --> lifecycle --> registry
     lifecycle --> novelty
@@ -54,10 +54,9 @@ flowchart TB
     coordtools -. verify_citation · apply_proposal .-> logstore
     adapter --> ledger & lifecycle
     review -- marks after the coordinator --> registry
-    prompt -. system context .-> coordinator
+    prompt -. system context .-> coordinator & investigator
     registry -- outbox after commit --> notify
-    hooks -. checks .-> novelty
-    hooks -. checks .-> registry
+    hooks -. decision view .-> coordstep
 ```
 
 ## Responsibilities
@@ -67,4 +66,5 @@ flowchart TB
 - **Control:** code checks each proposal (schema, size, `estado_causa` against the type, verbatim and readable citation), with one correction round and a safe fallback.
 - **Coordinator:** the single writer. It never reads a raw logbook; it applies validated proposals by id (`apply_proposal`) and writes the texts. It runs only with a text to write or a validated proposal (Q-51).
 - **Cause ledger and judgment adapter:** code links cases to an active cause by scope (Q-02, Q-49) and feeds the raises to the lifecycle. Each judgment write re-runs `track` (Q-27) and rebuilds the notices; they are saved once per snapshot (ADR-0015).
-- **Hooks (spec 010):** code around every tool call. They enforce the allowlists, the severity floor, no repeats without news and report completeness, returning violations to the model as tool errors.
+- **Hooks (spec 010):** code around every tool call, in the `hooks` package. The allowlist hook runs first for both agents. The coordinator also gets novelty, text floor and cause checks before a call, a floor check after `apply_proposal`, and a completeness check on stop. They read the code's decision through the coordinator step's `DecisionView`, never recompute a rule, and return blocks to the model as tool errors (ADR-0016).
+- **Criteria prompt (spec 010):** the full `criterio.md`, served by the MCP server and composed into both agents' system in a `<criterios>` block.

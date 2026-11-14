@@ -16,7 +16,7 @@ from judgment_builders import (
     result_of,
 )
 
-from plant_monitor.agents.factory import COORDINATOR_TOOLS
+from plant_monitor.agents.allowlists import COORDINATOR_TOOLS
 from plant_monitor.domain.causes import Cause, CauseCategory, Evidence
 from plant_monitor.domain.enums import Stage
 from plant_monitor.domain.notices import notice_brief_item

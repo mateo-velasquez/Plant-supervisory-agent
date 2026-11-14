@@ -2,7 +2,7 @@
 
 import logging
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -130,6 +130,34 @@ class TraceInvestigator(BaseModel):
     trigger: InvestigatorTrigger = "review"
 
 
+HookPhase = Literal["pre_tool", "on_stop"]
+
+
+@dataclass(frozen=True)
+class HookRecord:
+    """One block by a hook; post-tool hooks never block, so they leave no record (R10)."""
+
+    agent: AgentName
+    phase: HookPhase
+    hook: str
+    tool: str | None
+    turn: int
+    reason: str
+
+
+class TraceHook(BaseModel):
+    """A hook record as written to the trace."""
+
+    model_config = ConfigDict(frozen=True)
+
+    agent: AgentName
+    phase: HookPhase
+    hook: str
+    tool: str | None
+    turn: int
+    reason: str
+
+
 class TraceLine(BaseModel):
     """One snapshot's line in the run trace; 'totals' sums every agent and may differ from 'model_calls'."""
 
@@ -149,7 +177,7 @@ class TraceLine(BaseModel):
     notices_template: list[str]
     report_id: str | None
     totals: TraceTotals
-    hooks: list[str] = []
+    hooks: list[TraceHook] = []
     agents_run: list[AgentName] | None = None
     investigator: TraceInvestigator | None = None
     proposals_applied: list[str] = []
@@ -280,6 +308,7 @@ def build_line(
     investigator: InvestigatorRecord | None = None,
     proposals_applied: Sequence[str] = (),
     proposals_declined: Sequence[str] = (),
+    hooks: Sequence[HookRecord] = (),
 ) -> TraceLine:
     """Cost each call and total every agent here; the loop knows no prices (R13, R14)."""
     calls, totals = _costed(model_calls, card)
@@ -306,6 +335,7 @@ def build_line(
             "investigator": traced,
             "proposals_applied": list(proposals_applied),
             "proposals_declined": list(proposals_declined),
+            "hooks": [asdict(h) for h in hooks],
         }
     )
 

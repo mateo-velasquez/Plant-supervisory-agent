@@ -28,7 +28,7 @@ from plant_monitor.runner.series import RunAborted, RunSummary, run_series
 from plant_monitor.telemetry.trace import TraceWriter, read_trace, run_totals, trace_path
 from plant_monitor.telemetry.usage import Usage
 
-from builders import held_out_policy, isolate_settings_env
+from builders import CRIT, held_out_policy, isolate_settings_env
 from notice_builders import FIXTURE_PLANT, plant_context, plant_shifts, write_series
 
 SERIES = ("S001", "S002", "S003", "S004")
@@ -127,7 +127,7 @@ def run_agent(
     trace = TraceWriter(trace_path(root / "traces", started))
     with SqliteRegistry(root / "registry.sqlite3") as registry:
         pipeline = build_agent_pipeline(
-            settings, registry, plant_context(), held_out_policy(is_open=True), model, trace
+            settings, registry, plant_context(), held_out_policy(is_open=True), model, trace, criteria=CRIT
         )
         outbox = OutboxDispatcher(
             registry.notices, CompositeNotifier((FileNotifier(out), recorder)), lambda: CLOCK_TIME

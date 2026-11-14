@@ -6,6 +6,7 @@ from typing import Self
 
 from mcp import Client
 from mcp.server.mcpserver import MCPServer
+from mcp.shared.exceptions import MCPError
 from mcp.types import TextContent
 
 from plant_monitor.mcp_server.types import ToolOutcome as ToolOutcome
@@ -38,6 +39,16 @@ class ToolClient:
         return tuple(
             ToolSpec(name=tool.name, description=tool.description or "", input_schema=tool.input_schema)
             for tool in result.tools
+        )
+
+    async def get_prompt(self, name: str) -> str:
+        """Text of the prompt 'name'; any failure is a ValueError 'prompt <name> is not available'."""
+        try:
+            result = await self._client.get_prompt(name)
+        except MCPError as error:
+            raise ValueError(f"prompt {name} is not available") from error
+        return "".join(
+            message.content.text for message in result.messages if isinstance(message.content, TextContent)
         )
 
     async def call(self, name: str, arguments: Mapping[str, object]) -> ToolOutcome:

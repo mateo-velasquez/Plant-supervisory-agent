@@ -100,6 +100,11 @@ class Settings(BaseSettings):
         return self.data_dir / "reglas"
 
     @property
+    def criteria_path(self) -> Path:
+        """The criteria text served as the MCP prompt, derived from rules_dir."""
+        return self.rules_dir / "criterio.md"
+
+    @property
     def evals_dir(self) -> Path:
         """Evaluation run outputs, derived from output_dir."""
         return self.output_dir / "evals"

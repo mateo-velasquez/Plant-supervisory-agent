@@ -2,6 +2,7 @@
 
 import ast
 import json
+import pkgutil
 import re
 import subprocess
 import sys
@@ -429,6 +430,7 @@ AGENTS_ALLOWED = (
     "plant_monitor.telemetry",
     "plant_monitor.config",
     "plant_monitor.agents",
+    "plant_monitor.hooks",
 )
 AGENTS_TYPES = "plant_monitor.mcp_server.types"
 ANTHROPIC_MODULE = "agents/anthropic_model.py"
@@ -715,3 +717,78 @@ def test_e32_runner_judgment_imports_only_domain_cases_and_mcp_server_context() 
     path = PACKAGE / "runner" / "judgment.py"
     source = path.read_text(encoding="utf-8")
     assert disallowed_modules(source, package_of(path), JUDGMENT_ALLOWED) == set()
+
+
+# --- 010 hooks (E23, R15) ---
+
+HOOKS_ALLOWED = ("plant_monitor.domain", "plant_monitor.mcp_server.types", "plant_monitor.hooks")
+
+
+def test_e23_hooks_import_only_domain_mcp_server_types_and_hooks_and_no_sdk() -> None:
+    """010 E23 (R15): 'hooks' never reaches 'agents', 'cases', 'config', 'anthropic' or 'mcp'."""
+    offenders: dict[str, list[str]] = {}
+    for path in modules_of("hooks"):
+        source = path.read_text(encoding="utf-8")
+        extra = disallowed_modules(source, package_of(path), HOOKS_ALLOWED) | (
+            imported_roots(source) & FORBIDDEN
+        )
+        if extra:
+            offenders[path.name] = sorted(extra)
+    assert offenders == {}
+
+
+@pytest.mark.parametrize(
+    ("source", "package", "allowed", "expected"),
+    [
+        (
+            "from plant_monitor.cases.novelty import is_news",
+            "plant_monitor.hooks",
+            HOOKS_ALLOWED,
+            {"plant_monitor.cases.novelty.is_news"},
+        ),
+        (
+            "from plant_monitor.agents import loop",
+            "plant_monitor.hooks",
+            HOOKS_ALLOWED,
+            {"plant_monitor.agents.loop"},
+        ),
+        (
+            "from plant_monitor.hooks.chain import HookChain",
+            "plant_monitor.agents",
+            (*AGENTS_ALLOWED, AGENTS_TYPES),
+            set(),
+        ),
+    ],
+)
+def test_e23_scanner_flags_cases_and_agents_in_hooks_and_admits_hooks_in_agents(
+    source: str, package: str, allowed: tuple[str, ...], expected: set[str]
+) -> None:
+    """010 E23 (R15): 'hooks' importing 'cases' or 'agents' is flagged; 'agents' may import 'hooks'."""
+    assert disallowed_modules(source, package, allowed) == expected
+
+
+def test_e23_importing_hooks_loads_neither_anthropic_nor_mcp(tmp_path: Path) -> None:
+    """010 E23 (R15): the 'hooks' package stays SDK-free at import time."""
+    modules = ["plant_monitor.hooks"] + [
+        f"plant_monitor.hooks.{info.name}" for info in pkgutil.iter_modules([str(PACKAGE / "hooks")])
+    ]
+    assert len(modules) > 1
+    for module in modules:
+        assert loaded_by_import(tmp_path, module, ("anthropic", "mcp")) == []
+
+
+ALLOWLISTS_ALLOWED = ("plant_monitor.telemetry", "plant_monitor.mcp_server.types")
+
+
+def test_e23_allowlists_import_only_telemetry_and_mcp_server_types() -> None:
+    """010 E23 (R15): 'agents/allowlists.py' imports only 'telemetry' and 'mcp_server.types'."""
+    path = PACKAGE / "agents" / "allowlists.py"
+    source = path.read_text(encoding="utf-8")
+    assert disallowed_modules(source, package_of(path), ALLOWLISTS_ALLOWED) == set()
+
+
+def test_e23_coordinator_step_imports_no_hooks_module() -> None:
+    """010 E23 (R15): 'DecisionView' satisfies 'SnapshotView' structurally, so the step needs no import."""
+    path = PACKAGE / "runner" / "coordinator_step.py"
+    names = project_modules(path.read_text(encoding="utf-8"), package_of(path))
+    assert [n for n in names if n.startswith("plant_monitor.hooks")] == []

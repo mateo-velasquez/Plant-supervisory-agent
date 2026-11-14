@@ -1,7 +1,6 @@
 """MCP server: async tool wrappers over the sync read tools, refusals mapped to ToolError (R13)."""
 
 from collections.abc import Awaitable, Callable, Collection
-from typing import Final
 
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
@@ -11,24 +10,28 @@ from plant_monitor.domain.enums import Market, Model, Stage
 from plant_monitor.domain.errors import RejectedRequest
 from plant_monitor.mcp_server import read_tools, write_tools
 from plant_monitor.mcp_server.context import FrameHolder, ToolContext
+from plant_monitor.mcp_server.types import (
+    APPLY_PROPOSAL,
+    CRITERIA_PROMPT,
+    EMIT_ALERT,
+    EMIT_SHIFT_REPORT,
+    GET_ACTIVE_CASES,
+    GET_CASE,
+    GET_DELAYED_UNITS,
+    GET_DEVIATIONS,
+    GET_LOGBOOK,
+    LIFT_SEVERITY_RAISE,
+    LIST_AVAILABLE_LOGBOOKS,
+    RAISE_SEVERITY,
+    SET_CAUSE,
+)
+from plant_monitor.mcp_server.types import (
+    READ_TOOLS as READ_TOOLS,
+)
+from plant_monitor.mcp_server.types import (
+    WRITE_TOOLS as WRITE_TOOLS,
+)
 from plant_monitor.mcp_server.write_tools import NewsText
-
-READ_TOOLS: Final[tuple[str, ...]] = (
-    "list_available_logbooks",
-    "get_logbook",
-    "get_deviations",
-    "get_active_cases",
-    "get_case",
-    "get_delayed_units",
-)
-WRITE_TOOLS: Final[tuple[str, ...]] = (
-    "set_cause",
-    "raise_severity",
-    "lift_severity_raise",
-    "apply_proposal",
-    "emit_alert",
-    "emit_shift_report",
-)
 
 
 def _refusals(call: Callable[[], str]) -> str:
@@ -112,20 +115,25 @@ def build_server(ctx: ToolContext, frames: FrameHolder, tools: Collection[str] =
         return _refusals(lambda: write_tools.emit_shift_report(ctx, frames, textos))
 
     available: dict[str, Callable[..., Awaitable[str]]] = {
-        "list_available_logbooks": list_available_logbooks,
-        "get_logbook": get_logbook,
-        "get_deviations": get_deviations,
-        "get_active_cases": get_active_cases,
-        "get_case": get_case,
-        "get_delayed_units": get_delayed_units,
-        "set_cause": set_cause,
-        "raise_severity": raise_severity,
-        "lift_severity_raise": lift_severity_raise,
-        "apply_proposal": apply_proposal,
-        "emit_alert": emit_alert,
-        "emit_shift_report": emit_shift_report,
+        LIST_AVAILABLE_LOGBOOKS: list_available_logbooks,
+        GET_LOGBOOK: get_logbook,
+        GET_DEVIATIONS: get_deviations,
+        GET_ACTIVE_CASES: get_active_cases,
+        GET_CASE: get_case,
+        GET_DELAYED_UNITS: get_delayed_units,
+        SET_CAUSE: set_cause,
+        RAISE_SEVERITY: raise_severity,
+        LIFT_SEVERITY_RAISE: lift_severity_raise,
+        APPLY_PROPOSAL: apply_proposal,
+        EMIT_ALERT: emit_alert,
+        EMIT_SHIFT_REPORT: emit_shift_report,
     }
     for name in (*READ_TOOLS, *WRITE_TOOLS):
         if name in tools:
             server.add_tool(available[name], name=name)
+    criteria = ctx.criteria
+    if criteria is not None:
+        server.prompt(name=CRITERIA_PROMPT, description="The plant criteria, served unchanged.")(
+            lambda: criteria
+        )
     return server
