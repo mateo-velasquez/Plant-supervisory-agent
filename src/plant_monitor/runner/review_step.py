@@ -1,5 +1,6 @@
 """The investigator step: plans pending logbooks, reads them and records the review marks (009 R2, R6-R8)."""
 
+import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol
@@ -15,6 +16,8 @@ from plant_monitor.logbooks.store import LogbookStore
 from plant_monitor.mcp_server.context import FrameHolder, SnapshotFrame
 from plant_monitor.runner.bridge import run_in_frame
 from plant_monitor.runner.pipeline import SnapshotDecision
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -121,6 +124,14 @@ class InvestigatorStep:
             log,
             review,
         )
+        rejected = len(review_log.rejections)
+        if outcome is LoopOutcome.INVALID_OUTPUT or (outcome is LoopOutcome.TURN_CAP and rejected):
+            logger.warning(
+                "%s investigator output invalid after %d rejected outputs: %s; causes stay no_declarada",
+                sid,
+                rejected,
+                outcome.value,
+            )
         accepted = (review_log.accepted or ()) if outcome is LoopOutcome.DONE else ()
         return ReviewOutcome(plan, True, outcome, accepted)
 

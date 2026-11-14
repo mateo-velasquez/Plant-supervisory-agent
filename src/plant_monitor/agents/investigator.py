@@ -63,7 +63,7 @@ class ReviewLog:
 
 
 class ProposalReview:
-    """The investigator's 'EndReview': control decides; one correction note, then a fallback."""
+    """The investigator's 'EndReview': control decides; notes up to 'max_notes', then a fallback."""
 
     def __init__(
         self, task: InvestigatorTask, citations: CitationCheck, max_chars: int, log: ReviewLog
