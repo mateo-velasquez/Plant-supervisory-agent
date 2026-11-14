@@ -1,6 +1,7 @@
 """009 T15a: 'InvestigatorStep' over FakeModel, IF logbooks and an in-memory registry (E25)."""
 
 import json
+import logging
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import AbstractAsyncContextManager, contextmanager
 from dataclasses import dataclass, replace
@@ -18,13 +19,14 @@ from incident_builders import (
 from incident_runs import F5, Act, IncidentRun, incident_run
 from judgment_builders import PL_CASE, incident_tool_context
 from mcp.server.mcpserver import MCPServer
+from multi_agent_builders import FRAGMENT_ERROR, WRONG_RAISE5
 
 from plant_monitor.agents.allowlists import INVESTIGATOR_TOOLS
 from plant_monitor.agents.factory import build_investigator
 from plant_monitor.agents.fake_model import FakeModel
-from plant_monitor.agents.investigator import ReviewLog
+from plant_monitor.agents.investigator import CORRECTION_HEADER, ReviewLog
 from plant_monitor.agents.loop import LoopLog, LoopOutcome, ToolPort
-from plant_monitor.agents.model import ModelReply, ModelRequest, TextBlock
+from plant_monitor.agents.model import Message, ModelReply, ModelRequest, TextBlock
 from plant_monitor.cases.notice_builder import SnapshotNotices
 from plant_monitor.cases.registry import SqliteRegistry
 from plant_monitor.cases.reviews import LogbookReview, ReviewMark
@@ -78,9 +80,15 @@ def s010_rig(
     monkeypatch: pytest.MonkeyPatch,
     script: Sequence[ModelReply | Exception],
     logbooks: Path = INCIDENTS / "bitacoras",
+    corrections: int | None = None,
+    max_turns: int | None = None,
 ) -> Iterator[Rig]:
     """IF to S009 with T01-T04 reviewed, then S010 decided inside its unit of work."""
     isolate_settings_env(monkeypatch, tmp_path)
+    if corrections is not None:
+        monkeypatch.setenv("INVESTIGATOR_OUTPUT_CORRECTIONS", str(corrections))
+    if max_turns is not None:
+        monkeypatch.setenv("INVESTIGATOR_MAX_TURNS", str(max_turns))
     settings = Settings(anthropic_api_key="k")
     ctx, frames = incident_tool_context(logbooks)
     model = FakeModel(script)
@@ -165,6 +173,64 @@ def test_risk_a_run_that_does_not_end_done_keeps_no_accepted_proposal(
         outcome = rig.step.run(plan, rig.decision, LoopLog(), review_log)
         assert outcome.outcome is LoopOutcome.INVALID_OUTPUT
         assert outcome.accepted == ()
+
+
+NOTE = f"{CORRECTION_HEADER}\n- {FRAGMENT_ERROR}"
+WRONG = out(WRONG_RAISE5)
+WARNING_TEXT = (
+    "S010 investigator output invalid after {n} rejected outputs: {outcome}; causes stay no_declarada"
+)
+
+
+@pytest.mark.parametrize(
+    ("script", "corrections", "max_turns", "requests", "outcome", "accepted", "rejections", "mark"),
+    [
+        pytest.param([out(RAISE5)], None, None, 1, LoopOutcome.DONE, [S010_P1], 0, None, id="a-valid"),
+        pytest.param(
+            [WRONG, out(RAISE5)], None, None, 2, LoopOutcome.DONE, [S010_P1], 1, None, id="b-retry-succeeds"
+        ),
+        pytest.param(
+            [WRONG, WRONG], None, None, 2, LoopOutcome.INVALID_OUTPUT, [], 2, "reintento", id="c-fallback"
+        ),
+        pytest.param([WRONG], 0, None, 1, LoopOutcome.INVALID_OUTPUT, [], 1, "reintento", id="d-no-budget"),
+        pytest.param(
+            [WRONG, WRONG, out(RAISE5)], 2, None, 3, LoopOutcome.DONE, [S010_P1], 2, None, id="e-two-notes"
+        ),
+        pytest.param([WRONG, WRONG], 2, 2, 2, LoopOutcome.TURN_CAP, [], 2, "reintento", id="f-turn-cap"),
+    ],
+)
+def test_e6_a_f_a_rejected_output_gets_its_note_budget_then_falls_back_with_one_warning(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    script: list[ModelReply | Exception],
+    corrections: int | None,
+    max_turns: int | None,
+    requests: int,
+    outcome: LoopOutcome,
+    accepted: list[str],
+    rejections: int,
+    mark: str | None,
+) -> None:
+    """E6 (a)-(f), R4, R5: notes up to the setting, then 'fallback' and one WARNING with the count."""
+    caplog.set_level(logging.WARNING, logger="plant_monitor.runner.review_step")
+    with s010_rig(tmp_path, monkeypatch, script, corrections=corrections, max_turns=max_turns) as rig:
+        review_log = ReviewLog()
+        step_outcome = rig.step.run(rig.step.plan(rig.decision), rig.decision, LoopLog(), review_log)
+        sent = rig.model.requests
+        assert len(sent) == requests
+        for request in sent[1:]:
+            assert request.messages[-1] == Message("user", (TextBlock(NOTE),))
+        assert step_outcome.outcome is outcome
+        assert [p.id for p in step_outcome.accepted] == accepted
+        assert review_log.rejections == [(FRAGMENT_ERROR,)] * rejections
+        warnings = [r.getMessage() for r in caplog.records if r.name == "plant_monitor.runner.review_step"]
+        if outcome is LoopOutcome.DONE:
+            assert warnings == []
+        else:
+            assert warnings == [WARNING_TEXT.format(n=rejections, outcome=outcome.value)]
+            marks = rig.step.record(step_outcome, None, "S010")
+            assert marks_of(marks) == {"T05": mark}
 
 
 ALL_REVIEWED = ["T01", "T02", "T03", "T04", "T05"]

@@ -80,27 +80,46 @@ def _message_param(message: Message) -> dict[str, object]:
     return {"role": message.role, "content": [_block_param(b) for b in message.content]}
 
 
-def to_params(request: ModelRequest, model: str) -> dict[str, object]:
-    """Keyword arguments for 'messages.create' (E11); no sampling parameters."""
+def _ephemeral() -> dict[str, str]:
+    """A fresh cache marker, so no request shares a mutable dict."""
+    return {"type": "ephemeral"}
+
+
+def _base_params(request: ModelRequest, model: str) -> dict[str, object]:
+    """The params shared by 'create' and 'count_tokens'."""
     return {
         "model": model,
-        "max_tokens": request.max_tokens,
-        "system": request.system,
+        "system": [{"type": "text", "text": request.system}],
         "tools": [
-            {"name": t.name, "description": t.description, "input_schema": dict(t.input_schema)}
+            {
+                "name": t.name,
+                "description": t.description,
+                "input_schema": dict(t.input_schema),
+                "strict": True,
+            }
             for t in request.tools
         ],
         "messages": [_message_param(m) for m in request.messages],
         "thinking": {"type": "adaptive", "display": "summarized"},
-        "output_config": {"effort": request.effort},
         "tool_choice": {"type": "auto"},
     }
 
 
-def _count_params(request: ModelRequest, model: str) -> dict[str, object]:
-    params = to_params(request, model)
-    del params["max_tokens"], params["output_config"]
+def to_params(request: ModelRequest, model: str) -> dict[str, object]:
+    """Keyword arguments for 'messages.create' (E11); no sampling parameters."""
+    params = _base_params(request, model)
+    output_config: dict[str, object] = {"effort": request.effort}
+    if request.output_schema is not None:
+        output_config["format"] = {"type": "json_schema", "schema": dict(request.output_schema)}
+    params["system"] = [{"type": "text", "text": request.system, "cache_control": _ephemeral()}]
+    params["max_tokens"] = request.max_tokens
+    params["output_config"] = output_config
+    params["cache_control"] = _ephemeral()
     return params
+
+
+def _count_params(request: ModelRequest, model: str) -> dict[str, object]:
+    return _base_params(request, model)
 
 
 def _usage(usage: anthropic.types.Usage) -> Usage:

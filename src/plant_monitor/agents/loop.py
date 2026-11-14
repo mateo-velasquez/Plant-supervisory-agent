@@ -4,7 +4,7 @@ import logging
 import time
 from collections.abc import Callable, Mapping
 from contextlib import AbstractAsyncContextManager
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import Protocol
 
@@ -21,6 +21,8 @@ from plant_monitor.agents.model import (
     ToolResultBlock,
     ToolUseBlock,
 )
+from plant_monitor.agents.output import strict_schema
+from plant_monitor.agents.prefix import PrefixMonitor, prefix_hash
 from plant_monitor.hooks.allowlist import AllowlistHook
 from plant_monitor.hooks.chain import HookChain, HookContext, ToolCall
 from plant_monitor.hooks.view import SnapshotView
@@ -74,7 +76,7 @@ class EndReview(Protocol):
 
     @property
     def exhausted(self) -> LoopOutcome:
-        """The outcome when a second note would be needed."""
+        """The outcome when a note beyond 'max_notes' would be needed."""
         ...
 
     def review(self, text: str) -> str | None: ...
@@ -101,6 +103,7 @@ class LoopConfig:
     prompt_token_limit: int
     max_tokens: int
     effort: Effort
+    max_notes: int = 1
 
 
 @dataclass
@@ -132,6 +135,8 @@ class Coordinator:
         agent: AgentName = "coordinator",
         hooks: HookChain | None = None,
         criteria_prompt: str | None = None,
+        output_schema: Mapping[str, object] | None = None,
+        prefix_monitor: PrefixMonitor | None = None,
     ) -> None:
         self._model = model
         self._tools = tools
@@ -141,6 +146,8 @@ class Coordinator:
         self._clock = clock
         self._agent = agent
         self._criteria_prompt = criteria_prompt
+        self._output_schema = output_schema
+        self._prefix_monitor = prefix_monitor
         self._hooks = (hooks or HookChain()).with_first(AllowlistHook(agent, allowed))
 
     async def run(
@@ -160,8 +167,11 @@ class Coordinator:
             system = self._system
             if self._criteria_prompt is not None:
                 system = compose_system(system, await port.get_prompt(self._criteria_prompt))
+            digest = prefix_hash(system, offered, self._output_schema)
+            if self._prefix_monitor is not None:
+                self._prefix_monitor.on_run(self._agent, snapshot_id, digest)
             log.outcome = await self._loop(
-                session, port, offered, system, snapshot_id, brief, progress, log, end_review, view
+                session, port, offered, system, snapshot_id, brief, progress, log, end_review, view, digest
             )
         return log.outcome
 
@@ -170,7 +180,10 @@ class Coordinator:
         absent = [name for name in self._allowed if name not in by_name]
         if absent:
             raise ValueError(f"the tool server lacks allowed tools: {', '.join(absent)}")
-        return tuple(by_name[name] for name in self._allowed)
+        return tuple(
+            replace(by_name[name], input_schema=strict_schema(by_name[name].input_schema))
+            for name in self._allowed
+        )
 
     async def _loop(
         self,
@@ -184,12 +197,15 @@ class Coordinator:
         log: LoopLog,
         end_review: EndReview,
         view: SnapshotView | None,
+        digest: str,
     ) -> LoopOutcome:
         config = self._config
         messages: tuple[Message, ...] = (Message("user", (TextBlock(brief),)),)
-        reminded = False
+        notes_sent = 0
         for turn in range(1, config.max_turns + 1):
-            request = ModelRequest(system, offered, messages, config.max_tokens, config.effort)
+            request = ModelRequest(
+                system, offered, messages, config.max_tokens, config.effort, self._output_schema
+            )
             count = await session.count_tokens(request)
             if count > config.prompt_token_limit:
                 logger.warning(
@@ -204,7 +220,9 @@ class Coordinator:
             started = self._clock()
             reply = await session.create(request)
             latency = self._ms_since(started)
-            log.model_calls.append(ModelCallRecord(turn, reply.stop_reason, reply.usage, latency))
+            log.model_calls.append(ModelCallRecord(turn, reply.stop_reason, reply.usage, latency, digest))
+            if self._prefix_monitor is not None:
+                self._prefix_monitor.on_call(self._agent, snapshot_id, turn, reply.usage, digest)
             log.thinking.extend(b.thinking for b in reply.content if isinstance(b, ThinkingBlock))
             messages = (*messages, Message("assistant", reply.content))
             if reply.stop_reason == "tool_use":
@@ -224,9 +242,9 @@ class Coordinator:
                     note = end_review.review(text)
                 if note is None:
                     return LoopOutcome.DONE
-                if reminded:
+                if notes_sent >= config.max_notes:
                     return end_review.exhausted
-                reminded = True
+                notes_sent += 1
                 messages = (*messages, Message("user", (TextBlock(note),)))
             else:
                 return _STOP_FALLBACKS.get(reply.stop_reason, LoopOutcome.UNEXPECTED_STOP)

@@ -10,6 +10,7 @@ from pydantic import TypeAdapter
 from plant_monitor.agents.fake_model import FakeModel
 from plant_monitor.agents.loop import Coordinator, LoopConfig, ToolPort
 from plant_monitor.agents.model import ModelReply, TextBlock, ToolUseBlock
+from plant_monitor.agents.prefix import PrefixMonitor
 from plant_monitor.domain.proposals import Proposal, ValidatedProposal
 from plant_monitor.hooks.chain import HookChain
 from plant_monitor.mcp_server.server import READ_TOOLS
@@ -61,14 +62,16 @@ class FakeTools:
         self.offered = tuple(offered)
         self.calls: list[tuple[str, Mapping[str, object]]] = []
         self.prompt_calls: list[str] = []
+        self.criteria = CRIT
+        self.suffix = ""
 
     async def get_prompt(self, name: str) -> str:
-        """Record the name and serve CRIT."""
+        """Record the name and serve 'criteria'."""
         self.prompt_calls.append(name)
-        return CRIT
+        return self.criteria
 
     async def list_tools(self) -> tuple[ToolSpec, ...]:
-        return tuple(ToolSpec(name, f"{name} tool", {"type": "object"}) for name in self.offered)
+        return tuple(ToolSpec(name, f"{name} tool{self.suffix}", {"type": "object"}) for name in self.offered)
 
     async def call(self, name: str, arguments: Mapping[str, object]) -> ToolOutcome:
         self.calls.append((name, arguments))
@@ -194,8 +197,17 @@ def make_coordinator(
     hooks: HookChain | None = None,
     agent: AgentName = "coordinator",
     criteria_prompt: str | None = None,
+    max_notes: int = 1,
+    output_schema: Mapping[str, object] | None = None,
+    prefix_monitor: PrefixMonitor | None = None,
 ) -> Coordinator:
-    config = LoopConfig(max_turns=max_turns, prompt_token_limit=limit, max_tokens=16_000, effort="medium")
+    config = LoopConfig(
+        max_turns=max_turns,
+        prompt_token_limit=limit,
+        max_tokens=16_000,
+        effort="medium",
+        max_notes=max_notes,
+    )
     return Coordinator(
         model,
         tools.opener(),
@@ -205,4 +217,6 @@ def make_coordinator(
         agent=agent,
         hooks=hooks,
         criteria_prompt=criteria_prompt,
+        output_schema=output_schema,
+        prefix_monitor=prefix_monitor,
     )

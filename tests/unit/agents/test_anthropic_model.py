@@ -2,16 +2,20 @@
 
 import json
 from collections.abc import Sequence
+from dataclasses import replace
 from typing import Any
 
 import anthropic
 import httpx2
 import pytest
+from anthropic.types import MessageCountTokensParams, OutputConfigParam, ToolParam
+from anthropic.types.message_create_params import MessageCreateParamsNonStreaming
 from pydantic import SecretStr
 
 from plant_monitor.agents.anthropic_model import (
     AnthropicModel,
     RetryPolicy,
+    _count_params,
     from_message,
     to_params,
 )
@@ -189,6 +193,7 @@ def test_e11_params_keys_and_block_round_trip() -> None:
         "thinking",
         "output_config",
         "tool_choice",
+        "cache_control",  # 011 E4: the top-level cache marker joins the key set
     }
     assert params["model"] == MODEL_NAME
     assert params["max_tokens"] == 16000
@@ -224,6 +229,103 @@ async def test_count_tokens_body_omits_max_tokens_and_output_config() -> None:
     assert "max_tokens" not in body
     assert "output_config" not in body
     assert body["thinking"] == {"type": "adaptive", "display": "summarized"}
+
+
+GC: dict[str, object] = {
+    "type": "object",
+    "properties": {"case_id": {"type": "string"}},
+    "required": ["case_id"],
+    "additionalProperties": False,
+}
+OUT: dict[str, object] = {
+    "type": "object",
+    "properties": {"propuestas": {"type": "array", "items": {"type": "string"}}},
+    "required": ["propuestas"],
+    "additionalProperties": False,
+}
+SYS = "ROLE\n\n<criterios>\nC\n</criterios>"
+EPHEMERAL = {"type": "ephemeral"}
+BASE_KEYS = {"model", "system", "tools", "messages", "thinking", "tool_choice"}
+
+
+def e3_request() -> ModelRequest:
+    return ModelRequest(
+        SYS,
+        (ToolSpec("get_case", "Return one case with its history.", GC),),
+        (Message("user", (TextBlock("brief"),)),),
+        16000,
+        "medium",
+    )
+
+
+def test_e3_coordinator_request_shape_has_both_cache_markers_and_strict_tools() -> None:
+    """E3: exact params, 'strict' tools, a marker on the system block and one at the top level."""
+    assert to_params(e3_request(), MODEL_NAME) == {
+        "model": MODEL_NAME,
+        "max_tokens": 16000,
+        "system": [{"type": "text", "text": SYS, "cache_control": EPHEMERAL}],
+        "tools": [
+            {
+                "name": "get_case",
+                "description": "Return one case with its history.",
+                "input_schema": GC,
+                "strict": True,
+            }
+        ],
+        "messages": [{"role": "user", "content": [{"type": "text", "text": "brief"}]}],
+        "thinking": {"type": "adaptive", "display": "summarized"},
+        "output_config": {"effort": "medium"},
+        "tool_choice": {"type": "auto"},
+        "cache_control": EPHEMERAL,
+    }
+
+
+async def test_e4_investigator_shape_and_count_params() -> None:
+    """E4 (a)(b)(c): the format joins 'output_config'; counts carry the base only; bodies match."""
+    request = replace(e3_request(), output_schema=OUT)
+    shaped: dict[str, Any] = to_params(request, MODEL_NAME)
+    assert shaped["output_config"] == {
+        "effort": "medium",
+        "format": {"type": "json_schema", "schema": OUT},
+    }
+    counts: list[dict[str, Any]] = [
+        _count_params(e3_request(), MODEL_NAME),
+        _count_params(request, MODEL_NAME),
+    ]
+    for counted in counts:
+        assert set(counted) == BASE_KEYS
+        assert counted["system"] == [{"type": "text", "text": SYS}]
+        assert all(t["strict"] is True for t in counted["tools"])
+    harness = Harness([ok_message(), ok_count()])
+    async with harness.model(0).session() as session:
+        await session.create(request)
+        await session.count_tokens(request)
+    created: dict[str, Any] = json.loads(harness.requests[0].content)
+    assert created["cache_control"] == EPHEMERAL
+    assert created["system"][0]["cache_control"] == EPHEMERAL
+    assert created["tools"][0]["strict"] is True
+    assert created["output_config"]["format"]["schema"] == OUT
+    count_text = harness.requests[1].content.decode()
+    assert "cache_control" not in count_text
+    assert "output_config" not in count_text
+
+
+def test_e15_risk_params_use_only_keys_the_sdk_knows() -> None:
+    """Risk: a param key the SDK TypedDicts lack would make every real call fail (E15, no network)."""
+
+    def keys(typed: Any) -> set[str]:
+        return set(typed.__required_keys__ | typed.__optional_keys__)
+
+    create, count = keys(MessageCreateParamsNonStreaming), keys(MessageCountTokensParams)
+    tool_keys, output_keys = keys(ToolParam), keys(OutputConfigParam)
+    for request in (e3_request(), replace(e3_request(), output_schema=OUT)):
+        shaped: dict[str, Any] = to_params(request, MODEL_NAME)
+        counted: dict[str, Any] = _count_params(request, MODEL_NAME)
+        assert set(shaped) <= create
+        assert set(counted) <= count
+        for params in (shaped, counted):
+            assert all(set(t) <= tool_keys for t in params["tools"])
+        assert set(shaped["output_config"]) <= output_keys
 
 
 def test_r5_unknown_content_block_raises_instead_of_being_dropped() -> None:

@@ -37,7 +37,7 @@ from plant_monitor.notify.file import FileNotifier
 from plant_monitor.runner.agent_pipeline import build_agent_pipeline
 from plant_monitor.runner.outbox import OutboxDispatcher
 from plant_monitor.runner.post_commit import PostCommitChain
-from plant_monitor.runner.series import run_series
+from plant_monitor.runner.series import RunSummary, run_series
 from plant_monitor.telemetry.trace import TraceLine, TraceWriter, read_trace, trace_path
 from plant_monitor.telemetry.usage import Usage
 
@@ -162,7 +162,7 @@ def run_full(
     model: FakeModel,
     recorder: Recorder,
     started: datetime,
-) -> None:
+) -> RunSummary:
     """Run the series on 'root' with the production wiring: file registry, trace and outbox."""
     root.mkdir(parents=True, exist_ok=True)
     trace = TraceWriter(trace_path(root / "traces", started))
@@ -181,7 +181,7 @@ def run_full(
             CompositeNotifier((FileNotifier(root / "out"), recorder)),
             lambda: datetime(2026, 3, 2, 23, 0, tzinfo=UTC),
         )
-        run_series(
+        return run_series(
             arrivals, incident_shifts(), registry, pipeline, post_commit=PostCommitChain([trace, outbox])
         )
 

@@ -306,3 +306,65 @@ def test_e17c_run_totals_split_the_cost_by_agent() -> None:
     assert (investigator.runs, investigator.model_calls) == (2, 4)
     assert (investigator.input_tokens, investigator.output_tokens) == (12_000, 800)
     assert float(investigator.usd) == pytest.approx(0.0016)
+
+
+def _hashed_call(turn: int) -> ModelCallRecord:
+    usage = Usage(input_tokens=120, output_tokens=40, cache_read_tokens=2350)
+    return ModelCallRecord(turn, "end_turn", usage, 100, prefix_hash="ab" * 32)
+
+
+def test_e12a_prefix_hash_reaches_both_agents_and_survives_write_and_read(tmp_path: Path) -> None:
+    """E12 (a): 'prefix_hash' is copied for coordinator and investigator and round trips."""
+    line = replace_calls(_line(calls=1, agents_run=("investigator", "coordinator")))
+    assert line.investigator is not None
+    assert [c.prefix_hash for c in line.model_calls] == ["ab" * 32]
+    assert [c.prefix_hash for c in line.investigator.model_calls] == ["ab" * 32]
+    path = tmp_path / "trace.jsonl"
+    TraceWriter(path).write_now(line)
+    assert read_trace(path) == (line,)
+
+
+def replace_calls(line: TraceLine) -> TraceLine:
+    """Rebuild 'line' with the hashed coordinator call."""
+    return build_line(
+        snapshot_id=line.snapshot_id,
+        turno_id=line.turno_id,
+        status=line.status,
+        decision=line.decision,
+        decision_reason=line.decision_reason,
+        outcome=line.outcome,
+        required=line.required,
+        model_calls=[_hashed_call(1)],
+        tool_calls=[],
+        thinking=[],
+        notices_agent=[],
+        notices_template=[],
+        report_id=None,
+        card=CARD,
+        agents_run=("investigator", "coordinator"),
+        investigator=replace(_investigator(), model_calls=[_hashed_call(1)]),
+        proposals_applied=[],
+        proposals_declined=[],
+    )
+
+
+def test_e12b_a_010_line_without_prefix_hash_parses_and_totals_use_the_line_cache_fields() -> None:
+    """E12 (b): 'prefix_hash' reads as None; run cache sums come from the line totals."""
+    old = _line(calls=1).model_dump(mode="json")
+    for call in old["model_calls"]:
+        call.pop("prefix_hash", None)
+    old["totals"].update(cache_read_tokens=7, cache_write_5m_tokens=5, cache_write_1h_tokens=3)
+    line = TraceLine.model_validate_json(json.dumps(old))
+    assert [c.prefix_hash for c in line.model_calls] == [None]
+    totals = run_totals([line])
+    assert (totals.cache_read_tokens, totals.cache_write_5m_tokens, totals.cache_write_1h_tokens) == (7, 5, 3)
+
+
+def test_e12_run_totals_by_agent_sum_the_cache_tokens_of_each_call() -> None:
+    """E12 / R10: 'AgentRunTotals' sums 'cache_read_tokens' from the costed calls' usage."""
+    line = replace_calls(_line())
+    totals = run_totals([line])
+    assert totals.cache_read_tokens == 2 * 2350
+    assert totals.by_agent["coordinator"].cache_read_tokens == 2350
+    assert totals.by_agent["investigator"].cache_read_tokens == 2350
+    assert totals.by_agent["coordinator"].cache_write_5m_tokens == 0
