@@ -21,6 +21,7 @@ class ModelCallRecord:
     stop_reason: str
     usage: Usage
     latency_ms: int
+    prefix_hash: str | None = None
 
 
 @dataclass(frozen=True)
@@ -59,6 +60,7 @@ class TraceModelCall(BaseModel):
     usage: Usage
     usd: Decimal
     latency_ms: int
+    prefix_hash: str | None = None
 
     @field_serializer("usd")
     def _write_usd(self, value: Decimal) -> float:
@@ -200,6 +202,9 @@ class AgentRunTotals(BaseModel):
     model_calls: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
+    cache_read_tokens: int = 0
+    cache_write_5m_tokens: int = 0
+    cache_write_1h_tokens: int = 0
     usd: Decimal = Decimal(0)
 
 
@@ -215,6 +220,9 @@ class RunTotals(BaseModel):
     output_tokens: int
     usd: Decimal
     by_agent: dict[AgentName, AgentRunTotals] = {}
+    cache_read_tokens: int = 0
+    cache_write_5m_tokens: int = 0
+    cache_write_1h_tokens: int = 0
 
 
 def _costed(calls: Sequence[ModelCallRecord], card: PriceCard) -> tuple[list[TraceModelCall], TraceTotals]:
@@ -226,6 +234,7 @@ def _costed(calls: Sequence[ModelCallRecord], card: PriceCard) -> tuple[list[Tra
             usage=c.usage,
             usd=cost_usd(c.usage, card),
             latency_ms=c.latency_ms,
+            prefix_hash=c.prefix_hash,
         )
         for c in calls
     ]
@@ -404,6 +413,9 @@ def run_totals(lines: Iterable[TraceLine]) -> RunTotals:
             model_calls=len(costs),
             input_tokens=sum(call.usage.input_tokens for call in costs),
             output_tokens=sum(call.usage.output_tokens for call in costs),
+            cache_read_tokens=sum(call.usage.cache_read_tokens for call in costs),
+            cache_write_5m_tokens=sum(call.usage.cache_write_5m_tokens for call in costs),
+            cache_write_1h_tokens=sum(call.usage.cache_write_1h_tokens for call in costs),
             usd=sum((call.usd for call in costs), Decimal(0)),
         )
     return RunTotals(
@@ -416,5 +428,8 @@ def run_totals(lines: Iterable[TraceLine]) -> RunTotals:
         by_agent=by_agent,
         input_tokens=sum(row.totals.input_tokens for row in rows),
         output_tokens=sum(row.totals.output_tokens for row in rows),
+        cache_read_tokens=sum(row.totals.cache_read_tokens for row in rows),
+        cache_write_5m_tokens=sum(row.totals.cache_write_5m_tokens for row in rows),
+        cache_write_1h_tokens=sum(row.totals.cache_write_1h_tokens for row in rows),
         usd=sum((row.totals.usd for row in rows), Decimal(0)),
     )

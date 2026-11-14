@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     investigator_max_turns: int = Field(default=4, ge=1)
     proposal_output_max_chars: int = Field(default=2000, gt=0)
     logbook_review_max_attempts: int = Field(default=2, ge=1)
+    investigator_output_corrections: int = Field(default=1, ge=0)
 
     # Prices in USD per million tokens (007 R16).
     price_input_per_mtok: Decimal = Field(default=Decimal("0.10"), ge=0)

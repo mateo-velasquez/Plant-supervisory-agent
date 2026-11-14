@@ -1,17 +1,21 @@
 """007 T7: 'build_coordinator' and prompt v1 (R15, E5)."""
 
+import logging
 import re
 from importlib import resources
 from pathlib import Path
 
 import pytest
-from agent_builders import ALERT_ID, FakeProgress, FakeTools, end, tool
+from agent_builders import ALERT_ID, FakeProgress, FakeTools, end, out, tool
 from judgment_builders import incident_tool_context
 
-from plant_monitor.agents.allowlists import COORDINATOR_TOOLS
-from plant_monitor.agents.factory import build_coordinator, load_prompt
+from plant_monitor.agents.allowlists import COORDINATOR_TOOLS, INVESTIGATOR_TOOLS
+from plant_monitor.agents.factory import build_coordinator, build_investigator, load_prompt
 from plant_monitor.agents.fake_model import FakeModel
+from plant_monitor.agents.investigator import NothingRequired
 from plant_monitor.agents.loop import LoopLog, LoopOutcome, compose_system
+from plant_monitor.agents.output import investigator_output_schema
+from plant_monitor.agents.prefix import prefix_hash
 from plant_monitor.config import Settings
 from plant_monitor.hooks.chain import HookChain
 from plant_monitor.mcp_server import types
@@ -121,3 +125,41 @@ async def test_e10_the_coordinator_cannot_reach_logbook_or_judgment_tools_even_b
     async with ToolClient(server) as client:
         direct = await client.call("get_logbook", {"turno_id": "T05"})
     assert direct.is_error
+
+
+@pytest.mark.parametrize("agent", ["investigator", "coordinator"])
+async def test_e5_the_loop_sends_the_schema_and_tools_its_agent_owns(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    agent: str,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """E5 (a), (b), R2, R3, R8, R9: format, strict tools, hash; a changed criteria warns once."""
+    caplog.set_level(logging.WARNING, logger="plant_monitor.agents.prefix")
+    isolate_settings_env(monkeypatch, tmp_path)
+    settings = Settings(anthropic_api_key="k")
+    log = LoopLog()
+    if agent == "investigator":
+        progress: FakeProgress | NothingRequired = NothingRequired()
+        tools = FakeTools(FakeProgress(), offered=INVESTIGATOR_TOOLS)
+        model = FakeModel([out(), out()])
+        loop = build_investigator(settings, model, tools.opener())
+        names, schema = INVESTIGATOR_TOOLS, investigator_output_schema()
+    else:
+        progress = FakeProgress()
+        tools = FakeTools(progress, offered=COORDINATOR_TOOLS)
+        model = FakeModel([end("Listo."), end("Listo.")])
+        loop = build_coordinator(settings, model, tools.opener(), hooks=HookChain())
+        names, schema = COORDINATOR_TOOLS, None
+    await loop.run("S003", "brief", progress, log)
+    tools.criteria = CRIT + "Extra.\n"
+    await loop.run("S004", "brief", progress, LoopLog())
+    assert len([m for m in caplog.messages if m.startswith(f"{agent} prefix changed at")]) == 1
+    request = model.requests[0]
+    assert request.output_schema == schema
+    assert tuple(t.name for t in request.tools) == names
+    assert [dict(t.input_schema) for t in request.tools] == [
+        {"type": "object", "additionalProperties": False}
+    ] * len(names)
+    expected = prefix_hash(request.system, request.tools, request.output_schema)
+    assert log.model_calls[0].prefix_hash == expected

@@ -57,6 +57,7 @@ class ModelRequest:
     messages: tuple[Message, ...]
     max_tokens: int
     effort: Effort
+    output_schema: Mapping[str, object] | None = None
 
 
 @dataclass(frozen=True)

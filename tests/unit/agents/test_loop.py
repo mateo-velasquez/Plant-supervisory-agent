@@ -18,7 +18,7 @@ from plant_monitor.agents.model import (
     ToolResultBlock,
     ToolUseBlock,
 )
-from plant_monitor.mcp_server.types import ToolOutcome
+from plant_monitor.mcp_server.types import ToolOutcome, ToolSpec
 
 pytestmark = pytest.mark.anyio
 
@@ -266,6 +266,50 @@ async def test_e5_end_of_turn_goes_through_the_review(
             Message("assistant", script[0].content),
             Message("user", (TextBlock("N1"),)),
         )
+
+
+@pytest.mark.parametrize(
+    ("max_notes", "rejects", "requests", "expected", "texts"),
+    [
+        pytest.param(0, 1, 1, "fallback:invalid_output", ["x"], id="a-no-budget"),
+        pytest.param(2, 2, 3, "done", ["x", "y", "z"], id="b-two-notes-then-accept"),
+        pytest.param(2, 3, 3, "fallback:invalid_output", ["x", "y", "z"], id="c-budget-spent"),
+    ],
+)
+async def test_e7_note_budget_in_the_loop(
+    max_notes: int, rejects: int, requests: int, expected: str, texts: list[str]
+) -> None:
+    """E7: 'max_notes' notes are sent as user turns; the next rejection returns the review's outcome."""
+    progress = FakeProgress()
+    model = FakeModel([end("x"), end("y"), end("z")][: max(requests, 1)])
+    review = FakeReview(rejects)
+    outcome = await make_coordinator(model, FakeTools(progress), max_notes=max_notes).run(
+        "S010", "task", progress, LoopLog(), review
+    )
+    assert outcome == expected
+    assert len(model.requests) == requests
+    assert review.texts == texts
+    for request in model.requests[1:]:
+        assert request.messages[-1] == Message("user", (TextBlock("N1"),))
+
+
+class UnsanitizableTools(FakeTools):
+    """A tool port whose one tool schema the sanitizer cannot accept."""
+
+    async def list_tools(self) -> tuple[ToolSpec, ...]:
+        return (ToolSpec("get_deviations", "d", {"type": "string", "contentEncoding": "x"}),)
+
+
+async def test_r3_a_schema_that_cannot_be_sanitized_raises_before_any_request() -> None:
+    """R3: fail-closed, 'ValueError' out of 'run' and no model request."""
+    progress = FakeProgress(ALERT_ID)
+    model = FakeModel([end("x")])
+    tools = UnsanitizableTools(progress)
+    with pytest.raises(ValueError, match="contentEncoding"):
+        await make_coordinator(model, tools, allowed=("get_deviations",)).run(
+            "S003", "brief", progress, LoopLog()
+        )
+    assert model.requests == []
 
 
 async def test_t4_allowed_tool_missing_from_the_server_is_a_wiring_error() -> None:

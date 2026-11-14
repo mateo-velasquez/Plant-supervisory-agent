@@ -219,3 +219,29 @@ def test_e13c_env_example_has_one_line_per_multi_agent_name() -> None:
     lines = example.read_text(encoding="utf-8").splitlines()
     for name in MULTI_AGENT_ENV_NAMES:
         assert sum(line.startswith(f"{name}=") for line in lines) == 1
+
+
+def test_e8a_output_corrections_default_is_one() -> None:
+    """E8 (a) of spec 011: the default is 1."""
+    assert Settings(anthropic_api_key="k").investigator_output_corrections == 1
+
+
+def test_e8b_output_corrections_accepts_zero_and_refuses_negative(monkeypatch: pytest.MonkeyPatch) -> None:
+    """E8 (b), (c) of spec 011: 0 is valid, -1 is a 'ValidationError'."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    monkeypatch.setenv("INVESTIGATOR_OUTPUT_CORRECTIONS", "0")
+    assert Settings().investigator_output_corrections == 0
+    monkeypatch.setenv("INVESTIGATOR_OUTPUT_CORRECTIONS", "-1")
+    with pytest.raises(ValidationError):
+        Settings()
+
+
+def test_e8d_env_example_has_the_line_in_the_multi_agent_block() -> None:
+    """E8 (d) of spec 011: exactly one line, between the multi-agent header and the next block."""
+    example = Path(__file__).resolve().parents[1] / ".env.example"
+    lines = example.read_text(encoding="utf-8").splitlines()
+    start = next(i for i, line in enumerate(lines) if line.startswith("# --- Multi-agent"))
+    end = next(i for i in range(start + 1, len(lines)) if lines[i].startswith("# ---"))
+    name = "INVESTIGATOR_OUTPUT_CORRECTIONS=1"
+    assert lines.count(name) == 1
+    assert start < lines.index(name) < end

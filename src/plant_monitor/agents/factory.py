@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
+from dataclasses import replace
 from importlib import resources
 from typing import Literal
 
@@ -9,6 +10,8 @@ from plant_monitor.agents.allowlists import ALLOWLISTS
 from plant_monitor.agents.brief import render_reminder
 from plant_monitor.agents.loop import Coordinator, LoopConfig, ToolPort
 from plant_monitor.agents.model import ModelPort
+from plant_monitor.agents.output import investigator_output_schema
+from plant_monitor.agents.prefix import PrefixMonitor
 from plant_monitor.config import Settings
 from plant_monitor.hooks.cause import CauseHook
 from plant_monitor.hooks.chain import HookChain
@@ -58,6 +61,7 @@ def build_coordinator(
         config,
         hooks=hooks,
         criteria_prompt=CRITERIA_PROMPT,
+        prefix_monitor=PrefixMonitor(),
     )
 
 
@@ -67,7 +71,9 @@ def build_investigator(
     tools: Callable[[], AbstractAsyncContextManager[ToolPort]],
 ) -> Coordinator:
     """The read-only investigator: its own prompt, tools and turn cap."""
-    config = _config(settings, settings.investigator_max_turns)
+    config = replace(
+        _config(settings, settings.investigator_max_turns), max_notes=settings.investigator_output_corrections
+    )
     return Coordinator(
         model,
         tools,
@@ -76,4 +82,6 @@ def build_investigator(
         config,
         agent="investigator",
         criteria_prompt=CRITERIA_PROMPT,
+        output_schema=investigator_output_schema(),
+        prefix_monitor=PrefixMonitor(),
     )
