@@ -787,6 +787,21 @@ def test_e23_allowlists_import_only_telemetry_and_mcp_server_types() -> None:
     assert disallowed_modules(source, package_of(path), ALLOWLISTS_ALLOWED) == set()
 
 
+def test_e13_runner_summary_imports_only_domain_runner_telemetry_and_no_sdk() -> None:
+    """012 E13 (R11): Risk: 'runner/summary.py' never reaches 'agents', 'mcp_server' or an SDK."""
+    path = PACKAGE / "runner" / "summary.py"
+    assert layer_offenders([path], {"domain", "runner", "telemetry"}) == {}
+    assert imported_roots(path.read_text(encoding="utf-8")) & FORBIDDEN == set()
+
+
+def test_e13_runner_cli_imports_only_its_layers_and_never_anthropic_or_mcp() -> None:
+    """012 E13 (R11): Risk: 'runner/cli.py' may use 'AnthropicModel' but never 'anthropic' or 'mcp'."""
+    path = PACKAGE / "runner" / "cli.py"
+    allowed = {"agents", "cases", "config", "domain", "ingestion", "metrics", "notify", "runner", "telemetry"}
+    assert layer_offenders([path], allowed) == {}
+    assert imported_roots(path.read_text(encoding="utf-8")) & FORBIDDEN == set()
+
+
 def test_e23_coordinator_step_imports_no_hooks_module() -> None:
     """010 E23 (R15): 'DecisionView' satisfies 'SnapshotView' structurally, so the step needs no import."""
     path = PACKAGE / "runner" / "coordinator_step.py"

@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Literal
+from typing import Final, Literal
 
 from pydantic import BaseModel, ConfigDict, JsonValue, field_serializer
 
@@ -44,6 +44,9 @@ DecisionReason = Literal["text_needed", "proposals", "investigator_only", "no_te
 InvestigatorTrigger = Literal["review", "cause_lookup"]
 AgentName = Literal["investigator", "coordinator"]
 AGENTS: tuple[AgentName, ...] = ("investigator", "coordinator")
+
+
+BUDGET_EXCEEDED_OUTCOME: Final = "fallback:budget_exceeded"
 
 
 def _usd(value: Decimal) -> Decimal:
@@ -392,6 +395,26 @@ def read_trace(path: Path) -> tuple[TraceLine, ...]:
     """Every line of a trace file, in order."""
     text = path.read_text(encoding="utf-8")
     return tuple(TraceLine.model_validate_json(row) for row in text.split("\n") if row)
+
+
+class BudgetStep(BaseModel):
+    """One agent step that stopped on the prompt budget."""
+
+    model_config = ConfigDict(frozen=True)
+
+    snapshot_id: str
+    agent: AgentName
+
+
+def budget_exceeded_steps(lines: Iterable[TraceLine]) -> tuple[BudgetStep, ...]:
+    """Budget hits per line, the investigator before the coordinator."""
+    steps: list[BudgetStep] = []
+    for line in lines:
+        if line.investigator is not None and line.investigator.outcome == BUDGET_EXCEEDED_OUTCOME:
+            steps.append(BudgetStep(snapshot_id=line.snapshot_id, agent="investigator"))
+        if line.outcome == BUDGET_EXCEEDED_OUTCOME:
+            steps.append(BudgetStep(snapshot_id=line.snapshot_id, agent="coordinator"))
+    return tuple(steps)
 
 
 def run_totals(lines: Iterable[TraceLine]) -> RunTotals:

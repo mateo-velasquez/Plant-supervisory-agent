@@ -8,13 +8,16 @@ from pathlib import Path
 import pytest
 from agent_builders import RAISE5, validated
 
+from plant_monitor.agents.loop import LoopOutcome
 from plant_monitor.telemetry.trace import (
+    BUDGET_EXCEEDED_OUTCOME,
     InvestigatorRecord,
     ModelCallRecord,
     ToolCallRecord,
     TraceLine,
     TraceWriter,
     abort_outcome,
+    budget_exceeded_steps,
     build_line,
     read_trace,
     run_totals,
@@ -151,6 +154,20 @@ def test_trace_path_is_named_after_the_utc_start(tmp_path: Path) -> None:
     """R14: 'trace-<UTC %Y%m%dT%H%M%SZ>.jsonl' in the traces directory."""
     started = datetime(2026, 3, 2, 23, 0, tzinfo=UTC)
     assert trace_path(tmp_path, started) == tmp_path / "trace-20260302T230000Z.jsonl"
+
+
+def test_e9_budget_exceeded_steps_list_investigator_then_coordinator_per_line() -> None:
+    """012 E9: one step per budget hit, in line order; none for no lines; the constant matches the enum."""
+    budget = replace(_investigator(), outcome="fallback:budget_exceeded")
+    lines = [
+        _line("S003"),
+        _line("S004", outcome="fallback:budget_exceeded", investigator=budget),
+        _line("S005", outcome="aborted:ModelCallFailed"),
+    ]
+    steps = budget_exceeded_steps(lines)
+    assert [(s.snapshot_id, s.agent) for s in steps] == [("S004", "investigator"), ("S004", "coordinator")]
+    assert budget_exceeded_steps([]) == ()
+    assert LoopOutcome.BUDGET_EXCEEDED.value == BUDGET_EXCEEDED_OUTCOME
 
 
 def test_abort_outcome_formats_the_error_class() -> None:

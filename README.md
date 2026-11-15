@@ -41,7 +41,7 @@ Requirements: [uv](https://docs.astral.sh/uv/) ≥ 0.13. Python 3.14 is selected
 ```powershell
 uv sync                          # create the environment
 uv run pre-commit install        # enable git hooks
-Copy-Item .env.example .env      # then set ANTHROPIC_API_KEY
+Copy-Item .env.example .env      # then set ANTHROPIC_API_KEY (agent mode only)
 ```
 Place the course dataset in `data/` (see [data/README.md](data/README.md)).
 
@@ -54,8 +54,26 @@ uv run pre-commit run --all-files
 ```
 CI runs the same checks on Ubuntu and Windows for every PR. CI never calls the model.
 
+## How to run
+One command runs the series ([ADR-0018](docs/adr/0018-full-series-cli-resume-by-output-dir-run-summary.md)):
+
+```powershell
+uv run plant-monitor run                                 # agent mode (needs ANTHROPIC_API_KEY)
+uv run plant-monitor run --thresholds-only               # code only, no model, no key
+uv run plant-monitor run --until S020                    # stop after the first arrival of S020
+uv run plant-monitor run --speed 5                       # pause 5 s after each committed snapshot (live demo)
+```
+
+- **One directory, one run.** `OUTPUT_DIR` (default `outputs`) holds the registry, the traces, the notices and the summaries. Running again with the same directory resumes at the first snapshot not yet committed. For a fresh run, use a new `OUTPUT_DIR`.
+- **Do not mix modes in one directory.** A threshold-only run followed by an agent run in the same directory skips every snapshot already processed, and the summary shows 0 processed. The opposite order is refused: a directory that holds agent traces must resume in agent mode, because threshold-only mode would drop the agent's severity raises in force.
+- **Held-out days** are read only with `HELDOUT_OPEN=true`. While it is closed, the run stops at the last allowed snapshot (S042), and `--until` cannot reach past it.
+- **Summary.** The summary is printed and written to `OUTPUT_DIR/runs/run-<timestamp>.json`. It has two scopes:
+  - *run*: this invocation's arrivals, duration, tokens (input, output, cache), USD, and the steps that hit the prompt budget;
+  - *series*: every trace in the directory, aborted attempts included, plus the shift reports and alerts in the registry.
+- **Exit codes:** `0` the run finished; `2` settings, data or option error, or a run aborted at a snapshot (rerun to resume); `130` interrupted with Ctrl-C.
+
 ## How to run evals
-Evals run on demand over the real data of days 1–7 ([ADR-0011](docs/adr/0011-evaluator-reads-outbox-independent-noise.md)). Both scripts read `Settings`, so `ANTHROPIC_API_KEY` must be set (any value works while the run is threshold-only).
+Evals run on demand over the real data of days 1–7 ([ADR-0011](docs/adr/0011-evaluator-reads-outbox-independent-noise.md)). The threshold-only smoke run needs no `ANTHROPIC_API_KEY`; the paid agent run of days 1–7 does.
 
 ```powershell
 # 1. Threshold-only run of days 1–7: writes outputs/evals/smoke-<timestamp>/registry.sqlite3
