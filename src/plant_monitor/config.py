@@ -5,7 +5,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal, Self
 
-from pydantic import Field, SecretStr, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,7 +16,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    anthropic_api_key: SecretStr = Field(min_length=1)
+    anthropic_api_key: SecretStr | None = None
     anthropic_model: str = "claude-haiku-5-5"
     anthropic_effort: Literal["low", "medium", "high"] = "medium"
 
@@ -59,6 +59,13 @@ class Settings(BaseSettings):
     long_context_threshold_tokens: int = Field(default=100000, gt=0)
     long_context_multiplier: Decimal = Field(default=Decimal(5), ge=1)
 
+    @field_validator("anthropic_api_key", mode="before")
+    @classmethod
+    def _blank_key_is_none(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
     @model_validator(mode="after")
     def _retry_cap_not_below_base(self) -> Self:
         if self.anthropic_retry_cap_seconds < self.anthropic_retry_base_seconds:
@@ -69,6 +76,11 @@ class Settings(BaseSettings):
     def traces_dir(self) -> Path:
         """Run trace files, derived from output_dir."""
         return self.output_dir / "traces"
+
+    @property
+    def runs_dir(self) -> Path:
+        """Run report files, derived from output_dir."""
+        return self.output_dir / "runs"
 
     @property
     def registry_path(self) -> Path:

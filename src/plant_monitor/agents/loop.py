@@ -27,7 +27,13 @@ from plant_monitor.hooks.allowlist import AllowlistHook
 from plant_monitor.hooks.chain import HookChain, HookContext, ToolCall
 from plant_monitor.hooks.view import SnapshotView
 from plant_monitor.mcp_server.types import ToolOutcome, ToolSpec
-from plant_monitor.telemetry.trace import AgentName, HookRecord, ModelCallRecord, ToolCallRecord
+from plant_monitor.telemetry.trace import (
+    BUDGET_EXCEEDED_OUTCOME,
+    AgentName,
+    HookRecord,
+    ModelCallRecord,
+    ToolCallRecord,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +68,7 @@ class LoopOutcome(StrEnum):
 
     DONE = "done"
     SKIPPED = "skipped"
-    BUDGET_EXCEEDED = "fallback:budget_exceeded"
+    BUDGET_EXCEEDED = BUDGET_EXCEEDED_OUTCOME
     TURN_CAP = "fallback:turn_cap"
     REFUSAL = "fallback:refusal"
     MAX_TOKENS = "fallback:max_tokens"

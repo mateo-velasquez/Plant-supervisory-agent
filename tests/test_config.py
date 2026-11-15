@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from plant_monitor.agents.anthropic_model import AnthropicModel
 from plant_monitor.config import Settings
 
 from builders import AGENT_ENV_NAMES, isolate_settings_env
@@ -15,9 +16,28 @@ def _isolate_environment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Non
     isolate_settings_env(monkeypatch, tmp_path)
 
 
-def test_fails_without_api_key() -> None:
-    with pytest.raises(ValidationError):
-        Settings()
+def test_e3a_api_key_is_optional() -> None:
+    """012 E3 (a): without a key 'Settings' builds and the key is None (was: ValidationError)."""
+    assert Settings().anthropic_api_key is None
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [pytest.param("", None, id="b_blank_is_unset"), pytest.param("sk-x", "sk-x", id="c_value_is_read")],
+)
+def test_e3bc_blank_key_is_unset_and_a_value_is_read(
+    monkeypatch: pytest.MonkeyPatch, value: str, expected: str | None
+) -> None:
+    """012 E3 (b), (c) with I2: an empty key reads as None; 'sk-x' reads back."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", value)
+    key = Settings().anthropic_api_key
+    assert (None if key is None else key.get_secret_value()) == expected
+
+
+def test_e3d_from_settings_without_a_key_raises_value_error() -> None:
+    """012 E3 (d) with I3: the adapter refuses a missing key, naming the variable."""
+    with pytest.raises(ValueError, match="ANTHROPIC_API_KEY"):
+        AnthropicModel.from_settings(Settings())
 
 
 def test_reads_environment_with_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -30,6 +50,7 @@ def test_reads_environment_with_defaults(monkeypatch: pytest.MonkeyPatch) -> Non
 def test_reads_env_file(tmp_path: Path) -> None:
     (tmp_path / ".env").write_text("ANTHROPIC_API_KEY=sk-file\nLOG_LEVEL=DEBUG\n", encoding="utf-8")
     settings = Settings()
+    assert settings.anthropic_api_key is not None
     assert settings.anthropic_api_key.get_secret_value() == "sk-file"
     assert settings.log_level == "DEBUG"
 
@@ -158,6 +179,9 @@ def test_e19_agent_defaults_and_traces_dir() -> None:
     assert settings.long_context_multiplier == 5
     assert settings.traces_dir == Path("out") / "traces"
     assert "traces_dir" not in Settings.model_fields
+    # 012 I8: 'runs_dir' is derived the same way.
+    assert settings.runs_dir == Path("out") / "runs"
+    assert "runs_dir" not in Settings.model_fields
 
 
 def test_e19_prompt_token_limit_accepts_the_hard_ceiling(monkeypatch: pytest.MonkeyPatch) -> None:

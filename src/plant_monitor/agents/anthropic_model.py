@@ -231,12 +231,15 @@ class AnthropicModel:
 
     @classmethod
     def from_settings(cls, settings: Settings) -> AnthropicModel:
+        key = settings.anthropic_api_key
+        if key is None:
+            raise ValueError("ANTHROPIC_API_KEY is not set")
         policy = RetryPolicy(
             max_retries=settings.anthropic_max_retries,
             base_seconds=settings.anthropic_retry_base_seconds,
             cap_seconds=settings.anthropic_retry_cap_seconds,
         )
-        return cls(api_key=settings.anthropic_api_key, model=settings.anthropic_model, policy=policy)
+        return cls(api_key=key, model=settings.anthropic_model, policy=policy)
 
     def _new_client(self) -> anthropic.AsyncAnthropic:
         if self._client_factory is not None:
