@@ -18,11 +18,12 @@ from plant_monitor.telemetry.trace import (
     BudgetStep,
     RunTotals,
     TraceLine,
+    TraceMode,
     budget_exceeded_steps,
     run_totals,
 )
 
-Mode = Literal["agent", "thresholds_only"]
+Mode = TraceMode
 Status = Literal["ok", "aborted", "interrupted"]
 
 STAMP_FORMAT = "%Y%m%dT%H%M%SZ"

@@ -802,6 +802,15 @@ def test_e13_runner_cli_imports_only_its_layers_and_never_anthropic_or_mcp() -> 
     assert imported_roots(path.read_text(encoding="utf-8")) & FORBIDDEN == set()
 
 
+def test_e12_notice_reader_imports_only_domain_and_cases_registry_and_no_sdk() -> None:
+    """013 E12 (R14): Risk: 'notice_reader.py' never reaches 'telemetry', 'anthropic' or 'mcp'."""
+    path = PACKAGE / "cases" / "registry" / "notice_reader.py"
+    source = path.read_text(encoding="utf-8")
+    allowed = ("plant_monitor.domain", "plant_monitor.cases.registry")
+    assert disallowed_modules(source, package_of(path), allowed) == set()
+    assert imported_roots(source) & FORBIDDEN == set()
+
+
 def test_e23_coordinator_step_imports_no_hooks_module() -> None:
     """010 E23 (R15): 'DecisionView' satisfies 'SnapshotView' structurally, so the step needs no import."""
     path = PACKAGE / "runner" / "coordinator_step.py"

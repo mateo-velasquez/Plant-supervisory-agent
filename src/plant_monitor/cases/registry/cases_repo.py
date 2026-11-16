@@ -57,13 +57,21 @@ _CASE_COLUMNS: Final = (
 )
 
 
-_HISTORY_COLUMNS: Final = (
-    "case_id, snapshot_id, state, minimum_severity, raised, gap_units, gap_pct, delay_days, "
-    "bottleneck, clean_streak"
+HISTORY_COLUMNS: Final = (
+    "case_id",
+    "snapshot_id",
+    "state",
+    "minimum_severity",
+    "raised",
+    "gap_units",
+    "gap_pct",
+    "delay_days",
+    "bottleneck",
+    "clean_streak",
 )
 
 
-def _history_from_row(r: sqlite3.Row | tuple[Any, ...]) -> CaseHistoryRow:
+def history_from_row(r: sqlite3.Row | tuple[Any, ...]) -> CaseHistoryRow:
     return CaseHistoryRow(
         case_id=r[0],
         snapshot_id=r[1],
@@ -106,9 +114,10 @@ class SqliteCaseRepository:
 
     def history(self, case_id: str) -> tuple[CaseHistoryRow, ...]:
         rows = self._session.conn.execute(
-            f"SELECT {_HISTORY_COLUMNS} FROM case_history WHERE case_id = ? ORDER BY seq", (case_id,)
+            f"SELECT {', '.join(HISTORY_COLUMNS)} FROM case_history WHERE case_id = ? ORDER BY seq",
+            (case_id,),
         ).fetchall()
-        return tuple(_history_from_row(r) for r in rows)
+        return tuple(history_from_row(r) for r in rows)
 
     def resolved_unreported(self) -> tuple[Case, ...]:
         """Resolved cases not yet reported as resolved, in 'case_order'."""
@@ -124,11 +133,11 @@ class SqliteCaseRepository:
         deviating = tuple(str(s) for s in Severity if is_deviation(s))
         marks = ", ".join("?" for _ in deviating)
         rows = self._session.conn.execute(
-            f"SELECT {_HISTORY_COLUMNS} FROM case_history WHERE case_id = ? "
+            f"SELECT {', '.join(HISTORY_COLUMNS)} FROM case_history WHERE case_id = ? "
             f"AND minimum_severity IN ({marks}) ORDER BY seq DESC LIMIT 1",
             (case_id, *deviating),
         ).fetchall()
-        return next((_history_from_row(r) for r in rows), None)
+        return next((history_from_row(r) for r in rows), None)
 
     def save_case(self, case: Case, row: CaseHistoryRow) -> None:
         Case.model_validate({name: getattr(case, name) for name in Case.model_fields})

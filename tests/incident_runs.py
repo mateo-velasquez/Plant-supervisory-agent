@@ -3,6 +3,7 @@
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from pathlib import Path
 
 from incident_builders import (
     IncidentScenario,
@@ -93,11 +94,14 @@ class IncidentRun:
 
 @contextmanager
 def incident_run(
-    scenario: IncidentScenario | None = None, *, with_ledger: bool = True
+    scenario: IncidentScenario | None = None,
+    *,
+    with_ledger: bool = True,
+    path: str | Path = ":memory:",
 ) -> Iterator[IncidentRun]:
-    """In-memory registry with the IF context; the ledger is omitted when 'with_ledger' is False."""
+    """Registry at 'path' (in memory by default) with the IF context; 'with_ledger' False omits the ledger."""
     ctx = incident_context()
-    with SqliteRegistry(":memory:") as registry:
+    with SqliteRegistry(path) as registry:
         ledger = CauseLedger(registry.causes, registry.cases, ctx.shifts)
         pipeline = ThresholdPipeline.from_registry(registry, ctx, ledger if with_ledger else None)
         yield IncidentRun(registry, ledger, pipeline, scenario or incident_scenario())
