@@ -1,5 +1,7 @@
+import builtins
 import json
 import logging
+import re
 from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -20,6 +22,7 @@ from plant_monitor.telemetry.trace import (
     budget_exceeded_steps,
     build_line,
     read_trace,
+    read_trace_files,
     run_totals,
     trace_path,
 )
@@ -168,6 +171,41 @@ def test_e9_budget_exceeded_steps_list_investigator_then_coordinator_per_line() 
     assert [(s.snapshot_id, s.agent) for s in steps] == [("S004", "investigator"), ("S004", "coordinator")]
     assert budget_exceeded_steps([]) == ()
     assert LoopOutcome.BUDGET_EXCEEDED.value == BUDGET_EXCEEDED_OUTCOME
+
+
+def test_e14_trace_files_come_in_name_order_and_bad_or_absent_ones_are_handled(tmp_path: Path) -> None:
+    """013 E14 (R7, I10): sorted 'trace-*.jsonl', other files ignored, '()' when none, one-line error."""
+    traces = tmp_path / "traces"
+    traces.mkdir()
+    TraceWriter(traces / "trace-20260302T233000Z.jsonl").write_now(_line("S005"))
+    TraceWriter(traces / "trace-20260302T230000Z.jsonl").write_now(_line("S004"))
+    (traces / "notes.txt").write_text("not a trace", encoding="utf-8")
+    files = read_trace_files(traces)
+    assert [f.name for f in files] == ["trace-20260302T230000Z.jsonl", "trace-20260302T233000Z.jsonl"]
+    assert [[entry.snapshot_id for entry in f.lines] for f in files] == [["S004"], ["S005"]]
+
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    assert read_trace_files(empty) == ()
+    assert read_trace_files(tmp_path / "absent") == ()
+
+    bad = tmp_path / "bad"
+    bad.mkdir()
+    (bad / "trace-20260301T000000Z.jsonl").write_text("{broken\n", encoding="utf-8")
+    with pytest.raises(
+        ValueError, match=r"^trace-20260301T000000Z\.jsonl is not a readable trace file \(ValidationError\)$"
+    ):
+        read_trace_files(bad)
+
+
+def test_r13_an_unopenable_trace_file_gives_the_one_line_error(tmp_path: Path) -> None:
+    """013 R13: a trace file that cannot be opened raises the one-line 'ValueError' with the OS error."""
+    (tmp_path / "trace-x.jsonl").mkdir()
+    with pytest.raises(ValueError, match=r"^trace-x\.jsonl is not a readable trace file \((\w+)\)$") as info:
+        read_trace_files(tmp_path)
+    error_class = re.search(r"\((\w+)\)$", str(info.value))
+    assert error_class is not None
+    assert issubclass(getattr(builtins, error_class.group(1)), OSError)
 
 
 def test_abort_outcome_formats_the_error_class() -> None:

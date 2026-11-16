@@ -46,6 +46,8 @@ AgentName = Literal["investigator", "coordinator"]
 AGENTS: tuple[AgentName, ...] = ("investigator", "coordinator")
 
 
+TraceMode = Literal["agent", "thresholds_only"]
+TRACE_GLOB: Final = "trace-*.jsonl"
 BUDGET_EXCEEDED_OUTCOME: Final = "fallback:budget_exceeded"
 
 
@@ -395,6 +397,25 @@ def read_trace(path: Path) -> tuple[TraceLine, ...]:
     """Every line of a trace file, in order."""
     text = path.read_text(encoding="utf-8")
     return tuple(TraceLine.model_validate_json(row) for row in text.split("\n") if row)
+
+
+@dataclass(frozen=True)
+class TraceFile:
+    """One trace file by name, with its lines."""
+
+    name: str
+    lines: tuple[TraceLine, ...]
+
+
+def read_trace_files(directory: Path) -> tuple[TraceFile, ...]:
+    """Every 'trace-*.jsonl' of a directory in name order; a missing directory gives '()'."""
+    files: list[TraceFile] = []
+    for path in sorted(directory.glob(TRACE_GLOB)):
+        try:
+            files.append(TraceFile(name=path.name, lines=read_trace(path)))
+        except (ValueError, OSError) as exc:
+            raise ValueError(f"{path.name} is not a readable trace file ({type(exc).__name__})") from exc
+    return tuple(files)
 
 
 class BudgetStep(BaseModel):

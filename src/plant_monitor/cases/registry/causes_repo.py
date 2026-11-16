@@ -16,10 +16,20 @@ from plant_monitor.domain.enums import Market, Model, Stage
 from .session import Session
 from .session import opt as _opt
 
-_ACTIVE_COLUMNS: Final = (
-    "active_cause_id, categoria, modelo, etapa, mercado, opened_at, opened_bitacora, opened_fragmento, "
-    "lifted_at, lifted_bitacora, lifted_fragmento"
+ACTIVE_COLUMNS: Final = (
+    "active_cause_id",
+    "categoria",
+    "modelo",
+    "etapa",
+    "mercado",
+    "opened_at",
+    "opened_bitacora",
+    "opened_fragmento",
+    "lifted_at",
+    "lifted_bitacora",
+    "lifted_fragmento",
 )
+CITED_COLUMNS: Final = ("case_id", "categoria", "etapa", "bitacora", "fragmento", "set_at", "active_cause_id")
 
 
 class CauseStore(Protocol):
@@ -44,7 +54,18 @@ class CauseStore(Protocol):
     def set_cited(self, case_id: str, cause: CitedCause) -> None: ...
 
 
-def _active_from_row(r: sqlite3.Row | tuple[Any, ...]) -> ActiveCause:
+def cited_from_row(r: sqlite3.Row | tuple[Any, ...]) -> CitedCause:
+    """A 'CitedCause' from a row in 'CITED_COLUMNS' order (the case id is not used)."""
+    return CitedCause(
+        categoria=CauseCategory(r[1]),
+        etapa=Stage(r[2]),
+        evidence=Evidence(bitacora=r[3], fragmento=r[4]),
+        set_at=r[5],
+        active_cause_id=r[6],
+    )
+
+
+def active_from_row(r: sqlite3.Row | tuple[Any, ...]) -> ActiveCause:
     lifted = None if r[8] is None else Evidence(bitacora=r[9], fragmento=r[10])
     return ActiveCause(
         active_cause_id=r[0],
@@ -71,15 +92,16 @@ class SqliteCauseRepository:
 
     def in_force(self) -> tuple[ActiveCause, ...]:
         rows = self._session.conn.execute(
-            f"SELECT {_ACTIVE_COLUMNS} FROM active_causes WHERE lifted_at IS NULL ORDER BY seq"
+            f"SELECT {', '.join(ACTIVE_COLUMNS)} FROM active_causes WHERE lifted_at IS NULL ORDER BY seq"
         ).fetchall()
-        return tuple(_active_from_row(r) for r in rows)
+        return tuple(active_from_row(r) for r in rows)
 
     def get_active(self, active_cause_id: str) -> ActiveCause | None:
         row = self._session.conn.execute(
-            f"SELECT {_ACTIVE_COLUMNS} FROM active_causes WHERE active_cause_id = ?", (active_cause_id,)
+            f"SELECT {', '.join(ACTIVE_COLUMNS)} FROM active_causes WHERE active_cause_id = ?",
+            (active_cause_id,),
         ).fetchone()
-        return None if row is None else _active_from_row(row)
+        return None if row is None else active_from_row(row)
 
     def opened_count(self, snapshot_id: str) -> int:
         row = self._session.conn.execute(
@@ -105,20 +127,11 @@ class SqliteCauseRepository:
         if not case_ids:
             return {}
         rows = self._session.conn.execute(
-            "SELECT case_id, categoria, etapa, bitacora, fragmento, set_at, active_cause_id "
+            f"SELECT {', '.join(CITED_COLUMNS)} "
             f"FROM case_causes WHERE case_id IN ({_placeholders(case_ids)})",
             tuple(case_ids),
         ).fetchall()
-        return {
-            r[0]: CitedCause(
-                categoria=CauseCategory(r[1]),
-                etapa=Stage(r[2]),
-                evidence=Evidence(bitacora=r[3], fragmento=r[4]),
-                set_at=r[5],
-                active_cause_id=r[6],
-            )
-            for r in rows
-        }
+        return {r[0]: cited_from_row(r) for r in rows}
 
     def open(self, cause: ActiveCause) -> None:
         self._session.require_open(cause.opened_at)

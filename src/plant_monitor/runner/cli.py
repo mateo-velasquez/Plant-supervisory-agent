@@ -1,4 +1,4 @@
-"""The 'plant-monitor run' command: top-level composition root of the full-series run (012, ADR-0018)."""
+"""The 'plant-monitor run' and 'plant-monitor trace' commands: the series run and the notice trace."""
 
 import argparse
 import logging
@@ -9,22 +9,27 @@ import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 
 from pydantic import ValidationError
 
 from plant_monitor.agents.anthropic_model import AnthropicModel
 from plant_monitor.agents.model import ModelPort
 from plant_monitor.cases.registry import SqliteRegistry
+from plant_monitor.cases.registry.notice_reader import read_notice
 from plant_monitor.cases.registry.notices import read_deliverables
 from plant_monitor.config import Settings, get_settings
 from plant_monitor.domain.calendar import HeldOutPolicy
 from plant_monitor.domain.models import Shift
+from plant_monitor.domain.notices import ShiftReport
 from plant_monitor.ingestion import DataLoadError
 from plant_monitor.ingestion.arrivals import Arrival, load_arrivals, load_arrivals_until
+from plant_monitor.ingestion.held_out import check_ids
 from plant_monitor.ingestion.plant import load_plan, load_shifts, load_shipments, load_standards
 from plant_monitor.metrics.engine import PlantContext
 from plant_monitor.metrics.tables import ShipmentsTable, StandardsTable
 from plant_monitor.metrics.thresholds import load_thresholds
+from plant_monitor.notify.console import write_safe
 from plant_monitor.notify.file import FileNotifier
 from plant_monitor.runner.agent_pipeline import build_agent_pipeline
 from plant_monitor.runner.outbox import OutboxDispatcher
@@ -41,7 +46,16 @@ from plant_monitor.runner.summary import (
     report_path,
     write_report,
 )
-from plant_monitor.telemetry.trace import TraceLine, TraceWriter, read_trace, trace_path
+from plant_monitor.telemetry.trace import (
+    TRACE_GLOB,
+    TraceFile,
+    TraceWriter,
+    read_trace,
+    read_trace_files,
+    trace_path,
+)
+from plant_monitor.telemetry.trace_query import CorruptTraces, build_notice_trace
+from plant_monitor.telemetry.trace_render import render_notice_trace
 
 _SHIFTS_FILE = "turnos.csv"
 _PLAN_FILE = "plan_produccion.csv"
@@ -49,8 +63,9 @@ _STANDARDS_FILE = "tiempos_estandar.csv"
 _SHIPMENTS_FILE = "embarques.csv"
 _THRESHOLDS_FILE = "umbrales.yaml"
 _ARRIVALS_FILE = "llegadas.csv"
-_TRACE_GLOB = "trace-*.jsonl"
 _COMMAND = "run"
+_TRACE_COMMAND = "trace"
+_UNKNOWN_NOTICE = 1
 _EXIT_CODES = {"ok": 0, "aborted": 2, "interrupted": 130}
 _USAGE_ERROR = 2
 
@@ -75,10 +90,19 @@ def _seconds(text: str) -> float:
     return value
 
 
-def parse_args(argv: Sequence[str] | None) -> RunOptions:
-    """Parse 'run [--thresholds-only] [--until ID] [--speed SECONDS]'; argparse exits on errors."""
+@dataclass(frozen=True)
+class TraceOptions:
+    """The parsed 'trace' command line."""
+
+    notice_id: str
+
+
+def parse_args(argv: Sequence[str] | None) -> RunOptions | TraceOptions:
+    """Parse 'run [--thresholds-only] [--until ID] [--speed SECONDS]' or 'trace NOTICE_ID'."""
     parser = argparse.ArgumentParser(prog="plant-monitor")
     commands = parser.add_subparsers(dest="command", required=True)
+    trace = commands.add_parser(_TRACE_COMMAND, help="show how a stored notice came about")
+    trace.add_argument("notice_id", metavar="NOTICE_ID", help="id of a notice in the registry")
     run = commands.add_parser(_COMMAND, help="process the full series of snapshots")
     run.add_argument("--thresholds-only", action="store_true", help="no model: thresholds and templates only")
     run.add_argument("--until", metavar="SNAPSHOT_ID", help="stop after the first arrival of this snapshot")
@@ -86,6 +110,8 @@ def parse_args(argv: Sequence[str] | None) -> RunOptions:
         "--speed", type=_seconds, default=0.0, metavar="SECONDS", help="pause after each snapshot"
     )
     args = parser.parse_args(argv)
+    if args.command == _TRACE_COMMAND:
+        return TraceOptions(notice_id=args.notice_id)
     mode: Mode = "thresholds_only" if args.thresholds_only else "agent"
     return RunOptions(mode=mode, until=args.until, speed=args.speed)
 
@@ -200,9 +226,7 @@ def _report(settings: Settings, mode: Mode, started: datetime, outcome: RunOutco
     """Build the report from this run's trace, every trace and the registry's deliverables."""
     run_file = trace_path(settings.traces_dir, started)
     run_lines = read_trace(run_file) if run_file.exists() else ()
-    series_lines: list[TraceLine] = []
-    for path in sorted(settings.traces_dir.glob(_TRACE_GLOB)):
-        series_lines.extend(read_trace(path))
+    series_lines = [line for file in read_trace_files(settings.traces_dir) for line in file.lines]
     return build_report(
         mode=mode,
         started_at=started,
@@ -218,12 +242,54 @@ def _fail(message: str) -> int:
     return _USAGE_ERROR
 
 
+def _read_traces(directory: Path) -> tuple[TraceFile, ...] | None:
+    """The trace files of a directory, or None when there are none; errors get the 'traces: ' prefix."""
+    try:
+        files = read_trace_files(directory)
+    except ValueError as exc:
+        raise ValueError(f"traces: {exc}") from exc
+    return files or None
+
+
+def _trace(opts: TraceOptions, settings: Settings) -> int:
+    """Show one stored notice with its trace; read-only, no model (013)."""
+    shifts = load_shifts(settings.plant_dir / _SHIFTS_FILE)
+    policy = HeldOutPolicy.from_calendar(shifts, settings.heldout_first_shift, settings.heldout_open)
+    stored = read_notice(settings.registry_path, opts.notice_id)
+    if stored is None:
+        print(f"unknown notice_id: {opts.notice_id}", file=sys.stderr)
+        return _UNKNOWN_NOTICE
+    if isinstance(stored, ShiftReport):
+        check_ids(
+            policy, snapshots={stored.snapshot_id}, shifts={stored.turno_id}, where=f"report {opts.notice_id}"
+        )
+        news = ", ".join(news.notice_id for news in stored.novedades) or "none"
+        print(f"{opts.notice_id} is a shift report, not a notice; its novedades: {news}", file=sys.stderr)
+        return _UNKNOWN_NOTICE
+    notice = stored.notice
+    where = f"notice {opts.notice_id}"
+    check_ids(
+        policy,
+        snapshots={notice.snapshot_id},
+        shifts={item.bitacora for item in notice.evidencia},
+        where=where,
+    )
+    traces = _read_traces(settings.traces_dir)
+    try:
+        view = build_notice_trace(stored, traces)
+    except CorruptTraces as exc:
+        raise ValueError(f"traces: {exc}") from exc
+    check_ids(policy, snapshots=view.shown_snapshots(), shifts=view.shown_shifts(), where=where)
+    write_safe(render_notice_trace(view) + "\n", sys.stdout)
+    return 0
+
+
 def _run(opts: RunOptions, settings: Settings, deps: CliDeps) -> tuple[RunOutcome, datetime]:
     """Steps 3-8 of 'main': checks, wiring and the run. Raises the setup errors."""
     if opts.mode == "agent" and settings.anthropic_api_key is None:
         raise ValueError("ANTHROPIC_API_KEY is not set (needed in agent mode; use --thresholds-only)")
     # Q-71: a directory with agent-mode traces never gets threshold-only commits.
-    if opts.mode == "thresholds_only" and any(settings.traces_dir.glob(_TRACE_GLOB)):
+    if opts.mode == "thresholds_only" and any(settings.traces_dir.glob(TRACE_GLOB)):
         raise ValueError(
             f"{settings.traces_dir} holds agent-mode traces: resume in agent mode or use a new OUTPUT_DIR"
         )
@@ -254,7 +320,7 @@ def _emit(settings: Settings, opts: RunOptions, started: datetime, outcome: RunO
 
 
 def main(argv: Sequence[str] | None = None, *, deps: CliDeps | None = None) -> int:
-    """Run the command; 0 finished, 2 setup error or aborted run, 130 Ctrl-C."""
+    """Run the command; 0 finished, 1 unknown 'trace' notice_id, 2 setup error or aborted run, 130 Ctrl-C."""
     deps = deps or CliDeps()
     try:
         opts = parse_args(argv)
@@ -266,6 +332,11 @@ def main(argv: Sequence[str] | None = None, *, deps: CliDeps | None = None) -> i
         fields = ", ".join(str(err["loc"][0]).upper() for err in exc.errors() if err["loc"])
         detail = fields or str(exc.errors()[0]["msg"])
         return _fail(f"settings: invalid or missing {detail}")
+    if isinstance(opts, TraceOptions):
+        try:
+            return _trace(opts, settings)
+        except (DataLoadError, ValueError, OSError, sqlite3.Error) as exc:
+            return _fail(str(exc))
     try:
         outcome, started = _run(opts, settings, deps)
     except (DataLoadError, ValueError, OSError, sqlite3.Error) as exc:

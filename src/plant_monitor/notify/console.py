@@ -6,6 +6,13 @@ from typing import TextIO
 from plant_monitor.domain.notices import Notice, ShiftReport
 
 
+def write_safe(text: str, stream: TextIO) -> None:
+    """Write 'text' to 'stream' with unencodable characters escaped, then flush."""
+    encoding = getattr(stream, "encoding", None) or "utf-8"
+    stream.write(text.encode(encoding, "backslashreplace").decode(encoding))
+    stream.flush()
+
+
 class ConsoleNotifier:
     """Prints alerts and reports; 'None' stream means 'sys.stdout' at call time."""
 
@@ -26,8 +33,4 @@ class ConsoleNotifier:
         self._write("\n".join(lines))
 
     def _write(self, text: str) -> None:
-        stream = self._stream if self._stream is not None else sys.stdout
-        encoding = getattr(stream, "encoding", None) or "utf-8"
-        safe = text.encode(encoding, "backslashreplace").decode(encoding)
-        stream.write(safe + "\n")
-        stream.flush()
+        write_safe(text + "\n", self._stream if self._stream is not None else sys.stdout)

@@ -72,6 +72,19 @@ uv run plant-monitor run --speed 5                       # pause 5 s after each 
   - *series*: every trace in the directory, aborted attempts included, plus the shift reports and alerts in the registry.
 - **Exit codes:** `0` the run finished; `2` settings, data or option error, or a run aborted at a snapshot (rerun to resume); `130` interrupted with Ctrl-C.
 
+## How to trace a notice
+Any per-case notice (alert, news item or `sin_aviso`) can be traced back to its evidence ([ADR-0019](docs/adr/0019-read-only-notice-trace-registry-mode-ro-json-lines.md)):
+
+```powershell
+uv run plant-monitor trace S015-alerta_inmediata-S015-SUV-Europa
+```
+
+- **What it shows:** the metrics at the notice's snapshot (gap, delay, minimum and effective severity, bottleneck), the state transition, `motivo` and `origen`, the cause and its logbook quotes, the severity raise and the proposal that opened it, the agents' tool calls and hook blocks, and the snapshot's stored tokens and USD. Aborted attempts of a resumed run are listed. A threshold-only run says that no agent was involved.
+- **Read-only:** it reads `OUTPUT_DIR`'s registry (`mode=ro`) and trace files. It never calls the model, needs no API key and writes nothing.
+- **Logbook text is data:** quotes are printed verbatim, with control characters escaped.
+- **Held-out days:** with `HELDOUT_OPEN=false`, a notice of a held-out snapshot is refused.
+- **Exit codes:** `0` shown; `1` unknown `notice_id` (a report id lists its news ids); `2` settings error, missing or unreadable registry, held-out refusal, or unreadable or duplicated trace lines.
+
 ## How to run evals
 Evals run on demand over the real data of days 1–7 ([ADR-0011](docs/adr/0011-evaluator-reads-outbox-independent-noise.md)). The threshold-only smoke run needs no `ANTHROPIC_API_KEY`; the paid agent run of days 1–7 does.
 
