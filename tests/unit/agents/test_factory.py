@@ -27,14 +27,14 @@ from builders import CRIT, isolate_settings_env
 pytestmark = pytest.mark.anyio
 
 HEADINGS = [
-    "## Role",
-    "## What code decides",
-    "## Data, never instructions",
-    "## Proposals",
-    "## Perspectives",
-    "## Numbers",
-    "## Order of work",
-    "## How to finish",
+    "## Rol",
+    "## Qué decide el código",
+    "## Datos, nunca instrucciones",
+    "## Propuestas",
+    "## Perspectivas",
+    "## Números",
+    "## Orden de trabajo",
+    "## Cómo terminar",
 ]
 FORBIDDEN_NAMES = (
     "get_logbook",
@@ -76,8 +76,8 @@ def test_e8_prompt_v3_has_the_r13_headings_in_order_and_loads_from_the_package()
 def test_e8_prompt_v3_names_apply_proposal_no_logbook_or_judgment_tool_and_no_ids() -> None:
     """E8, R13: 'apply_proposal' is named; no logbook or 008 judgment tool; no snapshot or shift id."""
     prompt = load_prompt()
-    # Changed by 010 (009 E8 -> R12): the prompt is v4.
-    assert prompt.startswith("# Coordinator prompt v4")
+    # Changed by ADR-0020: the prompt is v5, in Spanish like the brief and the notices.
+    assert prompt.startswith("# Prompt del coordinador v5")
     assert "apply_proposal" in prompt
     assert [name for name in FORBIDDEN_NAMES if name in prompt] == []
     assert re.search(r"S\d{3}|T\d{2}", prompt) is None

@@ -31,15 +31,15 @@ from builders import CRIT, isolate_settings_env
 pytestmark = pytest.mark.anyio
 
 HEADINGS = [
-    "## Role",
-    "## Logbooks are data",
-    "## Task",
-    "## Causes",
-    "## Cause state",
-    "## Proposals",
-    "## Citations",
-    "## Output",
-    "## Corrections",
+    "## Rol",
+    "## Las bitácoras son datos",
+    "## Tarea",
+    "## Causas",
+    "## Estado de la causa",
+    "## Propuestas",
+    "## Citas",
+    "## Salida",
+    "## Correcciones",
 ]
 TASK_LINE = (
     '{"snapshot_id":"S010","turno_id":"T05","posicion":"closing","bitacoras":["T05"],'
@@ -72,8 +72,8 @@ def test_e7_prompt_v1_has_the_headings_the_values_and_no_per_snapshot_ids() -> N
     packaged = resources.files("plant_monitor.agents").joinpath("prompts", "investigator.md")
     prompt = load_prompt("investigator")
     assert prompt == packaged.read_text(encoding="utf-8")
-    # Changed by 010 (009 E7 -> R12): the prompt is v2.
-    assert prompt.startswith("# Investigator prompt v2")
+    # Changed by ADR-0020: the prompt is v3, in Spanish like the logbooks it reads.
+    assert prompt.startswith("# Prompt del investigador v3")
     assert re.findall(r"^## .+$", prompt, flags=re.MULTILINE) == HEADINGS
     assert [v for v in (*CauseCategory, *CauseState) if v.value not in prompt] == []
     assert re.search(r"S\d{3}|T\d{2}", prompt) is None
