@@ -418,8 +418,9 @@ def test_e18_mcp_server_imports_only_its_allowed_layers_and_no_anthropic() -> No
 
 
 def test_e18_verbatim_and_errors_import_nothing_from_the_project() -> None:
-    """E18: the two shared 'domain' modules are leaves."""
-    files = [PACKAGE / "domain" / "verbatim.py", PACKAGE / "domain" / "errors.py"]
+    """E18, 014 R14: the shared 'domain' leaf modules import nothing from the project."""
+    files = [PACKAGE / "domain" / name for name in ("verbatim.py", "errors.py", "text.py")]
+    assert [f.name for f in files if not f.exists()] == []
     assert layer_offenders(files, set()) == {}
 
 

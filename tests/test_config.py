@@ -72,6 +72,13 @@ def test_e34_notices_dir_is_derived_from_output_dir_with_no_new_variable() -> No
     assert "notices_dir" not in Settings.model_fields
 
 
+def test_014_e10_html_dir_is_derived_from_output_dir_with_no_new_variable() -> None:
+    """014 E10: 'html_dir' is 'output_dir / html' and not a settings field."""
+    settings = Settings(anthropic_api_key="k", output_dir=Path("out"))
+    assert settings.html_dir == Path("out") / "html"
+    assert "html_dir" not in Settings.model_fields
+
+
 def test_rejects_invalid_effort(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
     monkeypatch.setenv("ANTHROPIC_EFFORT", "turbo")

@@ -45,6 +45,11 @@ def case_id_for(snapshot_id: str, combination: Combination) -> str:
     return f"{snapshot_id}-{combination.modelo}-{combination.mercado}"
 
 
+def case_snapshot_id(case_id: str) -> str:
+    """The opening 'snapshot_id' of a 'case_id' (inverse prefix of 'case_id_for')."""
+    return case_id.split("-", 1)[0]
+
+
 class Case(FrozenModel):
     """One case as of its last evaluated snapshot."""
 

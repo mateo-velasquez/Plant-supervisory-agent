@@ -93,6 +93,11 @@ class Settings(BaseSettings):
         return self.output_dir / "notices"
 
     @property
+    def html_dir(self) -> Path:
+        """HTML pages of the reports and alerts, derived from output_dir."""
+        return self.output_dir / "html"
+
+    @property
     def plant_dir(self) -> Path:
         """Plant files (turnos.csv, plan, standards, shipments), derived from data_dir."""
         return self.data_dir / "planta"
