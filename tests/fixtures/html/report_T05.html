@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Informe de turno T05</title>
+<style>
+body{font-family:system-ui,sans-serif;margin:2rem;max-width:72rem;color:#1a1a1a}
+table{border-collapse:collapse}
+th,td{border:1px solid #999;padding:.25rem .5rem;text-align:left}
+.sev{padding:0 .4rem;border:1px solid #555;border-radius:.2rem;font-weight:bold}
+.sev-ninguna{background:#e9ecef}
+.sev-media{background:#fff3bf}
+.sev-alta{background:#ffc078}
+.sev-critica{background:#c92a2a;color:#fff}
+.peak{outline:2px solid #c92a2a}
+.notice{border-top:1px solid #ccc;padding:.5rem 0}
+.empty{font-style:italic}
+blockquote{margin:.25rem 0;padding-left:.75rem;border-left:3px solid #999}
+figure{margin:.25rem 1rem}
+code{background:#f1f3f5;padding:0 .2rem}
+</style>
+</head>
+<body>
+<nav><a href="index.html">Índice</a></nav>
+<h1>Informe de turno T05</h1>
+<p>Snapshot de cierre: S010</p>
+<h2>Novedades</h2>
+<article class="notice">
+<h3>S005-SUV-Europa</h3>
+<p>Severidad <span class="sev sev-critica">critica</span> · Máxima <span class="sev sev-critica">critica</span> · Estado escalado</p>
+<p>Motivo: bitacora · Origen: agente</p>
+<p class="text">SUV × Europa escaló a crítica por bitácora: auditoría en calidad.</p>
+<p>Causa: retencion_de_calidad · Etapa: calidad</p>
+<p>Evidencia:</p>
+<figure><blockquote>la auditoría de homologación retuvo en calidad las SUV para Europa</blockquote><figcaption>Bitácora T05</figcaption></figure>
+<p>Traza: <code>plant-monitor trace S010-informe_de_turno-S005-SUV-Europa</code></p>
+</article>
+<article class="notice">
+<h3>S009-Pickup-Brasil</h3>
+<p>Severidad <span class="sev sev-media">media</span> · Máxima <span class="sev sev-alta peak">alta</span> <strong>pico</strong> · Estado en_seguimiento</p>
+<p>Motivo: gap · Origen: umbral</p>
+<p class="text">Pickup × Brasil: caso nuevo; pico de alta. Estado en seguimiento, severidad media, máxima alta. Causa no declarada, sin etapa cuello identificada.</p>
+<p>Causa: no_declarada · Etapa: —</p>
+<p>Evidencia: —</p>
+<p>Traza: <code>plant-monitor trace S010-informe_de_turno-S009-Pickup-Brasil</code></p>
+</article>
+<h2>Casos activos</h2>
+<table>
+<thead><tr><th>Caso</th><th>Modelo</th><th>Mercado</th><th>Gap (u)</th><th>Gap (%)</th><th>Retraso (días)</th><th>Severidad</th><th>Máxima</th><th>Estado</th><th>Etapa cuello</th></tr></thead>
+<tbody>
+<tr><td>S005-SUV-Europa</td><td>SUV</td><td>Europa</td><td>-4</td><td>-13.3%</td><td>0</td><td><span class="sev sev-critica">critica</span></td><td><span class="sev sev-critica">critica</span></td><td>escalado</td><td>calidad</td></tr>
+<tr><td>S009-Pickup-Brasil</td><td>Pickup</td><td>Brasil</td><td>-2.5</td><td>—</td><td>—</td><td><span class="sev sev-media">media</span></td><td><span class="sev sev-alta peak">alta</span> <strong>pico</strong></td><td>en_seguimiento</td><td>—</td></tr>
+</tbody>
+</table>
+</body>
+</html>
