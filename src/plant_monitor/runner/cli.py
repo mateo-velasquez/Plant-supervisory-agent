@@ -1,4 +1,4 @@
-"""The 'plant-monitor run' and 'plant-monitor trace' commands: the series run and the notice trace."""
+"""The 'plant-monitor' commands: 'run' the series, 'trace' a notice, 'html' the stored reports."""
 
 import argparse
 import logging
@@ -29,8 +29,10 @@ from plant_monitor.ingestion.plant import load_plan, load_shifts, load_shipments
 from plant_monitor.metrics.engine import PlantContext
 from plant_monitor.metrics.tables import ShipmentsTable, StandardsTable
 from plant_monitor.metrics.thresholds import load_thresholds
+from plant_monitor.notify.atomic import write_atomic
 from plant_monitor.notify.console import write_safe
 from plant_monitor.notify.file import FileNotifier
+from plant_monitor.notify.html import render_site, select_shown
 from plant_monitor.runner.agent_pipeline import build_agent_pipeline
 from plant_monitor.runner.outbox import OutboxDispatcher
 from plant_monitor.runner.pipeline import ThresholdPipeline
@@ -65,6 +67,7 @@ _THRESHOLDS_FILE = "umbrales.yaml"
 _ARRIVALS_FILE = "llegadas.csv"
 _COMMAND = "run"
 _TRACE_COMMAND = "trace"
+_HTML_COMMAND = "html"
 _UNKNOWN_NOTICE = 1
 _EXIT_CODES = {"ok": 0, "aborted": 2, "interrupted": 130}
 _USAGE_ERROR = 2
@@ -97,10 +100,16 @@ class TraceOptions:
     notice_id: str
 
 
-def parse_args(argv: Sequence[str] | None) -> RunOptions | TraceOptions:
-    """Parse 'run [--thresholds-only] [--until ID] [--speed SECONDS]' or 'trace NOTICE_ID'."""
+@dataclass(frozen=True)
+class HtmlOptions:
+    """The parsed 'html' command line."""
+
+
+def parse_args(argv: Sequence[str] | None) -> RunOptions | TraceOptions | HtmlOptions:
+    """Parse 'run [--thresholds-only] [--until ID] [--speed SECONDS]', 'trace NOTICE_ID' or 'html'."""
     parser = argparse.ArgumentParser(prog="plant-monitor")
     commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser(_HTML_COMMAND, help="render the stored reports and alerts as HTML pages")
     trace = commands.add_parser(_TRACE_COMMAND, help="show how a stored notice came about")
     trace.add_argument("notice_id", metavar="NOTICE_ID", help="id of a notice in the registry")
     run = commands.add_parser(_COMMAND, help="process the full series of snapshots")
@@ -112,6 +121,8 @@ def parse_args(argv: Sequence[str] | None) -> RunOptions | TraceOptions:
     args = parser.parse_args(argv)
     if args.command == _TRACE_COMMAND:
         return TraceOptions(notice_id=args.notice_id)
+    if args.command == _HTML_COMMAND:
+        return HtmlOptions()
     mode: Mode = "thresholds_only" if args.thresholds_only else "agent"
     return RunOptions(mode=mode, until=args.until, speed=args.speed)
 
@@ -238,8 +249,27 @@ def _report(settings: Settings, mode: Mode, started: datetime, outcome: RunOutco
 
 
 def _fail(message: str) -> int:
-    print(message, file=sys.stderr)
+    write_safe(message + "\n", sys.stderr)
     return _USAGE_ERROR
+
+
+def _html(settings: Settings) -> int:
+    """Render the stored reports and alerts as HTML pages; read-only, no model (014)."""
+    shifts = load_shifts(settings.plant_dir / _SHIFTS_FILE)
+    policy = HeldOutPolicy.from_calendar(shifts, settings.heldout_first_shift, settings.heldout_open)
+    items = read_deliverables(settings.registry_path)
+    shown, omitted = select_shown(items, policy)
+    pages = render_site(shown)
+    for page in pages:
+        write_atomic(settings.html_dir / page.name, page.data)
+    if omitted > 0:
+        write_safe(
+            f"html: {omitted} held-out or unverifiable items omitted (HELDOUT_OPEN=false)\n", sys.stderr
+        )
+    reports = sum(isinstance(item, ShiftReport) for item in shown)
+    summary = f"html: shift reports {reports}, alerts {len(shown) - reports}, in {settings.html_dir}\n"
+    write_safe(summary, sys.stdout)
+    return 0
 
 
 def _read_traces(directory: Path) -> tuple[TraceFile, ...] | None:
@@ -320,7 +350,7 @@ def _emit(settings: Settings, opts: RunOptions, started: datetime, outcome: RunO
 
 
 def main(argv: Sequence[str] | None = None, *, deps: CliDeps | None = None) -> int:
-    """Run the command; 0 finished, 1 unknown 'trace' notice_id, 2 setup error or aborted run, 130 Ctrl-C."""
+    """Run 'run', 'trace' or 'html'; 0 ok, 1 unknown notice_id, 2 setup error or abort, 130 Ctrl-C."""
     deps = deps or CliDeps()
     try:
         opts = parse_args(argv)
@@ -332,11 +362,14 @@ def main(argv: Sequence[str] | None = None, *, deps: CliDeps | None = None) -> i
         fields = ", ".join(str(err["loc"][0]).upper() for err in exc.errors() if err["loc"])
         detail = fields or str(exc.errors()[0]["msg"])
         return _fail(f"settings: invalid or missing {detail}")
-    if isinstance(opts, TraceOptions):
-        try:
-            return _trace(opts, settings)
-        except (DataLoadError, ValueError, OSError, sqlite3.Error) as exc:
-            return _fail(str(exc))
+    try:
+        match opts:
+            case TraceOptions():
+                return _trace(opts, settings)
+            case HtmlOptions():
+                return _html(settings)
+    except (DataLoadError, ValueError, OSError, sqlite3.Error) as exc:
+        return _fail(str(exc))
     try:
         outcome, started = _run(opts, settings, deps)
     except (DataLoadError, ValueError, OSError, sqlite3.Error) as exc:
