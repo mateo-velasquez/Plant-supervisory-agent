@@ -24,5 +24,6 @@ One file per significant decision: `NNNN-short-title.md`, numbered in order, nev
 | [0018](0018-full-series-cli-resume-by-output-dir-run-summary.md) | Full-series CLI: composition root, resume by output directory, held-out via settings, run summary | Accepted |
 | [0019](0019-read-only-notice-trace-registry-mode-ro-json-lines.md) | Read-only notice trace: registry read `mode=ro` plus JSON lines, no schema change | Accepted |
 | [0020](0020-agent-prompts-in-spanish.md) | Agent prompts in Spanish; identifiers and contract values unchanged | Accepted |
+| [0021](0021-post-run-read-only-html-reports.md) | Post-run read-only HTML reports: standard-library templates, one escape point, CSP, held-out omission | Accepted |
 
 Template: [template.md](template.md)
