@@ -74,6 +74,7 @@ Module-level detail lives in `docs/STRUCTURE.md`.
 | `reviewer` | Review the branch diff; read-only | — | Opus |
 | `design-reviewer` | Review design patterns, coupling and testability of a diff or plan; read-only | — | Opus |
 | `eval-curator` | Build golden cases from days 1–7 | `evals/golden/` | Sonnet |
+| `visual-designer` | Design and polish the live dashboard pages (layout, type, color, readability); presentation only | `src/frontend/` markup, CSS and presentation JS | Opus |
 
 Models are pinned in each agent's frontmatter. Specs and both reviewers stay on Opus: they are the source of truth and the last check. `test-writer` and `eval-curator` run on Sonnet, with the reviewer and `/verify-criteria` checking their output; `domain-implementer` also runs on Sonnet (since 2026-11-08), and tests, types and the reviewer catch its mistakes.
 

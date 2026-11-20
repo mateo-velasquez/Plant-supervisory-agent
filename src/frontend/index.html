@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Monitor de planta</title>
+<link rel="stylesheet" href="/app.css">
+<script src="/dom.js" defer></script>
+<script src="/app.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <div class="mark" aria-hidden="true"></div>
+    <div>
+      <div class="brand-name">Las Acacias</div>
+      <div class="brand-sub">Monitor de producción</div>
+    </div>
+  </div>
+  <nav class="tabs"><a href="/" class="on">Planta</a><a href="/agentes" target="agentes" rel="noopener">Agentes ↗</a></nav>
+  <div class="now" id="now"></div>
+  <div class="status">
+    <span class="live" id="live"><span class="dot"></span><span id="live-text">Conectando</span></span>
+    <span class="live done hidden" id="complete">Serie completa</span>
+  </div>
+</header>
+
+<div class="banners" id="banners"></div>
+
+<section class="timeline panel" aria-label="Línea de tiempo">
+  <div class="timeline-head">
+    <h2>Serie</h2>
+    <div class="legend">
+      <span><i class="k k-done"></i>procesado</span>
+      <span><i class="k k-current"></i>posición actual</span>
+      <span><i class="k k-alert"></i>alerta</span>
+      <span><i class="k k-report"></i>informe emitido</span>
+    </div>
+  </div>
+  <div class="days" id="days"></div>
+  <div class="controls" id="controls" aria-label="Reproducción">
+    <span class="transport">
+      <button type="button" id="back" class="ghost" title="Snapshot anterior">|◀</button>
+      <button type="button" id="play" class="ghost play" title="Reproducir o pausar">▶</button>
+      <button type="button" id="fwd" class="ghost" title="Snapshot siguiente">▶|</button>
+    </span>
+    <input type="range" id="slider" min="0" max="0" value="0" aria-label="Posición">
+    <span class="pos" id="pos"></span>
+    <span class="speeds" id="speeds" aria-label="Velocidad"></span>
+    <button type="button" id="golive" class="ghost">En vivo</button>
+  </div>
+</section>
+
+<section class="kpis five" id="kpis"></section>
+
+<main class="layout">
+  <section class="panel matrix-panel">
+    <div class="panel-head">
+      <h2>Modelo × mercado</h2>
+      <div class="sevscale" aria-label="Escala de severidad">
+        <span class="sv sv-ninguna">ninguna</span><span class="sv sv-baja">baja</span><span class="sv sv-media">media</span><span class="sv sv-alta">alta</span><span class="sv sv-critica">crítica</span>
+      </div>
+    </div>
+    <div class="matrix" id="matrix"></div>
+  </section>
+
+  <aside class="panel feed-panel">
+    <div class="panel-head"><h2>Actividad</h2><span class="muted" id="feed-count"></span></div>
+    <ol class="feed" id="feed"></ol>
+  </aside>
+</main>
+</body>
+</html>

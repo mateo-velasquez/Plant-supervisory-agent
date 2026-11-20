@@ -59,6 +59,9 @@ class Settings(BaseSettings):
     long_context_threshold_tokens: int = Field(default=100000, gt=0)
     long_context_multiplier: Decimal = Field(default=Decimal(5), ge=1)
 
+    # Local port of the dashboard (127.0.0.1 only).
+    dashboard_port: int = Field(default=8765, ge=1, le=65535)
+
     @field_validator("anthropic_api_key", mode="before")
     @classmethod
     def _blank_key_is_none(cls, value: object) -> object:

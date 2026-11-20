@@ -70,6 +70,16 @@ def test_e40d_a_notices_table_without_payload_raises_naming_file_and_column(tmp_
     assert "payload" in str(error.value)
 
 
+def test_e40d_a_registry_without_a_notices_table_keeps_the_lacks_message(tmp_path: Path) -> None:
+    """005 E40, 014 I3: the shared column check still reports 'table notices lacks [...]'."""
+    path = tmp_path / "other.sqlite3"
+    with closing(sqlite3.connect(path)) as conn:
+        conn.execute("CREATE TABLE other (x INTEGER)")
+        conn.commit()
+    with pytest.raises(ValueError, match=r"table notices lacks \["):
+        read_deliverables(path)
+
+
 def test_e40e_a_fresh_registry_has_no_deliverables(tmp_path: Path) -> None:
     path = tmp_path / "fresh.sqlite3"
     with SqliteRegistry(path):

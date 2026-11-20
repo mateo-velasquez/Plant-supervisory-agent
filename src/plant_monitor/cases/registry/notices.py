@@ -2,13 +2,13 @@
 
 import sqlite3
 from collections.abc import Sequence
-from contextlib import closing
 from datetime import datetime
 from pathlib import Path
 from typing import Final
 
 from plant_monitor.domain.notices import Notice, NoticeType, PendingDelivery, ShiftReport, report_id_for
 
+from .readonly import check_columns, open_readonly
 from .session import Session
 
 _KIND_NOTICE = "notice"
@@ -17,15 +17,16 @@ DELIVERABLE_FILTER: Final = "(kind = 'report' OR tipo = 'alerta_inmediata')"
 _READ_COLUMNS: Final = frozenset({"seq", "idx", "kind", "tipo", "payload"})
 
 
+def is_deliverable(item: Notice | ShiftReport) -> bool:
+    """Python mirror of 'DELIVERABLE_FILTER': a report or an immediate alert."""
+    return isinstance(item, ShiftReport) or item.tipo is NoticeType.ALERT
+
+
 def read_deliverables(path: Path) -> tuple[Notice | ShiftReport, ...]:
     """Deliverable rows of a registry file in (seq, idx) order; read-only, never creates the file."""
-    if not path.is_file():
-        raise ValueError(f"{path}: registry not found")
     try:
-        with closing(sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)) as conn:
-            columns = {row[1] for row in conn.execute("PRAGMA table_info(notices)")}
-            if missing := _READ_COLUMNS - columns:
-                raise ValueError(f"{path}: table notices lacks {sorted(missing)}")
+        with open_readonly(path) as conn:
+            check_columns(conn, path, {"notices": _READ_COLUMNS}, lacks_when_missing=True)
             found = conn.execute(
                 f"SELECT kind, payload FROM notices WHERE {DELIVERABLE_FILTER} ORDER BY seq, idx"
             ).fetchall()

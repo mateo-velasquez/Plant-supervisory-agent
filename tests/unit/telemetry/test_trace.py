@@ -198,6 +198,16 @@ def test_e14_trace_files_come_in_name_order_and_bad_or_absent_ones_are_handled(t
         read_trace_files(bad)
 
 
+def test_r7_a_half_written_multibyte_tail_is_dropped_without_raising(tmp_path: Path) -> None:
+    """Risk: 013 R7, 014 R12: a UTF-8 character cut after the last newline must not fail a live read."""
+    path = tmp_path / "trace-20260302T230000Z.jsonl"
+    TraceWriter(path).write_now(_line("S004"))
+    with path.open("ab") as handle:
+        handle.write(b'{"snapshot_id": "S005", "texto": "' + "ñ".encode()[:1])
+    files = read_trace_files(tmp_path, drop_partial_tail=True)
+    assert [[entry.snapshot_id for entry in f.lines] for f in files] == [["S004"]]
+
+
 def test_r13_an_unopenable_trace_file_gives_the_one_line_error(tmp_path: Path) -> None:
     """013 R13: a trace file that cannot be opened raises the one-line 'ValueError' with the OS error."""
     (tmp_path / "trace-x.jsonl").mkdir()

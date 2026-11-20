@@ -13,15 +13,17 @@ from plant_monitor.domain.proposals import LiftProposal, RaiseProposal, SetCause
 from plant_monitor.domain.stored import StoredNotice
 from plant_monitor.telemetry.trace import (
     AgentName,
+    TextBy,
     TraceFile,
     TraceHook,
     TraceLine,
     TraceMode,
     TraceToolCall,
     TraceTotals,
+    index_attempts,
 )
+from plant_monitor.telemetry.trace import text_by as text_by_of
 
-TextBy = Literal["agent", "template", "unknown"]
 OpeningStatus = Literal["found", "no_line", "no_proposal"]
 _APPLY: Final = "apply_proposal"
 _REPORT: Final = "emit_shift_report"
@@ -32,10 +34,6 @@ _ID_ARGS: Final = (_CASE_ARG, _ACTIVE_ARG, _LIFT_ARG)
 _LOGBOOK_ARG: Final = "bitacora"
 _SHIFT_ARGS: Final = ("turno_id", _LOGBOOK_ARG)
 _ITEMS_ARG: Final = "textos"
-
-
-class CorruptTraces(ValueError):
-    """Two committed lines for a snapshot the trace uses; the message has no prefix."""
 
 
 @dataclass(frozen=True)
@@ -225,18 +223,6 @@ def _history(stored: StoredNotice) -> HistoryView:
     )
 
 
-def _pick(
-    files: Sequence[TraceFile], snapshot_id: str
-) -> tuple[tuple[str, TraceLine] | None, tuple[tuple[str, TraceLine], ...]]:
-    """The single committed line of a snapshot and its aborted ones (R7)."""
-    pairs = [(f.name, line) for f in files for line in f.lines if line.snapshot_id == snapshot_id]
-    committed = [pair for pair in pairs if pair[1].status == "committed"]
-    if len(committed) > 1:
-        raise CorruptTraces(f"two committed lines for {snapshot_id} ({committed[0][0]}, {committed[1][0]})")
-    aborted = tuple(pair for pair in pairs if pair[1].status == "aborted")
-    return (committed[0] if committed else None), aborted
-
-
 def _applied(line: TraceLine) -> tuple[tuple[TraceToolCall, ValidatedProposal, Mapping[str, JsonValue]], ...]:
     """Successful 'apply_proposal' calls whose proposal parses (R6 step 1)."""
     if line.investigator is None:
@@ -281,9 +267,9 @@ def _raise_match(line: TraceLine, cause: ActiveCause) -> tuple[TraceToolCall, Ma
     return call, stored
 
 
-def _opening(files: Sequence[TraceFile], cause: ActiveCause) -> Opening:
+def _opening(committed: Mapping[str, tuple[str, TraceLine]], cause: ActiveCause) -> Opening:
     """The raise opening of a cause from its opening snapshot's committed line (R6)."""
-    picked, _ = _pick(files, cause.opened_at)
+    picked = committed.get(cause.opened_at)
     if picked is None:
         return Opening(cause.opened_at, "no_line", None, None, None)
     file, line = picked
@@ -314,19 +300,6 @@ def _concerns(call: TraceToolCall, case_id: str, marked: frozenset[int]) -> bool
     if call.name == _REPORT and case_id in _case_ids(call):
         return True
     return id(call) in marked
-
-
-def _text_by(notice_id: str, line: TraceLine | None, mode: TraceMode) -> TextBy:
-    """Who wrote the text (R9)."""
-    if mode == "thresholds_only":
-        return "template"
-    if line is None:
-        return "unknown"
-    if notice_id in line.notices_agent:
-        return "agent"
-    if notice_id in line.notices_template:
-        return "template"
-    return "unknown"
 
 
 def _line_view(
@@ -377,29 +350,40 @@ def _cited(stored: StoredNotice) -> CitedCause | None:
     return cited
 
 
+def _only(files: Sequence[TraceFile], snapshots: set[str]) -> list[TraceFile]:
+    """The files reduced to the lines of 'snapshots'."""
+    return [TraceFile(f.name, tuple(row for row in f.lines if row.snapshot_id in snapshots)) for f in files]
+
+
 def build_notice_trace(stored: StoredNotice, traces: Sequence[TraceFile] | None) -> NoticeTrace:
     """Join the stored notice with the trace files; 'None' or no files means a threshold-only run."""
     notice = stored.notice
     limit = _seq(stored.order, notice.snapshot_id)
     files = traces or ()
     mode: TraceMode = "agent" if files else "thresholds_only"
-    picked, aborted = _pick(files, notice.snapshot_id)
     linked: list[tuple[ActiveCause, str]] = []
     for cause in stored.causes:
         at = stored.links.get(cause.active_cause_id)
         if at is not None and _seq(stored.order, at) <= limit:
             linked.append((cause, at))
+    # Only the snapshots the view uses are indexed, so a duplicate elsewhere stays harmless (013 R7).
+    # The notice's own snapshot is checked first, so its duplicate is the one reported.
+    own = {notice.snapshot_id}
+    committed, aborted_by = index_attempts(_only(files, own))
+    picked = committed.get(notice.snapshot_id)
+    aborted = aborted_by.get(notice.snapshot_id, ())
+    committed, _ = index_attempts(_only(files, own | {cause.opened_at for cause, _ in linked}))
     causes = tuple(
         CauseView(
             cause=cause,
             linked_at=at,
             lift_shown=cause.lifted_at is not None and _seq(stored.order, cause.lifted_at) <= limit,
-            opening=_opening(files, cause) if files else None,
+            opening=_opening(committed, cause) if files else None,
         )
         for cause, at in linked
     )
     line = None if picked is None else picked[1]
-    text_by = _text_by(notice.notice_id, line, mode)
+    text_by = text_by_of(notice.notice_id, line, mode)
     line_view = (
         None
         if picked is None

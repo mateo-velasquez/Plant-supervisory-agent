@@ -2,7 +2,6 @@
 
 import sqlite3
 from collections.abc import Mapping
-from contextlib import closing
 from pathlib import Path
 from typing import Final
 
@@ -11,6 +10,7 @@ from plant_monitor.domain.stored import StoredNotice
 
 from .cases_repo import HISTORY_COLUMNS, history_from_row
 from .causes_repo import ACTIVE_COLUMNS, CITED_COLUMNS, active_from_row, cited_from_row
+from .readonly import check_columns, open_readonly
 
 _KIND_REPORT: Final = "report"
 _NEEDS: Final[Mapping[str, frozenset[str]]] = {
@@ -25,36 +25,15 @@ _NEEDS: Final[Mapping[str, frozenset[str]]] = {
 
 def read_notice(path: Path, notice_id: str) -> StoredNotice | ShiftReport | None:
     """The stored notice with its registry facts, a report, or None for an unknown id."""
-    if not path.is_file():
-        raise ValueError(f"{path}: registry not found")
     try:
-        with closing(
-            sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True, autocommit=True)
-        ) as conn:
-            conn.execute("BEGIN")
-            try:
-                found = _read(conn, path, notice_id)
-            except BaseException:
-                conn.execute("ROLLBACK")
-                raise
-            conn.execute("COMMIT")
+        with open_readonly(path) as conn:
+            return _read(conn, path, notice_id)
     except sqlite3.Error as error:
         raise ValueError(f"{path}: not a readable registry ({error})") from error
-    return found
-
-
-def _check_columns(conn: sqlite3.Connection, path: Path) -> None:
-    """Every table and column the reader uses must exist."""
-    for table, needed in _NEEDS.items():
-        columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
-        if not columns:
-            raise ValueError(f"{path}: table {table} not found")
-        if missing := needed - columns:
-            raise ValueError(f"{path}: table {table} lacks {sorted(missing)}")
 
 
 def _read(conn: sqlite3.Connection, path: Path, notice_id: str) -> StoredNotice | ShiftReport | None:
-    _check_columns(conn, path)
+    check_columns(conn, path, _NEEDS)
     row = conn.execute("SELECT kind, payload FROM notices WHERE notice_id = ?", (notice_id,)).fetchone()
     if row is None:
         return None

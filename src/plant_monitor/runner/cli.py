@@ -1,4 +1,4 @@
-"""The 'plant-monitor run' and 'plant-monitor trace' commands: the series run and the notice trace."""
+"""The 'plant-monitor run', 'trace' and 'dashboard' commands."""
 
 import argparse
 import logging
@@ -19,6 +19,7 @@ from plant_monitor.cases.registry import SqliteRegistry
 from plant_monitor.cases.registry.notice_reader import read_notice
 from plant_monitor.cases.registry.notices import read_deliverables
 from plant_monitor.config import Settings, get_settings
+from plant_monitor.dashboard.server import DashboardApp, serve_dashboard
 from plant_monitor.domain.calendar import HeldOutPolicy
 from plant_monitor.domain.models import Shift
 from plant_monitor.domain.notices import ShiftReport
@@ -48,13 +49,14 @@ from plant_monitor.runner.summary import (
 )
 from plant_monitor.telemetry.trace import (
     TRACE_GLOB,
+    CorruptTraces,
     TraceFile,
     TraceWriter,
     read_trace,
     read_trace_files,
     trace_path,
 )
-from plant_monitor.telemetry.trace_query import CorruptTraces, build_notice_trace
+from plant_monitor.telemetry.trace_query import build_notice_trace
 from plant_monitor.telemetry.trace_render import render_notice_trace
 
 _SHIFTS_FILE = "turnos.csv"
@@ -65,6 +67,7 @@ _THRESHOLDS_FILE = "umbrales.yaml"
 _ARRIVALS_FILE = "llegadas.csv"
 _COMMAND = "run"
 _TRACE_COMMAND = "trace"
+_DASHBOARD_COMMAND = "dashboard"
 _UNKNOWN_NOTICE = 1
 _EXIT_CODES = {"ok": 0, "aborted": 2, "interrupted": 130}
 _USAGE_ERROR = 2
@@ -97,10 +100,16 @@ class TraceOptions:
     notice_id: str
 
 
-def parse_args(argv: Sequence[str] | None) -> RunOptions | TraceOptions:
-    """Parse 'run [--thresholds-only] [--until ID] [--speed SECONDS]' or 'trace NOTICE_ID'."""
+@dataclass(frozen=True)
+class DashboardOptions:
+    """The parsed 'dashboard' command line: no arguments."""
+
+
+def parse_args(argv: Sequence[str] | None) -> RunOptions | TraceOptions | DashboardOptions:
+    """Parse 'run [--thresholds-only] [--until ID] [--speed SECONDS]', 'trace NOTICE_ID' or 'dashboard'."""
     parser = argparse.ArgumentParser(prog="plant-monitor")
     commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser(_DASHBOARD_COMMAND, help="serve the local read-only live dashboard")
     trace = commands.add_parser(_TRACE_COMMAND, help="show how a stored notice came about")
     trace.add_argument("notice_id", metavar="NOTICE_ID", help="id of a notice in the registry")
     run = commands.add_parser(_COMMAND, help="process the full series of snapshots")
@@ -112,6 +121,8 @@ def parse_args(argv: Sequence[str] | None) -> RunOptions | TraceOptions:
     args = parser.parse_args(argv)
     if args.command == _TRACE_COMMAND:
         return TraceOptions(notice_id=args.notice_id)
+    if args.command == _DASHBOARD_COMMAND:
+        return DashboardOptions()
     mode: Mode = "thresholds_only" if args.thresholds_only else "agent"
     return RunOptions(mode=mode, until=args.until, speed=args.speed)
 
@@ -129,6 +140,7 @@ class CliDeps:
     sleep: Callable[[float], None] = time.sleep
     monotonic: Callable[[], float] = time.monotonic
     now: Callable[[], datetime] = field(default=_utc_now)
+    serve: Callable[[DashboardApp, int, Callable[[int], None]], None] = serve_dashboard
 
 
 def select_arrivals(arrivals: Sequence[Arrival], until: str | None, policy: HeldOutPolicy) -> list[Arrival]:
@@ -238,7 +250,7 @@ def _report(settings: Settings, mode: Mode, started: datetime, outcome: RunOutco
 
 
 def _fail(message: str) -> int:
-    print(message, file=sys.stderr)
+    write_safe(message + "\n", sys.stderr)
     return _USAGE_ERROR
 
 
@@ -284,6 +296,35 @@ def _trace(opts: TraceOptions, settings: Settings) -> int:
     return 0
 
 
+def _dashboard(settings: Settings, deps: CliDeps) -> int:
+    """Serve the live dashboard until Ctrl+C; read-only, no model (014)."""
+    port = settings.dashboard_port
+
+    def on_ready(bound: int) -> None:
+        write_safe(f"dashboard: http://127.0.0.1:{bound}/ (Ctrl+C to stop)\n", sys.stdout)
+
+    try:
+        app = DashboardApp.from_settings(settings)
+    except (DataLoadError, ValueError, OSError) as exc:
+        return _fail(str(exc))
+    ready = False
+
+    def announce(bound: int) -> None:
+        nonlocal ready
+        ready = True
+        on_ready(bound)
+
+    try:
+        deps.serve(app, port, announce)
+    except KeyboardInterrupt:
+        return 0
+    except OSError as exc:
+        if ready:
+            return _fail(f"dashboard: server stopped ({type(exc).__name__})")
+        return _fail(f"dashboard: cannot listen on 127.0.0.1:{port} ({type(exc).__name__})")
+    return 0
+
+
 def _run(opts: RunOptions, settings: Settings, deps: CliDeps) -> tuple[RunOutcome, datetime]:
     """Steps 3-8 of 'main': checks, wiring and the run. Raises the setup errors."""
     if opts.mode == "agent" and settings.anthropic_api_key is None:
@@ -320,7 +361,7 @@ def _emit(settings: Settings, opts: RunOptions, started: datetime, outcome: RunO
 
 
 def main(argv: Sequence[str] | None = None, *, deps: CliDeps | None = None) -> int:
-    """Run the command; 0 finished, 1 unknown 'trace' notice_id, 2 setup error or aborted run, 130 Ctrl-C."""
+    """Run 'run', 'trace' or 'dashboard'; 0 ok, 1 unknown notice_id, 2 setup error or abort, 130 Ctrl-C."""
     deps = deps or CliDeps()
     try:
         opts = parse_args(argv)
@@ -332,6 +373,8 @@ def main(argv: Sequence[str] | None = None, *, deps: CliDeps | None = None) -> i
         fields = ", ".join(str(err["loc"][0]).upper() for err in exc.errors() if err["loc"])
         detail = fields or str(exc.errors()[0]["msg"])
         return _fail(f"settings: invalid or missing {detail}")
+    if isinstance(opts, DashboardOptions):
+        return _dashboard(settings, deps)
     if isinstance(opts, TraceOptions):
         try:
             return _trace(opts, settings)

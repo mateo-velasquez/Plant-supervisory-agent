@@ -14,3 +14,12 @@ def contains_verbatim(text: str, fragment: str) -> bool:
     """True iff 'fragment' occurs in 'text' with whitespace runs collapsed; case-sensitive (Q-36)."""
     needle = normalize_whitespace(fragment)
     return bool(needle) and needle in normalize_whitespace(text)
+
+
+def verbatim_spans(text: str, fragment: str) -> tuple[tuple[int, int], ...]:
+    """Non-overlapping '(start, end)' matches of 'fragment' in 'text'; same rule as 'contains_verbatim'."""
+    words = fragment.split()
+    if not words:
+        return ()
+    pattern = re.compile(r"\s+".join(map(re.escape, words)))
+    return tuple(m.span() for m in pattern.finditer(text))

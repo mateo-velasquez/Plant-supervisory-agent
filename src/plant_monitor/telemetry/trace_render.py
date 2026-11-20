@@ -1,21 +1,15 @@
 """Pure text of a notice trace; every line is escaped so a logbook cannot drive the terminal (013 R12)."""
 
 import json
-import re
 from decimal import Decimal
 from typing import Final
 
 from plant_monitor.domain.numbers import DECIMALS, round_display
+from plant_monitor.domain.text import escape_controls
 from plant_monitor.telemetry.trace import USD_DECIMALS, TraceTotals
 from plant_monitor.telemetry.trace_query import AbortedAttempt, AgentView, CauseView, LineView, NoticeTrace
 
-_CONTROLS: Final = re.compile("[\x00-\x1f\x7f-\x9f]")
 _NONE: Final = "none"
-
-
-def escape_controls(text: str) -> str:
-    """Each C0, DEL and C1 control character becomes '\\xHH'."""
-    return _CONTROLS.sub(lambda match: f"\\x{ord(match.group()):02x}", text)
 
 
 def _number(value: float) -> str:

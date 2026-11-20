@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agentes · Monitor de planta</title>
+<link rel="stylesheet" href="/app.css">
+<script src="/dom.js" defer></script>
+<script src="/agents.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <div class="mark" aria-hidden="true"></div>
+    <div>
+      <div class="brand-name">Las Acacias</div>
+      <div class="brand-sub">Monitor de producción</div>
+    </div>
+  </div>
+  <nav class="tabs"><a href="/">Planta</a><a href="/agentes" class="on">Agentes</a></nav>
+  <div class="now" id="now"></div>
+  <div class="status">
+    <span class="live" id="live"><span class="dot"></span><span id="live-text">Conectando</span></span>
+  </div>
+</header>
+
+<div class="banners" id="banners"></div>
+
+<section class="kpis" id="akpis"></section>
+
+<main class="agents-layout">
+  <aside class="panel steps-panel">
+    <div class="panel-head"><h2>Snapshots</h2><button type="button" id="follow" class="ghost small">Seguir en vivo</button></div>
+    <ol class="steps" id="steps"></ol>
+  </aside>
+  <section class="panel convo-panel">
+    <div class="panel-head"><h2 id="convo-title">Conversación</h2><span class="muted" id="convo-sub"></span></div>
+    <div class="lanes-head">
+      <div class="lane-h code"><span class="av">⚙</span><div><b>Código</b><small>reglas de criterio.md y umbrales</small></div></div>
+      <div class="lane-h inv"><span class="av">🔍</span><div><b>Investigador</b><small>lee bitácoras, propone causas</small></div></div>
+      <div class="lane-h coord"><span class="av">✎</span><div><b>Coordinador</b><small>aplica propuestas, escribe avisos</small></div></div>
+    </div>
+    <div class="convo" id="convo"></div>
+  </section>
+</main>
+</body>
+</html>
