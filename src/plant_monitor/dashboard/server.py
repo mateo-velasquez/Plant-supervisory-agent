@@ -165,6 +165,9 @@ def make_server(app: DashboardApp, port: int) -> ThreadingHTTPServer:
         def send_error(self, code: int, message: str | None = None, explain: str | None = None) -> None:
             """Malformed requests get the same headers and JSON body as every other reply."""
             reply = _error(code, "dashboard: bad request")
+            # Older 3.14 patches leave 'HTTP/0.9' on a bad version, which drops the status line and headers.
+            if self.request_version not in ("HTTP/1.0", "HTTP/1.1"):
+                self.request_version = "HTTP/1.0"
             self.send_response(code)
             for name, value in reply.headers:
                 self.send_header(name, value)
