@@ -418,7 +418,7 @@ def test_e18_mcp_server_imports_only_its_allowed_layers_and_no_anthropic() -> No
 
 
 def test_e18_verbatim_and_errors_import_nothing_from_the_project() -> None:
-    """E18, 014 R14: the shared 'domain' leaf modules import nothing from the project."""
+    """E18, 014 plan (shared 'domain/text.py'): the 'domain' leaf modules import nothing from the project."""
     files = [PACKAGE / "domain" / name for name in ("verbatim.py", "errors.py", "text.py")]
     assert [f.name for f in files if not f.exists()] == []
     assert layer_offenders(files, set()) == {}
@@ -798,7 +798,18 @@ def test_e13_runner_summary_imports_only_domain_runner_telemetry_and_no_sdk() ->
 def test_e13_runner_cli_imports_only_its_layers_and_never_anthropic_or_mcp() -> None:
     """012 E13 (R11): Risk: 'runner/cli.py' may use 'AnthropicModel' but never 'anthropic' or 'mcp'."""
     path = PACKAGE / "runner" / "cli.py"
-    allowed = {"agents", "cases", "config", "domain", "ingestion", "metrics", "notify", "runner", "telemetry"}
+    allowed = {
+        "agents",
+        "cases",
+        "config",
+        "dashboard",
+        "domain",
+        "ingestion",
+        "metrics",
+        "notify",
+        "runner",
+        "telemetry",
+    }
     assert layer_offenders([path], allowed) == {}
     assert imported_roots(path.read_text(encoding="utf-8")) & FORBIDDEN == set()
 
@@ -817,3 +828,42 @@ def test_e23_coordinator_step_imports_no_hooks_module() -> None:
     path = PACKAGE / "runner" / "coordinator_step.py"
     names = project_modules(path.read_text(encoding="utf-8"), package_of(path))
     assert [n for n in names if n.startswith("plant_monitor.hooks")] == []
+
+
+# --- 014 dashboard (E22, R16) ---
+
+DASHBOARD_ALLOWED = tuple(
+    f"plant_monitor.{layer}"
+    for layer in (
+        "domain",
+        "cases.registry.run_reader",
+        "cases.registry.notices",
+        "telemetry",
+        "ingestion",
+        "logbooks",
+        "config",
+        "dashboard",
+    )
+)
+
+
+def test_e22_dashboard_imports_only_its_layers_and_only_the_cli_imports_it() -> None:
+    """014 E22 (R16): 'dashboard' imports allowed layers, no SDK; the CLI imports it."""
+    offenders: dict[str, list[str]] = {}
+    for path in modules_of("dashboard"):
+        source = path.read_text(encoding="utf-8")
+        extra = disallowed_modules(source, package_of(path), DASHBOARD_ALLOWED)
+        extra |= imported_roots(source) & FORBIDDEN
+        if extra:
+            offenders[path.name] = sorted(extra)
+    assert offenders == {}
+    importers = sorted(
+        path.relative_to(PACKAGE).as_posix()
+        for path in PACKAGE.rglob("*.py")
+        if "dashboard" not in path.relative_to(PACKAGE).parts[:1]
+        and any(
+            name.startswith("plant_monitor.dashboard")
+            for name in project_modules(path.read_text(encoding="utf-8"), package_of(path))
+        )
+    )
+    assert importers == ["runner/cli.py"]

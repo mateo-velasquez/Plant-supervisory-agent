@@ -72,13 +72,6 @@ def test_e34_notices_dir_is_derived_from_output_dir_with_no_new_variable() -> No
     assert "notices_dir" not in Settings.model_fields
 
 
-def test_014_e10_html_dir_is_derived_from_output_dir_with_no_new_variable() -> None:
-    """014 E10: 'html_dir' is 'output_dir / html' and not a settings field."""
-    settings = Settings(anthropic_api_key="k", output_dir=Path("out"))
-    assert settings.html_dir == Path("out") / "html"
-    assert "html_dir" not in Settings.model_fields
-
-
 def test_rejects_invalid_effort(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
     monkeypatch.setenv("ANTHROPIC_EFFORT", "turbo")
@@ -276,3 +269,23 @@ def test_e8d_env_example_has_the_line_in_the_multi_agent_block() -> None:
     name = "INVESTIGATOR_OUTPUT_CORRECTIONS=1"
     assert lines.count(name) == 1
     assert start < lines.index(name) < end
+
+
+@pytest.mark.parametrize(("value", "expected"), [(None, 8765), ("9001", 9001), ("0", None), ("70000", None)])
+def test_e20_dashboard_port_default_override_and_bounds(
+    monkeypatch: pytest.MonkeyPatch, value: str | None, expected: int | None
+) -> None:
+    """014 E20 (R1): default 8765, env override, and 0 or 70000 are validation errors."""
+    if value is not None:
+        monkeypatch.setenv("DASHBOARD_PORT", value)
+    if expected is None:
+        with pytest.raises(ValidationError):
+            Settings(anthropic_api_key="k")
+    else:
+        assert Settings(anthropic_api_key="k").dashboard_port == expected
+
+
+def test_e20_env_example_lists_the_dashboard_port() -> None:
+    """014 E20 (R1): '.env.example' has the line 'DASHBOARD_PORT=8765'."""
+    example = Path(__file__).resolve().parents[1] / ".env.example"
+    assert "DASHBOARD_PORT=8765" in example.read_text(encoding="utf-8").splitlines()

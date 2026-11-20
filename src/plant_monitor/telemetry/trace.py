@@ -407,15 +407,59 @@ class TraceFile:
     lines: tuple[TraceLine, ...]
 
 
-def read_trace_files(directory: Path) -> tuple[TraceFile, ...]:
+def read_trace_files(directory: Path, *, drop_partial_tail: bool = False) -> tuple[TraceFile, ...]:
     """Every 'trace-*.jsonl' of a directory in name order; a missing directory gives '()'."""
     files: list[TraceFile] = []
     for path in sorted(directory.glob(TRACE_GLOB)):
         try:
-            files.append(TraceFile(name=path.name, lines=read_trace(path)))
+            if drop_partial_tail:
+                head = path.read_bytes().rpartition(b"\n")[0].decode("utf-8")
+                lines = tuple(TraceLine.model_validate_json(row) for row in head.split("\n") if row)
+            else:
+                lines = read_trace(path)
+            files.append(TraceFile(name=path.name, lines=lines))
         except (ValueError, OSError) as exc:
             raise ValueError(f"{path.name} is not a readable trace file ({type(exc).__name__})") from exc
     return tuple(files)
+
+
+class CorruptTraces(ValueError):
+    """Two committed lines for a snapshot the trace uses; the message has no prefix."""
+
+
+type TextBy = Literal["agent", "template", "unknown"]
+type _Attempt = tuple[str, TraceLine]
+
+
+def index_attempts(
+    files: Sequence[TraceFile],
+) -> tuple[dict[str, _Attempt], dict[str, tuple[_Attempt, ...]]]:
+    """Committed and aborted lines by snapshot in one pass; the first duplicate committed raises."""
+    committed: dict[str, _Attempt] = {}
+    aborted: dict[str, list[_Attempt]] = {}
+    for file in files:
+        for line in file.lines:
+            sid = line.snapshot_id
+            if line.status == "aborted":
+                aborted.setdefault(sid, []).append((file.name, line))
+            elif sid in committed:
+                raise CorruptTraces(f"two committed lines for {sid} ({committed[sid][0]}, {file.name})")
+            else:
+                committed[sid] = (file.name, line)
+    return committed, {sid: tuple(pairs) for sid, pairs in aborted.items()}
+
+
+def text_by(notice_id: str, line: TraceLine | None, mode: TraceMode) -> TextBy:
+    """Who wrote the text (013 R9)."""
+    if mode == "thresholds_only":
+        return "template"
+    if line is None:
+        return "unknown"
+    if notice_id in line.notices_agent:
+        return "agent"
+    if notice_id in line.notices_template:
+        return "template"
+    return "unknown"
 
 
 class BudgetStep(BaseModel):

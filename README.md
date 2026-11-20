@@ -85,19 +85,21 @@ uv run plant-monitor trace S015-alerta_inmediata-S015-SUV-Europa
 - **Held-out days:** with `HELDOUT_OPEN=false`, a notice of a held-out snapshot is refused.
 - **Exit codes:** `0` shown; `1` unknown `notice_id` (a report id lists its news ids); `2` settings error, missing or unreadable registry, held-out refusal, or unreadable or duplicated trace lines.
 
-## How to render the HTML reports
-The stored shift reports and alerts can be rendered as static pages after a run ([ADR-0021](docs/adr/0021-post-run-read-only-html-reports.md)):
+## Live dashboard
+A local web dashboard shows a run while it writes and replays a finished run snapshot by snapshot ([ADR-0021](docs/adr/0021-local-read-only-live-dashboard.md)):
 
 ```powershell
-uv run plant-monitor html
+uv run plant-monitor dashboard        # then open http://127.0.0.1:8765/
 ```
 
-- **Output:** `OUTPUT_DIR/html/` with `index.html` (a timeline of reports and alerts in registry order), one `<turno_id>-informe.html` per shift report and one `<notice_id>.html` per alert. Open `index.html` in a browser.
-- **Each report page** shows the news first (severity, peak, cause, logbook quotes, the `plant-monitor trace` command), then the active-cases table. A shift with no news says "Sin novedades en este turno".
-- **Read-only:** it reads the registry (`mode=ro`), never calls the model and needs no API key. Every page is rendered before the first one is written, so an error writes nothing. Pages are overwritten on each render; stale pages are never deleted.
-- **Logbook text is data:** every value is escaped; pages carry a Content-Security-Policy, embedded CSS, no JavaScript and no network access.
-- **Held-out days:** with `HELDOUT_OPEN=false`, items of held-out shifts or snapshots are left out, and stderr says `html: <k> held-out or unverifiable items omitted (HELDOUT_OPEN=false)`.
-- **Exit codes:** `0` rendered (an empty registry gives only the index); `2` settings error, missing or unreadable registry, or an id outside its pattern.
+- **Two windows:** *Planta* (series timeline, KPIs and model cost, model × market matrix, alerts and shift reports with the agents' texts) and *Agentes* (per snapshot, what the code, the investigator and the coordinator did: logbooks read with the cited fragments highlighted, proposals, hook blocks, texts written, cost).
+- **Live and replay:** while `plant-monitor run` writes to the same `OUTPUT_DIR` (for a demo, add `--speed 5`), the page follows the latest snapshot. Over any run, the ▶/⏸ buttons, the slider and the speed choice replay it from what is stored, without calling the model.
+- **Read-only:** it reads `OUTPUT_DIR`'s registry (`mode=ro`) and trace files, never calls the model, needs no API key and writes nothing.
+- **Port and access:** it listens only on `127.0.0.1`, on `DASHBOARD_PORT` (default 8765), and refuses requests addressed to any other host name.
+- **Logbook text is data:** values reach the page only as text; the pages carry a strict Content-Security-Policy and load nothing from the network.
+- **Held-out days:** with `HELDOUT_OPEN=false`, items of held-out shifts or snapshots are left out and a banner gives the count.
+- **Runs from the repo only:** the frontend lives in `src/frontend/` and is not packaged in the wheel.
+- **Exit codes:** `0` stopped with Ctrl-C; `2` settings error, missing frontend assets, or the port cannot be bound.
 
 ## How to run evals
 Evals run on demand over the real data of days 1–7 ([ADR-0011](docs/adr/0011-evaluator-reads-outbox-independent-noise.md)). The threshold-only smoke run needs no `ANTHROPIC_API_KEY`; the paid agent run of days 1–7 does.
