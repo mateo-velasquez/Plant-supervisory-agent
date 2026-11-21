@@ -7,10 +7,12 @@ from typing import Literal
 from pydantic import JsonValue
 
 from plant_monitor.cases.registry.run_reader import CaseRow, HistoryAt, NoticeAt
+from plant_monitor.dashboard.forecast import active_warnings, cell_forecast
 from plant_monitor.dashboard.payloads import (
     CaseView,
     CauseView,
     Cell,
+    CellForecast,
     Current,
     Day,
     EvidenceView,
@@ -146,13 +148,14 @@ def _cells(view: RunView, calendar: Calendar, at: int, seq_of: Mapping[str, int]
                 etapa=None if item.causa.etapa is None else item.causa.etapa.value,
             )
     positions = [p for p in view.positions() if p <= at]
+    marks = {r.combination: cell_forecast(r) for r in active_warnings(view.rows.forecasts or (), at)}
     cells: list[Cell] = []
     for combo in calendar.combinations:
         candidates = [c for c in view.rows.cases if c.combination == combo and c.case_id in newest]
         chosen = _pick(candidates, newest, seq_of)
         series: list[float | None] = [gaps.get(combo, {}).get(p) for p in positions]
         if chosen is None:
-            cells.append(_cell(combo, "calm", None, series))
+            cells.append(_cell(combo, "calm", None, series, marks.get(combo)))
             continue
         case_row, history = chosen
         row = history.row
@@ -173,7 +176,7 @@ def _cells(view: RunView, calendar: Calendar, at: int, seq_of: Mapping[str, int]
             opened_at=case_row.opened_at,
             resolved_at=row.snapshot_id if resolved else None,
         )
-        cells.append(_cell(combo, "resolved" if resolved else "active", case, series))
+        cells.append(_cell(combo, "resolved" if resolved else "active", case, series, marks.get(combo)))
     return cells
 
 
@@ -199,6 +202,7 @@ def _cell(
     status: Literal["calm", "active", "resolved"],
     case: CaseView | None,
     series: list[float | None],
+    forecast: CellForecast | None,
 ) -> Cell:
     return Cell(
         modelo=str(combo.modelo),
@@ -206,6 +210,7 @@ def _cell(
         status=status,
         case=case,
         series=series,
+        forecast=forecast,
     )
 
 

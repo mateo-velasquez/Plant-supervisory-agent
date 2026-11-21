@@ -33,7 +33,7 @@ _SINKS = (
 _REMOTE_URL = re.compile(r"url\(\s*['\"]?\s*(?:https?:|//)")
 _LINK_SINK = re.compile(r"\.href\s*=(?!=)|window\.open\(")
 _ALLOWED_LINK = re.compile(
-    r"""(?:\.href\s*=\s*|window\.open\(\s*)(?:"/agentes"|`/agentes#\$\{sid\}`)\s*(?:[;,)]|$)"""
+    r"""(?:\.href\s*=\s*|window\.open\(\s*)(?:"/agentes"|`/agentes#\$\{sid\}`|"/pronostico")\s*(?:[;,)]|$)"""
 )
 _SVG_NAMESPACE = re.compile(r"""(["'])http://www\.w3\.org/2000/svg\1""")
 _SID_CHECK = re.compile(r"\^S\[0-9\]\{3\}\$")
@@ -94,7 +94,7 @@ def test_e21_links_use_only_allowed_forms(path: Path) -> None:
         assert _SID_CHECK.search(text), "sid must be checked against /^S[0-9]{3}$/"
 
 
-@pytest.mark.parametrize("name", ["index.html", "agentes.html", "metricas.html"])
+@pytest.mark.parametrize("name", ["index.html", "agentes.html", "metricas.html", "pronostico.html"])
 def test_e21_html_pages_reference_only_allowlisted_assets(name: str) -> None:
     """E21: pages load only ASSETS routes, with no inline script, style or 'on...=' attribute (R15)."""
     html = (_SRC_FRONTEND / name).read_text(encoding="utf-8")
@@ -118,6 +118,37 @@ def test_e19_planta_and_agentes_link_to_the_metricas_window(name: str) -> None:
     html = (_SRC_FRONTEND / name).read_text(encoding="utf-8")
     assert re.search(r"""<a\s+href="/metricas"\s+target="metricas"[^>]*>Métricas ↗</a>""", html)
     assert 'href="/metricas" target="metricas"' in html
+
+
+def test_e23_pronostico_page_loads_exactly_css_dom_and_forecast_js() -> None:
+    """E23 (R18): 'pronostico.html' loads only '/app.css', '/dom.js' and '/forecast.js'."""
+    html = (_SRC_FRONTEND / "pronostico.html").read_text(encoding="utf-8")
+    refs = re.findall(r"""<(?:script|link|img)\b[^>]*?\b(?:src|href)\s*=\s*["']([^"']*)["']""", html, re.I)
+    assert sorted(refs) == ["/app.css", "/dom.js", "/forecast.js"]
+
+
+@pytest.mark.parametrize("name", ["index.html", "agentes.html", "metricas.html"])
+def test_e23_other_pages_link_to_the_pronostico_window(name: str) -> None:
+    """E23 (R18, Q-125): the other three pages hold the 'Pronóstico ↗' link to the 'pronostico' window."""
+    html = (_SRC_FRONTEND / name).read_text(encoding="utf-8")
+    assert '<a href="/pronostico" target="pronostico" rel="noopener">Pronóstico ↗</a>' in html
+
+
+def test_e23_pronostico_page_marks_itself_active_and_links_the_other_three() -> None:
+    """E23 (R18, Q-125): 'pronostico.html' has its own tab active and links Planta, Agentes and Métricas."""
+    html = (_SRC_FRONTEND / "pronostico.html").read_text(encoding="utf-8")
+    assert '<a href="/pronostico" class="on">Pronóstico</a>' in html
+    assert 'target="pronostico"' not in html
+    for href, label in [("/", "Planta"), ("/agentes", "Agentes"), ("/metricas", "Métricas")]:
+        assert f'<a href="{href}">{label}</a>' in html
+
+
+def test_e23_app_js_marker_opens_the_pronostico_window_from_cell_forecast() -> None:
+    """E23 (R16, Q-126): 'app.js' draws the ⚠ from 'cell.forecast' and opens the literal '/pronostico'."""
+    js = (_SRC_FRONTEND / "app.js").read_text(encoding="utf-8")
+    assert 'window.open("/pronostico", "pronostico")' in js
+    assert "cell.forecast" in js
+    assert "⚠" in js
 
 
 def test_e19_missing_metrics_js_raises_value_error_naming_it(

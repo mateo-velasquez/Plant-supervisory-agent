@@ -92,12 +92,20 @@ class CaseView(TypedDict):
     resolved_at: str | None
 
 
+class CellForecast(TypedDict):
+    """The active early warning of a combination (016 R16)."""
+
+    target_level: str
+    label: str
+
+
 class Cell(TypedDict):
     modelo: str
     mercado: str
     status: Literal["calm", "active", "resolved"]
     case: CaseView | None
     series: list[float | None]
+    forecast: CellForecast | None
 
 
 class NoticeItem(TypedDict):
@@ -465,6 +473,110 @@ class MetricsPayload(TypedDict):
     noise: NoiseOk | NoiseInvalid
     accuracy: AccuracyView
     runs: RunsView
+
+
+class ForecastOmitted(TypedDict):
+    snapshots: int
+    notices: int
+    trace_lines: int
+    forecast_rows: int
+
+
+class ForecastHeldOut(TypedDict):
+    open: bool
+    omitted: ForecastOmitted
+
+
+class BasisView(TypedDict):
+    rate: str
+    plan_per_snapshot: str | None
+    window: str
+    threshold: str | None
+
+
+class WarningView(TypedDict):
+    modelo: str
+    mercado: str
+    target_level: str
+    label: str
+    hours: int | float
+    basis: BasisView
+
+
+class Lines(TypedDict):
+    """Threshold lines as gap values (at most 0)."""
+
+    media: float
+    alta: float
+    critica: float
+
+
+class HistoryPoint(TypedDict):
+    seq: int
+    snapshot_id: str
+    gap: float
+    lines: Lines | None
+
+
+class ProjectionPoint(TypedDict):
+    snapshot_id: str
+    time: str
+    gap: float
+    lines: Lines | None
+
+
+class CombinationWarning(TypedDict):
+    target_level: str
+    label: str
+
+
+class ForecastCombination(TypedDict):
+    modelo: str
+    mercado: str
+    status: str | None
+    gap_severity: str | None
+    effective_severity: str | None
+    target_level: str | None
+    history: list[HistoryPoint]
+    projection: list[ProjectionPoint]
+    warning: CombinationWarning | None
+
+
+class AccuracyCounts(TypedDict):
+    fulfilled: int
+    not_fulfilled: int
+    pending: int
+    missed: int
+    no_forecast: int
+
+
+class EpisodeView(TypedDict):
+    modelo: str
+    mercado: str
+    level: str
+    first: str
+    last: str
+    outcome: Literal["fulfilled", "not_fulfilled", "pending"]
+    crossing: str | None
+    lead_hours: int | float | None
+
+
+class AccuracyBlock(TypedDict):
+    counts: AccuracyCounts
+    mean_lead_hours: str | None
+    episodes: list[EpisodeView]
+
+
+class ForecastPayload(TypedDict):
+    at: int
+    latest: int
+    positions: list[int]
+    registry: Literal["ok", "missing"]
+    state: Literal["ok", "unavailable"]
+    heldout: ForecastHeldOut
+    warnings: list[WarningView]
+    combinations: list[ForecastCombination]
+    accuracy: AccuracyBlock
 
 
 class StatePayload(TypedDict):

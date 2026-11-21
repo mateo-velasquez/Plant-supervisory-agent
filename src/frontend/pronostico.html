@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pronóstico · Monitor de planta</title>
+<link rel="stylesheet" href="/app.css">
+<script src="/dom.js" defer></script>
+<script src="/forecast.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <div class="mark" aria-hidden="true"></div>
+    <div>
+      <div class="brand-name">Las Acacias</div>
+      <div class="brand-sub">Monitor de producción</div>
+    </div>
+  </div>
+  <nav class="tabs"><a href="/">Planta</a><a href="/agentes">Agentes</a><a href="/metricas">Métricas</a><a href="/pronostico" class="on">Pronóstico</a></nav>
+  <div class="now" id="now"></div>
+  <div class="status">
+    <button type="button" id="follow" class="ghost small">Seguir en vivo</button>
+    <span class="live" id="live"><span class="dot"></span><span id="live-text">Conectando</span></span>
+  </div>
+</header>
+
+<div class="banners" id="banners"></div>
+
+<main class="forecast" id="forecast">
+  <section class="panel fcwarn-panel" id="warnings"></section>
+  <section class="panel" id="charts"></section>
+  <section class="panel" id="anticipation"></section>
+</main>
+</body>
+</html>

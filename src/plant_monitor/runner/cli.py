@@ -28,11 +28,13 @@ from plant_monitor.ingestion.arrivals import Arrival, load_arrivals, load_arriva
 from plant_monitor.ingestion.held_out import check_ids
 from plant_monitor.ingestion.plant import load_plan, load_shifts, load_shipments, load_standards
 from plant_monitor.metrics.engine import PlantContext
+from plant_monitor.metrics.forecast import ForecastConfig
 from plant_monitor.metrics.tables import ShipmentsTable, StandardsTable
 from plant_monitor.metrics.thresholds import load_thresholds
 from plant_monitor.notify.console import write_safe
 from plant_monitor.notify.file import FileNotifier
 from plant_monitor.runner.agent_pipeline import build_agent_pipeline
+from plant_monitor.runner.forecast_step import ForecastStep
 from plant_monitor.runner.outbox import OutboxDispatcher
 from plant_monitor.runner.pipeline import ThresholdPipeline
 from plant_monitor.runner.ports import PostCommit, SnapshotPipeline
@@ -185,7 +187,13 @@ def _wire_thresholds(
     registry: SqliteRegistry, prepared: Prepared, settings: Settings, deps: CliDeps, opts: RunOptions
 ) -> tuple[SnapshotPipeline, PostCommit]:
     """Threshold-only wiring: no model, no trace."""
-    pipeline = ThresholdPipeline.from_registry(registry, prepared.ctx)
+    config = ForecastConfig(
+        window=settings.early_warning_window_snapshots, horizon=settings.early_warning_horizon_snapshots
+    )
+    forecast = ForecastStep.build(
+        config, registry.forecasts, registry.forecasts, prepared.ctx, prepared.policy
+    )
+    pipeline = ThresholdPipeline.from_registry(registry, prepared.ctx, forecast=forecast)
     outbox = OutboxDispatcher(registry.notices, FileNotifier(settings.notices_dir), deps.now)
     return pipeline, _chain([outbox], deps, opts)
 

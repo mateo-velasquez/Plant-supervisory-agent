@@ -25,7 +25,9 @@ from plant_monitor.mcp_server.client import ToolClient
 from plant_monitor.mcp_server.context import FrameHolder, ToolContext
 from plant_monitor.mcp_server.server import build_server
 from plant_monitor.metrics.engine import PlantContext
+from plant_monitor.metrics.forecast import ForecastConfig
 from plant_monitor.runner.coordinator_step import CoordinatorOutcome, CoordinatorStep
+from plant_monitor.runner.forecast_step import ForecastStep
 from plant_monitor.runner.judgment import JudgmentFactory, SnapshotWriter, judgment_factory
 from plant_monitor.runner.perspectives import case_perspectives
 from plant_monitor.runner.pipeline import SnapshotDecision, ThresholdPipeline
@@ -288,7 +290,11 @@ def build_agent_pipeline(
         long_context_multiplier=settings.long_context_multiplier,
     )
     ledger = CauseLedger(registry.causes, registry.cases, ctx.shifts)
-    steps = ThresholdPipeline.from_registry(registry, ctx, ledger)
+    config = ForecastConfig(
+        window=settings.early_warning_window_snapshots, horizon=settings.early_warning_horizon_snapshots
+    )
+    forecast = ForecastStep.build(config, registry.forecasts, registry.forecasts, ctx, policy)
+    steps = ThresholdPipeline.from_registry(registry, ctx, ledger, forecast=forecast)
     review = InvestigatorStep(
         build_investigator(settings, model, investigator_tools),
         frames,

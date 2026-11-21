@@ -3,7 +3,7 @@
 from collections.abc import Mapping
 from typing import Final
 
-SCHEMA_VERSION: Final = 4
+SCHEMA_VERSION: Final = 5
 _FIRST_VERSION: Final = 2
 
 SCHEMA_V2_BODY: Final = """
@@ -133,8 +133,25 @@ CREATE TABLE logbook_reviews (
 );
 """
 
+MIGRATION_V4_TO_V5_BODY: Final = """
+CREATE TABLE gap_forecasts (
+    seq         INTEGER NOT NULL,
+    snapshot_id TEXT NOT NULL,
+    modelo      TEXT NOT NULL,
+    mercado     TEXT NOT NULL,
+    status      TEXT NOT NULL
+        CHECK (status IN ('warm_up', 'no_target', 'suppressed', 'no_crossing', 'warning')),
+    payload     TEXT NOT NULL,
+    PRIMARY KEY (seq, modelo, mercado)
+);
+"""
+
 # Step that takes a file from the key version to the next one.
-STEPS: Final[Mapping[int, str]] = {2: MIGRATION_V2_TO_V3_BODY, 3: MIGRATION_V3_TO_V4_BODY}
+STEPS: Final[Mapping[int, str]] = {
+    2: MIGRATION_V2_TO_V3_BODY,
+    3: MIGRATION_V3_TO_V4_BODY,
+    4: MIGRATION_V4_TO_V5_BODY,
+}
 
 
 def migration_from(version: int) -> str:

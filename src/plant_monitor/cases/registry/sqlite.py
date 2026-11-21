@@ -12,6 +12,7 @@ from plant_monitor.domain.models import Anomaly, Combination, SnapshotCommit
 from . import schema
 from .cases_repo import SqliteCaseRepository
 from .causes_repo import SqliteCauseRepository
+from .forecasts import SqliteForecastStore
 from .notices import SqliteNoticeStore
 from .releases import SqliteReleaseStore
 from .reviews_repo import SqliteReviewStore
@@ -56,6 +57,7 @@ class SqliteRegistry:
         self.notices = SqliteNoticeStore(self._session)
         self.causes = SqliteCauseRepository(self._session)
         self.reviews = SqliteReviewStore(self._session)
+        self.forecasts = SqliteForecastStore(self._session)
 
     def close(self) -> None:
         self._session.conn.close()

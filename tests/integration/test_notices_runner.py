@@ -179,10 +179,12 @@ def run(
     ctx = plant_context()
     with SqliteRegistry(path) as registry:
         if fail_save_at is None:
-            pipeline: SnapshotPipeline = ThresholdPipeline.from_registry(registry, ctx)
+            pipeline: SnapshotPipeline = ThresholdPipeline.from_registry(registry, ctx, forecast=None)
         else:
             sink = FailingSink(registry.notices, fail_save_at)
-            pipeline = ThresholdPipeline(ctx, registry.releases, registry.cases, registry.cases, sink)
+            pipeline = ThresholdPipeline(
+                ctx, registry.releases, registry.cases, registry.cases, sink, forecast=None
+            )
         if events is not None:
             pipeline = TracingPipeline(pipeline, events)
         store: PendingNotices = registry.notices

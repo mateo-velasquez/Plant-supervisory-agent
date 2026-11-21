@@ -68,7 +68,7 @@ def stored_report(registry: SqliteRegistry, snapshot_id: str) -> ShiftReport:
 def test_e40_mid_snapshot_stores_three_undeliverable_informes_and_marks_nothing(
     registry: SqliteRegistry, ctx: PlantContext
 ) -> None:
-    pipeline = ThresholdPipeline.from_registry(registry, ctx)
+    pipeline = ThresholdPipeline.from_registry(registry, ctx, forecast=None)
     process(registry, pipeline, "S001")
     stored = [n for n in registry.notices.for_snapshot("S001") if isinstance(n, Notice)]
     assert len(stored) == 3
@@ -84,7 +84,7 @@ def test_e40_mid_snapshot_stores_three_undeliverable_informes_and_marks_nothing(
 def test_e40_closing_snapshot_stores_the_pending_report_and_marks_the_report_set(
     registry: SqliteRegistry, ctx: PlantContext
 ) -> None:
-    pipeline = ThresholdPipeline.from_registry(registry, ctx)
+    pipeline = ThresholdPipeline.from_registry(registry, ctx, forecast=None)
     process(registry, pipeline, "S001")
     process(registry, pipeline, "S002")
     report = stored_report(registry, "S002")
@@ -106,7 +106,7 @@ def test_e40_closing_snapshot_stores_the_pending_report_and_marks_the_report_set
 
 def test_e40_pipeline_holds_no_notifier(registry: SqliteRegistry, ctx: PlantContext) -> None:
     """Delivery belongs to the post-commit dispatcher; a notifier in the pipeline could send before commit."""
-    pipeline = ThresholdPipeline.from_registry(registry, ctx)
+    pipeline = ThresholdPipeline.from_registry(registry, ctx, forecast=None)
     held = vars(pipeline).values()
     assert not any(hasattr(part, "alert") or hasattr(part, "report") for part in held)
 
@@ -114,7 +114,7 @@ def test_e40_pipeline_holds_no_notifier(registry: SqliteRegistry, ctx: PlantCont
 def test_e40_shift_close_is_none_at_mid_and_empty_at_closing_after_s001(
     registry: SqliteRegistry, ctx: PlantContext
 ) -> None:
-    process(registry, ThresholdPipeline.from_registry(registry, ctx), "S001")
+    process(registry, ThresholdPipeline.from_registry(registry, ctx, forecast=None), "S001")
     t01 = plant_shifts()[0]
     assert shift_close(t01, ShiftPosition.MID, registry.cases) is None
     assert shift_close(t01, ShiftPosition.CLOSING, registry.cases) == ShiftClose("T01", ())

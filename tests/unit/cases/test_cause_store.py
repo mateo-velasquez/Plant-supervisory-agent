@@ -92,11 +92,11 @@ def make_v2_file(path: Path) -> None:
         )
 
 
-def test_e2a_new_file_is_version_four_with_the_cause_tables_and_reopens(tmp_path: Path) -> None:
+def test_e2a_new_file_is_current_version_with_the_cause_tables_and_reopens(tmp_path: Path) -> None:
     path = tmp_path / "r.sqlite3"
     with SqliteRegistry(path):
         pass
-    assert user_version(path) == 4 == SCHEMA_VERSION
+    assert user_version(path) == SCHEMA_VERSION
     assert table_names(path) >= NEW_TABLES
     with SqliteRegistry(path) as again:
         assert again.causes.in_force() == ()
@@ -108,7 +108,7 @@ def test_e2b_version_two_file_is_migrated_in_place_keeping_its_rows(tmp_path: Pa
     before = {t: dump(path, t) for t in ("cases", "case_history", "notices")}
     with SqliteRegistry(path):
         pass
-    assert user_version(path) == 4
+    assert user_version(path) == SCHEMA_VERSION
     assert {t: dump(path, t) for t in before} == before
     assert table_names(path) >= NEW_TABLES
     assert all(dump(path, t) == [] for t in NEW_TABLES)
@@ -117,7 +117,7 @@ def test_e2b_version_two_file_is_migrated_in_place_keeping_its_rows(tmp_path: Pa
 
 
 @pytest.mark.parametrize("version", [1, 7])
-def test_e2cd_other_versions_raise_naming_file_found_and_four_and_leave_the_file(
+def test_e2cd_other_versions_raise_naming_file_found_and_current_and_leave_the_file(
     tmp_path: Path, version: int
 ) -> None:
     path = tmp_path / "r.sqlite3"
@@ -129,7 +129,7 @@ def test_e2cd_other_versions_raise_naming_file_found_and_four_and_leave_the_file
     message = str(error.value).replace(str(path), "")
     assert path.name in str(error.value)
     assert str(version) in message
-    assert "4" in message
+    assert str(SCHEMA_VERSION) in message
     assert user_version(path) == version
     assert table_names(path) == {"processed_snapshots"}
 

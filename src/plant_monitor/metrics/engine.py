@@ -19,7 +19,7 @@ from plant_monitor.domain.models import (
 )
 from plant_monitor.metrics.bottleneck import bottleneck_stage
 from plant_monitor.metrics.delay import combination_delay
-from plant_monitor.metrics.plan import cumulative_plan, gap_pct
+from plant_monitor.metrics.plan import cumulative_plan, gap_pct, shift_plan
 from plant_monitor.metrics.progress import count_progress
 from plant_monitor.metrics.severity import delay_severity, gap_severity, minimum_severity
 from plant_monitor.metrics.tables import ShipmentsTable, StandardsTable
@@ -38,15 +38,6 @@ class PlantContext:
     thresholds: Thresholds
 
 
-def _shift_plan(plan: Iterable[PlanRow], shift_id: str) -> dict[Combination, int]:
-    """Plan units of 'shift_id' per combination; all 9 combinations present."""
-    totals = dict.fromkeys(all_combinations(), 0)
-    for row in plan:
-        if row.turno_id == shift_id:
-            totals[Combination(modelo=row.modelo, mercado=row.mercado)] += row.unidades_plan
-    return totals
-
-
 def _units_by_combination(units: Iterable[Unit]) -> dict[Combination, list[Unit]]:
     """Snapshot units grouped per combination; all 9 combinations present."""
     groups: dict[Combination, list[Unit]] = {combo: [] for combo in all_combinations()}
@@ -63,7 +54,7 @@ def compute_metrics(
     shift, position = snapshot_position(ctx.shifts, snapshot.snapshot_id)
     progress = count_progress(chain(released_so_far, snapshot.liberadas))
     planned = cumulative_plan(ctx.plan, ctx.shifts, shift.turno_id, position is ShiftPosition.CLOSING)
-    shift_plan = _shift_plan(ctx.plan, shift.turno_id)
+    in_shift = shift_plan(ctx.plan, shift.turno_id)
     units = _units_by_combination(snapshot.unidades)
     at = snapshot.timestamp
     tolerance = ctx.thresholds.demora.tolerancia_minutos
@@ -72,7 +63,7 @@ def compute_metrics(
 
     for combo in all_combinations():
         gap_units = progress[combo] - planned[combo]
-        pct = gap_pct(gap_units, shift_plan[combo])
+        pct = gap_pct(gap_units, in_shift[combo])
         delay_days, beyond_horizon = combination_delay(units[combo], at, ctx.standards, ctx.shipments)
         gap_level = gap_severity(gap_units, pct, ctx.thresholds)
         delay_level = delay_severity(combo.mercado, delay_days, beyond_horizon, ctx.thresholds)

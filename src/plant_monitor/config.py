@@ -62,6 +62,10 @@ class Settings(BaseSettings):
     # Local port of the dashboard (127.0.0.1 only).
     dashboard_port: int = Field(default=8765, ge=1, le=65535)
 
+    # Early-warning gap forecast (016 R10): trend window and look-ahead, in snapshots.
+    early_warning_window_snapshots: int = Field(default=12, ge=2)
+    early_warning_horizon_snapshots: int = Field(default=3, ge=1)
+
     @field_validator("anthropic_api_key", mode="before")
     @classmethod
     def _blank_key_is_none(cls, value: object) -> object:

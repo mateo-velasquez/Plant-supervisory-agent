@@ -2,6 +2,7 @@
 
 from collections.abc import Iterable
 from dataclasses import dataclass
+from datetime import datetime
 
 from plant_monitor.domain.enums import ShiftPosition
 from plant_monitor.domain.models import Shift
@@ -33,6 +34,33 @@ def snapshot_position(shifts: Iterable[Shift], snapshot_id: str) -> tuple[Shift,
         if shift.snapshot_cierre == snapshot_id:
             return shift, ShiftPosition.CLOSING
     raise ValueError(f"snapshot {snapshot_id} is neither a mid nor a closing snapshot in turnos.csv")
+
+
+def scheduled_time(shift: Shift, position: ShiftPosition) -> datetime:
+    """Mid is 'inicio' plus half the shift, closing is 'fin' (016 R4)."""
+    if position is ShiftPosition.CLOSING:
+        return shift.fin
+    return shift.inicio + (shift.fin - shift.inicio) / 2
+
+
+def future_snapshots(
+    shifts: Iterable[Shift], snapshot_id: str, horizon: int
+) -> tuple[tuple[Shift, ShiftPosition, str], ...]:
+    """The next 'horizon' snapshots after 'snapshot_id' in calendar order; ValueError if it is unknown."""
+    ordered = calendar_order(shifts)
+    slots = [
+        slot
+        for shift in ordered
+        for slot in (
+            (shift, ShiftPosition.MID, shift.snapshot_medio),
+            (shift, ShiftPosition.CLOSING, shift.snapshot_cierre),
+        )
+    ]
+    ids = [snapshot for _, _, snapshot in slots]
+    if snapshot_id not in ids:
+        raise ValueError(f"snapshot {snapshot_id} is neither a mid nor a closing snapshot in turnos.csv")
+    start = ids.index(snapshot_id) + 1
+    return tuple(slots[start : start + horizon])
 
 
 @dataclass(frozen=True)

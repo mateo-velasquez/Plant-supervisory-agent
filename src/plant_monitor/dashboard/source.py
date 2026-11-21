@@ -21,6 +21,7 @@ from plant_monitor.dashboard.heldout import (
 )
 from plant_monitor.dashboard.payloads import Cost, HeldOut, OmittedCounts
 from plant_monitor.domain.calendar import HeldOutPolicy, calendar_order
+from plant_monitor.domain.forecast import ForecastRow
 from plant_monitor.domain.models import Combination, Shift, all_combinations
 from plant_monitor.domain.notices import Notice
 from plant_monitor.ingestion.plant import load_plan, load_shifts
@@ -77,6 +78,7 @@ class Omitted:
     snapshots: int
     notices: int
     trace_lines: int
+    forecast_rows: int = 0
 
 
 @dataclass(frozen=True)
@@ -109,7 +111,7 @@ class RunView:
 def load_view(registry_path: Path, traces_dir: Path, policy: HeldOutPolicy) -> RunView:
     """Read the registry and the traces once; 'RegistryBusy' and registry 'ValueError' pass through."""
     raw = read_run_rows(registry_path)
-    rows, deliverables, omitted_snapshots, omitted_notices = _filter_rows(raw, policy)
+    rows, deliverables, omitted_snapshots, omitted_notices, omitted_forecasts = _filter_rows(raw, policy)
     files, trace_error = _read_traces(traces_dir)
     shown = tuple(
         TraceFile(name=f.name, lines=tuple(ln for ln in f.lines if line_shown(ln, policy))) for f in files
@@ -136,7 +138,12 @@ def load_view(registry_path: Path, traces_dir: Path, policy: HeldOutPolicy) -> R
         aborted=aborted,
         trace_error=trace_error,
         mode="agent" if has_files else "thresholds_only",
-        omitted=Omitted(snapshots=omitted_snapshots, notices=omitted_notices, trace_lines=omitted_lines),
+        omitted=Omitted(
+            snapshots=omitted_snapshots,
+            notices=omitted_notices,
+            trace_lines=omitted_lines,
+            forecast_rows=omitted_forecasts,
+        ),
         policy_open=policy.is_open,
     )
 
@@ -153,10 +160,10 @@ def _read_traces(traces_dir: Path) -> tuple[tuple[TraceFile, ...], str | None]:
 
 def _filter_rows(
     raw: RunRows | None, policy: HeldOutPolicy
-) -> tuple[RunRows, tuple[NoticeAt, ...], int, int]:
+) -> tuple[RunRows, tuple[NoticeAt, ...], int, int, int]:
     """The rows the guard lets through, the deliverables among them and the omitted counts."""
     if raw is None:
-        return RunRows(processed=(), cases=(), history=(), notices=()), (), 0, 0
+        return RunRows(processed=(), cases=(), history=(), notices=()), (), 0, 0, 0
     processed = tuple(r for r in raw.processed if _processed_shown(r, policy))
     notices: list[NoticeAt] = []
     deliverables: list[NoticeAt] = []
@@ -170,21 +177,48 @@ def _filter_rows(
                 omitted_notices += 1
         elif _decision_shown(entry.item, policy):
             notices.append(entry)
+    forecasts = (
+        None if raw.forecasts is None else tuple(f for f in raw.forecasts if _forecast_shown(f, policy))
+    )
     rows = RunRows(
         processed=processed,
         cases=tuple(c for c in raw.cases if case_shown(c, policy)),
         history=tuple(h for h in raw.history if history_shown(h, policy)),
         notices=tuple(notices),
+        forecasts=forecasts,
     )
-    return rows, tuple(deliverables), len(raw.processed) - len(processed), omitted_notices
+    omitted_forecasts = (
+        0 if raw.forecasts is None or forecasts is None else len(raw.forecasts) - len(forecasts)
+    )
+    return (
+        rows,
+        tuple(deliverables),
+        len(raw.processed) - len(processed),
+        omitted_notices,
+        omitted_forecasts,
+    )
 
 
 def _processed_shown(row: ProcessedRow, policy: HeldOutPolicy) -> bool:
     """Whether a processed snapshot is not refused and has a well-formed id."""
+    return _snapshot_shown(row.snapshot_id, policy)
+
+
+def _snapshot_shown(snapshot_id: str, policy: HeldOutPolicy) -> bool:
+    """Whether a snapshot id is not refused and is well formed (always true while the guard is open)."""
     return policy.is_open or (
-        _SNAPSHOT_RE.fullmatch(row.snapshot_id) is not None
-        and row.snapshot_id not in policy.refused_snapshots
+        _SNAPSHOT_RE.fullmatch(snapshot_id) is not None and snapshot_id not in policy.refused_snapshots
     )
+
+
+def _forecast_shown(row: ForecastRow, policy: HeldOutPolicy) -> bool:
+    """Whether a forecast row and every snapshot id it names are shown (whole row or nothing)."""
+    ids = [row.snapshot_id, *(p.snapshot_id for p in row.points)]
+    if row.warning is not None:
+        ids.append(row.warning.crossing_snapshot_id)
+    if row.basis is not None:
+        ids.append(row.basis.window_first)
+    return all(_snapshot_shown(i, policy) for i in ids)
 
 
 def _decision_shown(item: object, policy: HeldOutPolicy) -> bool:

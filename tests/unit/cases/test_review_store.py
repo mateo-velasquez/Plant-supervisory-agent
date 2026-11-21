@@ -12,6 +12,7 @@ from plant_monitor.cases.registry.schema import (
     MIGRATION_V2_TO_V3_BODY,
     MIGRATION_V3_TO_V4_BODY,
     SCHEMA_V2_BODY,
+    SCHEMA_VERSION,
 )
 from plant_monitor.cases.reviews import LogbookReview
 from plant_monitor.domain.models import SnapshotCommit
@@ -49,8 +50,12 @@ def dump(path: Path, table: str) -> list[tuple[object, ...]]:
 
 
 def make_old_file(path: Path, version: int) -> None:
-    """A v2 or v3 file from the frozen bodies, holding one case (and one active cause at v3)."""
-    body = SCHEMA_V2_BODY + (MIGRATION_V2_TO_V3_BODY if version == 3 else "")
+    """A v2, v3 or v4 file from the frozen bodies, holding one case (and one active cause from v3)."""
+    body = SCHEMA_V2_BODY
+    if version >= 3:
+        body += MIGRATION_V2_TO_V3_BODY
+    if version >= 4:
+        body += MIGRATION_V3_TO_V4_BODY
     with closing(sqlite3.connect(path, autocommit=True)) as conn:
         conn.executescript(f"BEGIN;\n{body}\nPRAGMA user_version = {version};\nCOMMIT;")
         conn.execute(
@@ -58,7 +63,7 @@ def make_old_file(path: Path, version: int) -> None:
             " 'media', 0, 'S010', NULL, NULL, NULL, NULL)",
             (PL,),
         )
-        if version == 3:
+        if version >= 3:
             conn.execute(
                 "INSERT INTO active_causes (active_cause_id, seq, categoria, modelo, etapa, mercado,"
                 " opened_at, opened_bitacora, opened_fragmento) VALUES"
@@ -73,30 +78,30 @@ def commit(snapshot_id: str) -> SnapshotCommit:
     )
 
 
-def test_e12a_new_file_is_version_four_with_the_reviews_table_and_reopens(tmp_path: Path) -> None:
+def test_e12a_new_file_is_current_version_with_the_reviews_table_and_reopens(tmp_path: Path) -> None:
     path = tmp_path / "r.sqlite3"
     with SqliteRegistry(path):
         pass
-    assert user_version(path) == 4
+    assert user_version(path) == SCHEMA_VERSION
     assert "logbook_reviews" in table_names(path)
     with SqliteRegistry(path) as again:
         assert again.reviews.get(["T05"]) == {}
 
 
-@pytest.mark.parametrize("version", [2, 3])
+@pytest.mark.parametrize("version", [2, 3, 4])
 def test_e12bc_older_files_migrate_in_place_keeping_their_rows(tmp_path: Path, version: int) -> None:
     path = tmp_path / "r.sqlite3"
     make_old_file(path, version)
     before = {t: dump(path, t) for t in table_names(path)}
     with SqliteRegistry(path):
         pass
-    assert user_version(path) == 4
+    assert user_version(path) == SCHEMA_VERSION
     assert {t: dump(path, t) for t in before} == before
     assert dump(path, "logbook_reviews") == []
 
 
 @pytest.mark.parametrize("version", [1, 7])
-def test_e12d_other_versions_raise_naming_file_found_and_four_and_leave_the_file(
+def test_e12d_other_versions_raise_naming_file_found_and_current_and_leave_the_file(
     tmp_path: Path, version: int
 ) -> None:
     path = tmp_path / "r.sqlite3"
@@ -108,7 +113,7 @@ def test_e12d_other_versions_raise_naming_file_found_and_four_and_leave_the_file
     message = str(error.value).replace(str(path), "")
     assert path.name in str(error.value)
     assert str(version) in message
-    assert "4" in message
+    assert str(SCHEMA_VERSION) in message
     assert user_version(path) == version
     assert table_names(path) == {"processed_snapshots"}
 
@@ -117,7 +122,7 @@ def test_e12e_fresh_and_migrated_files_have_the_same_schema(tmp_path: Path) -> N
     fresh = tmp_path / "fresh.sqlite3"
     with SqliteRegistry(fresh):
         pass
-    for version in (2, 3):
+    for version in (2, 3, 4):
         migrated = tmp_path / f"v{version}.sqlite3"
         make_old_file(migrated, version)
         with SqliteRegistry(migrated):
