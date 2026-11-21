@@ -32,7 +32,16 @@ SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "Cache-Control": "no-store",
 }
-ASSET_NAMES = ("index.html", "agentes.html", "app.css", "dom.js", "app.js", "agents.js")
+ASSET_NAMES = (
+    "index.html",
+    "agentes.html",
+    "metricas.html",
+    "app.css",
+    "dom.js",
+    "app.js",
+    "agents.js",
+    "metrics.js",
+)
 
 
 @pytest.fixture(scope="module")
@@ -42,7 +51,7 @@ def th_app(thresholds_dir: Settings) -> DashboardApp:
 
 
 @pytest.mark.parametrize("query", ["at=abc", "at=-1", "at=1234567", "at="])
-@pytest.mark.parametrize("route", ["/api/state", "/api/agents"])
+@pytest.mark.parametrize("route", ["/api/state", "/api/agents", "/api/metrics"])
 def test_e1_invalid_at_is_400(th_app: DashboardApp, route: str, query: str) -> None:
     """014 E1 (R3): a non-number, negative, oversized or blank 'at' gives 400 with the fixed body."""
     status, body = get_json(th_app, f"{route}?{query}")
