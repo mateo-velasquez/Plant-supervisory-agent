@@ -26,5 +26,6 @@ One file per significant decision: `NNNN-short-title.md`, numbered in order, nev
 | [0020](0020-agent-prompts-in-spanish.md) | Agent prompts in Spanish; identifiers and contract values unchanged | Accepted |
 | [0021](0021-local-read-only-live-dashboard.md) | Local read-only live dashboard with replay: stdlib server on 127.0.0.1, stateless `at`, text-node JS, CSP, held-out omission | Accepted |
 | [0022](0022-dashboard-metrics-window-reads-stored-evals.md) | Dashboard metrics window: reads stored evaluations and run reports, live noise through `evaluation`, as of the replay position | Accepted |
+| [0023](0023-early-warning-code-only-gap-forecast-in-dashboard.md) | Early warning as a code-only gap forecast (release rate vs known plan), stored in registry v5 and shown in the Pronóstico window | Accepted |
 
 Template: [template.md](template.md)
