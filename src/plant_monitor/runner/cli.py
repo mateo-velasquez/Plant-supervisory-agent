@@ -38,15 +38,8 @@ from plant_monitor.runner.pipeline import ThresholdPipeline
 from plant_monitor.runner.ports import PostCommit, SnapshotPipeline
 from plant_monitor.runner.post_commit import Pacer, PostCommitChain
 from plant_monitor.runner.series import RunAborted, run_series
-from plant_monitor.runner.summary import (
-    Mode,
-    RunOutcome,
-    RunReport,
-    build_report,
-    render_report,
-    report_path,
-    write_report,
-)
+from plant_monitor.runner.summary import Mode, RunOutcome, build_report, render_report
+from plant_monitor.telemetry.run_report import RunReport, report_path, write_report
 from plant_monitor.telemetry.trace import (
     TRACE_GLOB,
     CorruptTraces,

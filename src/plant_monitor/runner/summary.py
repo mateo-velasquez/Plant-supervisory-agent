@@ -3,108 +3,30 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from decimal import Decimal
-from pathlib import Path
-from typing import Literal, Self
-
-from pydantic import AwareDatetime, BaseModel, ConfigDict, field_serializer
 
 from plant_monitor.domain.notices import Notice, ShiftReport
 from plant_monitor.runner.series import RunSummary
+from plant_monitor.telemetry.run_report import (
+    Arrivals,
+    RunReport,
+    RunScope,
+    SeriesScope,
+    Status,
+    Tokens,
+    report_path,
+)
 from plant_monitor.telemetry.trace import (
+    ISO_Z_FORMAT,
     USD_DECIMALS,
-    AgentName,
-    AgentRunTotals,
-    BudgetStep,
-    RunTotals,
     TraceLine,
     TraceMode,
     budget_exceeded_steps,
     run_totals,
 )
 
+__all__ = ["Mode", "RunOutcome", "build_report", "render_report", "report_path"]
+
 Mode = TraceMode
-Status = Literal["ok", "aborted", "interrupted"]
-
-STAMP_FORMAT = "%Y%m%dT%H%M%SZ"
-ISO_Z_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
-
-
-class Tokens(BaseModel):
-    """Calls, tokens and cost of one scope, as written to the report."""
-
-    model_config = ConfigDict(frozen=True)
-
-    model_calls: int = 0
-    input_tokens: int = 0
-    output_tokens: int = 0
-    cache_read_tokens: int = 0
-    cache_write_5m_tokens: int = 0
-    cache_write_1h_tokens: int = 0
-    usd: Decimal = Decimal(0)
-
-    @field_serializer("usd")
-    def _write_usd(self, value: Decimal) -> float:
-        return float(value.quantize(USD_DECIMALS))
-
-    @classmethod
-    def of(cls, totals: RunTotals | AgentRunTotals) -> Self:
-        """The report's tokens from a trace total."""
-        return cls(
-            model_calls=totals.model_calls,
-            input_tokens=totals.input_tokens,
-            output_tokens=totals.output_tokens,
-            cache_read_tokens=totals.cache_read_tokens,
-            cache_write_5m_tokens=totals.cache_write_5m_tokens,
-            cache_write_1h_tokens=totals.cache_write_1h_tokens,
-            usd=totals.usd,
-        )
-
-
-class Arrivals(BaseModel):
-    """Snapshot ids a run processed and skipped."""
-
-    model_config = ConfigDict(frozen=True)
-
-    processed: tuple[str, ...]
-    skipped: tuple[str, ...]
-
-
-class RunScope(BaseModel):
-    """What this run did, read from its own trace file."""
-
-    model_config = ConfigDict(frozen=True)
-
-    arrivals: Arrivals | None
-    anomalies: int
-    tokens: Tokens
-    by_agent: dict[AgentName, Tokens]
-    budget_exceeded: tuple[BudgetStep, ...]
-
-
-class SeriesScope(BaseModel):
-    """The whole series so far: every trace file and the registry's deliverables."""
-
-    model_config = ConfigDict(frozen=True)
-
-    tokens: Tokens
-    shift_reports: int
-    alerts: int
-
-
-class RunReport(BaseModel):
-    """The run report; the field order is the JSON key order."""
-
-    model_config = ConfigDict(frozen=True)
-
-    mode: Mode
-    status: Status
-    started_at: AwareDatetime
-    duration_seconds: float
-    aborted_at: str | None
-    cause: str | None
-    run: RunScope
-    series: SeriesScope
 
 
 @dataclass(frozen=True)
@@ -192,14 +114,3 @@ def render_report(report: RunReport) -> str:
     steps = ", ".join(f"{s.snapshot_id} {s.agent}" for s in report.run.budget_exceeded)
     lines.append(f"budget exceeded: {steps or 'none'}")
     return "\n".join(lines)
-
-
-def report_path(directory: Path, started: datetime) -> Path:
-    """One file per run, named after the UTC start."""
-    return directory / f"run-{started.astimezone(UTC).strftime(STAMP_FORMAT)}.json"
-
-
-def write_report(report: RunReport, path: Path) -> None:
-    """Write the report as indented JSON, creating the directory."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(report.model_dump_json(indent=2) + "\n", encoding="utf-8")

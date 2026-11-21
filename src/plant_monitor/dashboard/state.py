@@ -21,13 +21,21 @@ from plant_monitor.dashboard.payloads import (
     SnapshotCell,
     StatePayload,
 )
-from plant_monitor.dashboard.source import Calendar, RunView, cost_as_of, heldout_of
+from plant_monitor.dashboard.source import (
+    Calendar,
+    RunView,
+    author_of,
+    cost_as_of,
+    day_label,
+    day_lookup,
+    deliverables_as_of,
+    heldout_of,
+)
 from plant_monitor.domain.cases import CaseState
 from plant_monitor.domain.causes import CauseCategory
 from plant_monitor.domain.enums import Severity
-from plant_monitor.domain.models import Combination, Shift
+from plant_monitor.domain.models import Combination
 from plant_monitor.domain.notices import Notice, ShiftReport, report_id_for
-from plant_monitor.telemetry.trace import text_by
 
 
 def build_state(view: RunView, calendar: Calendar, at: int) -> StatePayload:
@@ -55,11 +63,6 @@ def build_state(view: RunView, calendar: Calendar, at: int) -> StatePayload:
     )
 
 
-def _day_label(shift: Shift) -> str:
-    """'fecha' as stored, or the 'M/D/YYYY' date of 'inicio' when it is empty."""
-    return shift.fecha or f"{shift.inicio.month}/{shift.inicio.day}/{shift.inicio.year}"
-
-
 def _hhmm(value: object) -> str:
     return value.strftime("%H:%M") if hasattr(value, "strftime") else ""
 
@@ -84,7 +87,7 @@ def _current(calendar: Calendar, at: int, seq_of: Mapping[str, int]) -> Current 
         turno=shift.turno,
         inicio=_hhmm(shift.inicio),
         fin=_hhmm(shift.fin),
-        fecha=_day_label(shift),
+        fecha=day_label(shift),
     )
 
 
@@ -92,9 +95,7 @@ def _days(view: RunView, calendar: Calendar, at: int, seq_of: Mapping[str, int])
     """Shifts grouped by day label in calendar order, each with its two snapshot cells."""
     alerts: Counter[str] = Counter()
     reports: set[str] = set()
-    for entry in view.deliverables:
-        if entry.seq > at:
-            continue
+    for entry in deliverables_as_of(view, at):
         if isinstance(entry.item, ShiftReport):
             reports.add(entry.item.snapshot_id)
         else:
@@ -111,9 +112,10 @@ def _days(view: RunView, calendar: Calendar, at: int, seq_of: Mapping[str, int])
             report=snapshot_id in reports,
         )
 
-    days: dict[str, list[ShiftCell]] = {}
+    lookup = day_lookup(calendar)
+    days: dict[str, list[ShiftCell]] = {label: [] for label in lookup.labels}
     for shift in calendar.shifts:
-        days.setdefault(_day_label(shift), []).append(
+        days[lookup.by_shift[shift.turno_id]].append(
             ShiftCell(
                 turno_id=shift.turno_id,
                 turno=shift.turno,
@@ -218,7 +220,7 @@ def _kpis(
     critical = [
         c for c in active if c["case"] is not None and c["case"]["severidad"] == Severity.CRITICAL.value
     ]
-    shown = [e for e in view.deliverables if e.seq <= at]
+    shown = deliverables_as_of(view, at)
     reports = sum(isinstance(e.item, ShiftReport) for e in shown)
     return Kpis(
         active=len(active),
@@ -233,7 +235,7 @@ def _kpis(
 
 
 def _notice_item(view: RunView, entry: NoticeAt, notice: Notice, kind: str) -> NoticeItem:
-    author = text_by(notice.notice_id, view.committed.get(notice.snapshot_id), view.mode)
+    author = author_of(view, notice)
     return NoticeItem(
         kind="alert" if kind == "alert" else "news",
         seq=entry.seq,
@@ -260,9 +262,7 @@ def _notice_item(view: RunView, entry: NoticeAt, notice: Notice, kind: str) -> N
 def _feed(view: RunView, at: int) -> list[NoticeItem | ReportItem]:
     """Deliverables as of 'at', newest first."""
     feed: list[NoticeItem | ReportItem] = []
-    for entry in reversed(view.deliverables):
-        if entry.seq > at:
-            continue
+    for entry in reversed(deliverables_as_of(view, at)):
         item = entry.item
         if isinstance(item, ShiftReport):
             active_rows: list[JsonValue] = [row.model_dump(mode="json") for row in item.casos_activos]

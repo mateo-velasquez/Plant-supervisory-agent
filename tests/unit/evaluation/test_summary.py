@@ -176,6 +176,12 @@ def test_e34a_write_summary_names_the_file_in_utc_and_keeps_the_bytes_clean(tmp_
     assert (data["gating_errors"], data["exit_code"]) == (1, 1)
 
 
+def test_e10_deliverables_counts_alerts_and_reports_and_is_null_when_unset() -> None:
+    """015 E10 (R10): 'evaluate' sets alerts plus reports; a hand-built summary writes null."""
+    assert _e32_summary().to_json()["deliverables"] == 3
+    assert _summary().to_json()["deliverables"] is None
+
+
 def test_e34b_a_naive_timestamp_is_rejected(tmp_path: Path) -> None:
     with pytest.raises(ValueError):
         write_summary(_e32_summary(), tmp_path, datetime(2026, 11, 7, 9, 0))

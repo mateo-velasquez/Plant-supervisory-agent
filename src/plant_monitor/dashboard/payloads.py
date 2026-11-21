@@ -4,6 +4,8 @@ from typing import Literal, TypedDict
 
 from pydantic import JsonValue
 
+from plant_monitor.telemetry.trace import TraceMode
+
 
 class OmittedCounts(TypedDict):
     snapshots: int
@@ -315,6 +317,154 @@ class AgentsPayload(TypedDict):
     kpis: AgentsKpis
     snapshots: list[SnapshotEntry]
     selected: Selected | None
+
+
+class MetricsOmitted(TypedDict):
+    snapshots: int
+    notices: int
+    trace_lines: int
+    evals: int
+    run_reports: int
+
+
+class MetricsHeldOut(TypedDict):
+    open: bool
+    omitted: MetricsOmitted
+
+
+class PointUsd(TypedDict):
+    investigator: str
+    coordinator: str
+
+
+class PointTokens(TypedDict):
+    input: int
+    output: int
+    cache_read: int
+    cache_write_5m: int
+    cache_write_1h: int
+
+
+class CostPoint(TypedDict):
+    """One position's cost; every per-snapshot field is 'None' when the snapshot has no trace line (I7)."""
+
+    seq: int
+    snapshot_id: str
+    usd: PointUsd | None
+    cumulative_usd: str
+    tokens: PointTokens | None
+    cache_pct: str | None
+    latency_ms: int | None
+
+
+class CostTotals(TypedDict):
+    usd: str
+    model_calls: int
+    input: int
+    output: int
+    cache_read: int
+    cache_write_5m: int
+    cache_write_1h: int
+    cache_pct: str | None
+    latency_ms: int
+
+
+class MetricsCost(TypedDict):
+    state: Literal["ok", "thresholds_only", "trace_error"]
+    points: list[CostPoint]
+    unplaced_usd: str | None
+    totals: CostTotals | None
+
+
+class DayBucket(TypedDict):
+    label: str
+    alerts: int
+    reports: int
+    reports_with_news: int
+    reports_without_news: int
+
+
+class Authors(TypedDict):
+    agent: int
+    template: int
+    unknown: int
+
+
+class RepeatView(TypedDict):
+    turno_id: str
+    case_id: str
+    previous_turno_id: str
+
+
+class DuplicateAlertView(TypedDict):
+    case_id: str
+    alerts: int
+
+
+class NoiseOk(TypedDict):
+    state: Literal["ok"]
+    errors: int
+    repeats: list[RepeatView]
+    duplicate_alerts: list[DuplicateAlertView]
+
+
+class NoiseInvalid(TypedDict):
+    state: Literal["invalid"]
+    error: str
+
+
+class SectionView(TypedDict):
+    gated: dict[str, int]
+    not_gated: dict[str, int]
+
+
+class SummaryView(TypedDict):
+    capabilities: list[str]
+    covered_shifts: list[str]
+    sections: dict[str, SectionView]
+    noise_errors: int
+    gating_errors: int
+    exit_code: int
+
+
+class AccuracyView(TypedDict):
+    state: Literal["ok", "none", "omitted"]
+    file: str | None
+    evaluated_at: str | None
+    earlier: int
+    unreadable: int
+    stale: bool | None
+    deliverables: int | None
+    current_deliverables: int | None
+    summary: SummaryView | None
+
+
+class RunItemView(TypedDict):
+    file: str | None
+    mode: TraceMode
+    status: Literal["ok", "aborted", "interrupted", "running"]
+    started_at: str
+    duration_seconds: float | None
+
+
+class RunsView(TypedDict):
+    unreadable: int
+    items: list[RunItemView]
+
+
+class MetricsPayload(TypedDict):
+    at: int
+    latest: int
+    positions: list[int]
+    registry: Literal["ok", "missing"]
+    trace_error: str | None
+    heldout: MetricsHeldOut
+    cost: MetricsCost
+    days: list[DayBucket]
+    authors: Authors
+    noise: NoiseOk | NoiseInvalid
+    accuracy: AccuracyView
+    runs: RunsView
 
 
 class StatePayload(TypedDict):

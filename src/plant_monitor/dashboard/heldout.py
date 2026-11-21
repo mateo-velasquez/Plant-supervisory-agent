@@ -147,12 +147,15 @@ def line_shown(line: TraceLine, policy: HeldOutPolicy) -> bool:
         return True
     if _SNAPSHOT_RE.fullmatch(line.snapshot_id) is None or _SHIFT_RE.fullmatch(line.turno_id) is None:
         return False
+    return json_shown(line.model_dump(mode="json"), policy)
+
+
+def json_shown(value: object, policy: HeldOutPolicy) -> bool:
+    """Whether no string in a decoded JSON value holds a refused snapshot or shift token."""
+    if policy.is_open:
+        return True
     refused = policy.refused_snapshots | policy.refused_shifts
-    return not any(
-        token in refused
-        for text in _strings(line.model_dump(mode="json"))
-        for token in _TOKEN_RE.findall(text)
-    )
+    return not any(token in refused for text in _strings(value) for token in _TOKEN_RE.findall(text))
 
 
 def _strings(value: object) -> Iterator[str]:
