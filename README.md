@@ -33,6 +33,7 @@ One line per decision and why; the full reasoning is in each record. Smaller rul
 | Own agent loop on the Anthropic SDK with our MCP server (proposed) | Full control over hooks, allowlists and cost; testable with a fake model | [ADR-0007](docs/adr/0007-own-agent-loop-with-mcp-client.md) |
 | Content-hash idempotency, unit of work, non-fatal anomalies | The series runs unattended and the held-out days run once, so a quirk must not stop it | [ADR-0008](docs/adr/0008-series-runner-resilience.md) |
 | Coordinator loop: template fallback, notice draft, budget guard, `anyio.run` bridge | A model failure never loses notices or stops the unattended series, and no request crosses the 5× price line | [ADR-0014](docs/adr/0014-coordinator-loop-contract.md) |
+| Early warning as a code-only gap forecast shown in the dashboard, never a notice | `criterio.md` defines no forecast notice and repeats are noise; the release rate against the known plan handles shift plan changes | [ADR-0023](docs/adr/0023-early-warning-code-only-gap-forecast-in-dashboard.md) |
 | Lean spec workflow: anchored reading, size budget, delta re-review, test budget | Cold subagents re-read large specs and tests outgrew the code (98.7% coverage) | [ADR-0012](docs/adr/0012-lean-spec-workflow.md) |
 
 ## Getting started
@@ -110,6 +111,14 @@ A third window, *Métricas* (the "Métricas ↗" link, or `http://127.0.0.1:8765
 - **Accuracy is read, never computed:** the panel shows the newest `eval-*.json` in `OUTPUT_DIR/evals/` written for this registry by `evals/run_eval.py` (see below), as stored. It does not follow the position, and it says "Evaluación desactualizada" when the registry has more alerts and reports than were evaluated. Its "Ruido evaluado" covers the whole registry at evaluation time, so it may differ from live noise.
 - **Runs:** each run report under `OUTPUT_DIR/runs/` with mode, status, start and duration; a trace file with no report reads "En curso o sin informe".
 - **Held-out days:** with the guard closed, an evaluation or run report that names a held-out shift or snapshot is left out whole and counted in the banner.
+
+### Forecast window
+A fourth window, *Pronóstico* (the "Pronóstico ↗" link, or `http://127.0.0.1:8765/pronostico`), warns before a combination's gap crosses its next severity level ([ADR-0023](docs/adr/0023-early-warning-code-only-gap-forecast-in-dashboard.md)):
+
+- **How it projects:** code takes each combination's release rate over the last `EARLY_WARNING_WINDOW_SNAPSHOTS` snapshots (default 12, so the first two days have no forecast) against the known production plan, and looks `EARLY_WARNING_HORIZON_SNAPSHOTS` snapshots ahead (default 3, 12 h). A warning names the snapshot and scheduled time of the crossing, e.g. `S024 · 12:00 (en 8 h)`.
+- **What it shows:** active warnings ordered by hours to crossing, with their basis on hover (rate, plan, window, threshold); a model × market grid of the gap, the dashed projection and the thresholds in units; and **Anticipación**, which scores past warnings as fulfilled, not fulfilled, pending, or crossings with no warning. Planta marks cells with an active warning with a small ⚠.
+- **A forecast, never a decision:** it never changes a severity, a case, a notice, a shift report, the evaluation or what the agents see. Every run stores it in the registry (schema v5), and a forecast error is logged as a WARNING without stopping the run. A registry from before this version reads "Esta corrida no tiene pronósticos".
+- **Held-out days:** with `HELDOUT_OPEN=false` the forecast stops at the last open snapshot, and rows that name a held-out snapshot are left out and counted.
 
 ## How to run evals
 Evals run on demand over the real data of days 1–7 ([ADR-0011](docs/adr/0011-evaluator-reads-outbox-independent-noise.md)). The threshold-only smoke run needs no `ANTHROPIC_API_KEY`; the paid agent run of days 1–7 does.
