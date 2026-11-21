@@ -25,5 +25,6 @@ One file per significant decision: `NNNN-short-title.md`, numbered in order, nev
 | [0019](0019-read-only-notice-trace-registry-mode-ro-json-lines.md) | Read-only notice trace: registry read `mode=ro` plus JSON lines, no schema change | Accepted |
 | [0020](0020-agent-prompts-in-spanish.md) | Agent prompts in Spanish; identifiers and contract values unchanged | Accepted |
 | [0021](0021-local-read-only-live-dashboard.md) | Local read-only live dashboard with replay: stdlib server on 127.0.0.1, stateless `at`, text-node JS, CSP, held-out omission | Accepted |
+| [0022](0022-dashboard-metrics-window-reads-stored-evals.md) | Dashboard metrics window: reads stored evaluations and run reports, live noise through `evaluation`, as of the replay position | Accepted |
 
 Template: [template.md](template.md)

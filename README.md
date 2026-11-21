@@ -101,6 +101,16 @@ uv run plant-monitor dashboard        # then open http://127.0.0.1:8765/
 - **Runs from the repo only:** the frontend lives in `src/frontend/` and is not packaged in the wheel.
 - **Exit codes:** `0` stopped with Ctrl-C; `2` settings error, missing frontend assets, or the port cannot be bound.
 
+### Metrics window
+A third window, *Métricas* (the "Métricas ↗" link, or `http://127.0.0.1:8765/metricas`), shows what the run cost and how well it did ([ADR-0022](docs/adr/0022-dashboard-metrics-window-reads-stored-evals.md)):
+
+- **Per snapshot:** USD by agent with the cumulative cost (its last value equals Planta's cost), tokens (input, output, cache read and writes), the share of the prompt read from cache, and model latency (the sum of model calls, not wall-clock time).
+- **Per day and overall:** alerts and shift reports (with and without news), texts by author (coordinator, template, untraced), and **live noise** (repeated news and duplicate alerts up to the position).
+- **Follows Planta:** it replays at Planta's position over the same browser channel; "Seguir en vivo" detaches it to the latest snapshot and "Seguir a Planta" reattaches it.
+- **Accuracy is read, never computed:** the panel shows the newest `eval-*.json` in `OUTPUT_DIR/evals/` written for this registry by `evals/run_eval.py` (see below), as stored. It does not follow the position, and it says "Evaluación desactualizada" when the registry has more alerts and reports than were evaluated. Its "Ruido evaluado" covers the whole registry at evaluation time, so it may differ from live noise.
+- **Runs:** each run report under `OUTPUT_DIR/runs/` with mode, status, start and duration; a trace file with no report reads "En curso o sin informe".
+- **Held-out days:** with the guard closed, an evaluation or run report that names a held-out shift or snapshot is left out whole and counted in the banner.
+
 ## How to run evals
 Evals run on demand over the real data of days 1–7 ([ADR-0011](docs/adr/0011-evaluator-reads-outbox-independent-noise.md)). The threshold-only smoke run needs no `ANTHROPIC_API_KEY`; the paid agent run of days 1–7 does.
 

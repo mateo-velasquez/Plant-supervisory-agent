@@ -830,6 +830,13 @@ def test_e23_coordinator_step_imports_no_hooks_module() -> None:
     assert [n for n in names if n.startswith("plant_monitor.hooks")] == []
 
 
+def test_e20_summary_file_imports_nothing_from_the_project_but_domain() -> None:
+    """015 E20 (R16): Risk: the leaf reader must not pull the scorer into the dashboard."""
+    path = PACKAGE / "evaluation" / "summary_file.py"
+    assert path.exists()
+    assert layer_offenders([path], {"domain"}) == {}
+
+
 # --- 014 dashboard (E22, R16) ---
 
 DASHBOARD_ALLOWED = tuple(
@@ -843,12 +850,22 @@ DASHBOARD_ALLOWED = tuple(
         "logbooks",
         "config",
         "dashboard",
+        # 015 R16: name-level, so a name added later to these modules is not admitted by default
+        "evaluation.output.RunOutput",
+        "evaluation.noise.count_noise",
+        "evaluation.noise.NoiseScore",
+        "evaluation.summary_file.EVAL_NAME",
+        "evaluation.summary_file.StoredSummary",
+        "evaluation.summary_file.read_summary",
     )
+)
+SCORER_MODULES = tuple(
+    f"plant_monitor.evaluation.{name}" for name in ("scoring", "golden", "causes", "summary")
 )
 
 
-def test_e22_dashboard_imports_only_its_layers_and_only_the_cli_imports_it() -> None:
-    """014 E22 (R16): 'dashboard' imports allowed layers, no SDK; the CLI imports it."""
+def test_e20_dashboard_imports_only_its_layers_and_only_the_cli_imports_it() -> None:
+    """015 E20 (R16; was 014 E22): 'dashboard' imports allowed names, no SDK; only the CLI imports it."""
     offenders: dict[str, list[str]] = {}
     for path in modules_of("dashboard"):
         source = path.read_text(encoding="utf-8")
@@ -867,3 +884,10 @@ def test_e22_dashboard_imports_only_its_layers_and_only_the_cli_imports_it() -> 
         )
     )
     assert importers == ["runner/cli.py"]
+
+
+def test_e20_importing_the_dashboard_server_loads_no_scorer_module(tmp_path: Path) -> None:
+    """015 E20 (R16; Q-118): Risk: the live dashboard must not load the scorer, golden, causes or summary."""
+    loaded = loaded_by_import(tmp_path, "plant_monitor.dashboard.server", (PROJECT,))
+    assert "plant_monitor.dashboard.server" in loaded
+    assert [m for m in loaded if m in SCORER_MODULES] == []

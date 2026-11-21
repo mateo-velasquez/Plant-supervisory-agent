@@ -4,8 +4,12 @@ import re
 from pathlib import Path
 
 import pytest
+import trace_builders
 
-from plant_monitor.dashboard.server import ASSETS, FRONTEND_DIR
+from plant_monitor.config import Settings
+from plant_monitor.dashboard.server import ASSETS, FRONTEND_DIR, DashboardApp
+
+thresholds_dir = trace_builders.thresholds_dir
 
 _SRC_FRONTEND = Path(__file__).resolve().parents[3] / "src" / "frontend"
 _ALLOWED_SUFFIXES = {".html", ".css", ".js"}
@@ -90,7 +94,7 @@ def test_e21_links_use_only_allowed_forms(path: Path) -> None:
         assert _SID_CHECK.search(text), "sid must be checked against /^S[0-9]{3}$/"
 
 
-@pytest.mark.parametrize("name", ["index.html", "agentes.html"])
+@pytest.mark.parametrize("name", ["index.html", "agentes.html", "metricas.html"])
 def test_e21_html_pages_reference_only_allowlisted_assets(name: str) -> None:
     """E21: pages load only ASSETS routes, with no inline script, style or 'on...=' attribute (R15)."""
     html = (_SRC_FRONTEND / name).read_text(encoding="utf-8")
@@ -99,3 +103,29 @@ def test_e21_html_pages_reference_only_allowlisted_assets(name: str) -> None:
     assert re.search(r"<script\b(?![^>]*\bsrc=)[^>]*>", html, re.I) is None
     assert re.search(r"<script\b[^>]*>(?!\s*</script>)", html, re.I) is None
     assert re.search(r"<style\b|\sstyle\s*=|\son[a-z]+\s*=", html, re.I) is None
+
+
+def test_e19_metricas_page_loads_exactly_css_dom_and_metrics_js() -> None:
+    """E19 (R15): 'metricas.html' loads only '/app.css', '/dom.js' and '/metrics.js'."""
+    html = (_SRC_FRONTEND / "metricas.html").read_text(encoding="utf-8")
+    refs = re.findall(r"""<(?:script|link|img)\b[^>]*?\b(?:src|href)\s*=\s*["']([^"']*)["']""", html, re.I)
+    assert sorted(refs) == ["/app.css", "/dom.js", "/metrics.js"]
+
+
+@pytest.mark.parametrize("name", ["index.html", "agentes.html"])
+def test_e19_planta_and_agentes_link_to_the_metricas_window(name: str) -> None:
+    """E19 (R15, Q-101): both 014 pages hold the 'Métricas ↗' link opening the 'metricas' window."""
+    html = (_SRC_FRONTEND / name).read_text(encoding="utf-8")
+    assert re.search(r"""<a\s+href="/metricas"\s+target="metricas"[^>]*>Métricas ↗</a>""", html)
+    assert 'href="/metricas" target="metricas"' in html
+
+
+def test_e19_missing_metrics_js_raises_value_error_naming_it(
+    thresholds_dir: Settings, tmp_path: Path
+) -> None:
+    """E19 (R15): a frontend folder without 'metrics.js' fails with the named message."""
+    for name, _ in ASSETS.values():
+        if name != "metrics.js":
+            (tmp_path / name).write_text("x", encoding="utf-8")
+    with pytest.raises(ValueError, match=r"\Adashboard: frontend asset not found: metrics\.js\Z"):
+        DashboardApp.from_settings(thresholds_dir, frontend_dir=tmp_path)

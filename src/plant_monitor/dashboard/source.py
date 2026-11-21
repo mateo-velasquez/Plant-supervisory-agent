@@ -28,12 +28,14 @@ from plant_monitor.telemetry.trace import (
     TRACE_GLOB,
     USD_DECIMALS,
     CorruptTraces,
+    TextBy,
     TraceFile,
     TraceLine,
     TraceMode,
     index_attempts,
     read_trace_files,
     run_totals,
+    text_by,
 )
 
 SHIFTS_FILE: Final = "turnos.csv"
@@ -216,16 +218,57 @@ def cost_as_of(view: RunView, at: int) -> Cost | None:
     """'run_totals' over the lines as of 'at'; at 'latest' also lines of snapshots that never committed."""
     if view.trace_error:
         return None
-    seq_of = {row.snapshot_id: row.seq for row in view.rows.processed}
-    latest = view.resolve_at(None)
-    lines = [
-        line
-        for _, line in view.lines
-        if at == latest or (line.snapshot_id in seq_of and seq_of[line.snapshot_id] <= at)
-    ]
-    totals = run_totals(lines)
+    totals = run_totals(lines_as_of(view, at))
     return Cost(
         usd=format_usd(totals.usd),
         model_calls=totals.model_calls,
         tokens=totals.input_tokens + totals.output_tokens,
     )
+
+
+def lines_as_of(view: RunView, at: int) -> list[TraceLine]:
+    """Every line at 'latest'; else the lines of shown positions up to 'at'."""
+    seq_of = {row.snapshot_id: row.seq for row in view.rows.processed}
+    latest = view.resolve_at(None)
+    return [
+        line
+        for _, line in view.lines
+        if at == latest or (line.snapshot_id in seq_of and seq_of[line.snapshot_id] <= at)
+    ]
+
+
+def day_label(shift: Shift) -> str:
+    """'fecha' as stored, or the 'M/D/YYYY' date of 'inicio' when it is empty."""
+    return shift.fecha or f"{shift.inicio.month}/{shift.inicio.day}/{shift.inicio.year}"
+
+
+def deliverables_as_of(view: RunView, at: int) -> tuple[NoticeAt, ...]:
+    """The deliverables with 'seq' up to 'at', in order."""
+    return tuple(entry for entry in view.deliverables if entry.seq <= at)
+
+
+def author_of(view: RunView, notice: Notice) -> TextBy:
+    """Who wrote the text of 'notice', from its snapshot's committed trace line."""
+    return text_by(notice.notice_id, view.committed.get(notice.snapshot_id), view.mode)
+
+
+@dataclass(frozen=True)
+class DayLookup:
+    """Day labels in calendar order and the label of each snapshot and shift."""
+
+    labels: tuple[str, ...]
+    by_snapshot: Mapping[str, str]
+    by_shift: Mapping[str, str]
+
+
+def day_lookup(calendar: Calendar) -> DayLookup:
+    """The day label of every shown shift and of its two snapshots."""
+    by_snapshot: dict[str, str] = {}
+    by_shift: dict[str, str] = {}
+    for shift in calendar.shifts:
+        label = day_label(shift)
+        by_shift[shift.turno_id] = label
+        by_snapshot[shift.snapshot_medio] = label
+        by_snapshot[shift.snapshot_cierre] = label
+    labels = tuple(dict.fromkeys(by_shift.values()))
+    return DayLookup(labels=labels, by_snapshot=by_snapshot, by_shift=by_shift)

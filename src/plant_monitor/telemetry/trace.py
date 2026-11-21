@@ -1,6 +1,7 @@
 """Trace records of the agent loop and the run's JSON-lines trace file (R13, R14)."""
 
 import logging
+import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
@@ -48,6 +49,9 @@ AGENTS: tuple[AgentName, ...] = ("investigator", "coordinator")
 
 TraceMode = Literal["agent", "thresholds_only"]
 TRACE_GLOB: Final = "trace-*.jsonl"
+STAMP_FORMAT: Final = "%Y%m%dT%H%M%SZ"
+ISO_Z_FORMAT: Final = "%Y-%m-%dT%H:%M:%SZ"
+TRACE_NAME: Final = re.compile(r"trace-(?P<stamp>[0-9]{8}T[0-9]{6}Z)\.jsonl")
 BUDGET_EXCEEDED_OUTCOME: Final = "fallback:budget_exceeded"
 
 
@@ -361,7 +365,7 @@ def abort_outcome(error: BaseException) -> str:
 
 def trace_path(directory: Path, started: datetime) -> Path:
     """One file per run, named after the UTC start."""
-    return directory / f"trace-{started.astimezone(UTC).strftime('%Y%m%dT%H%M%SZ')}.jsonl"
+    return directory / f"trace-{started.astimezone(UTC).strftime(STAMP_FORMAT)}.jsonl"
 
 
 class TraceWriter:

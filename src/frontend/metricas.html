@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Métricas · Monitor de planta</title>
+<link rel="stylesheet" href="/app.css">
+<script src="/dom.js" defer></script>
+<script src="/metrics.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <div class="mark" aria-hidden="true"></div>
+    <div>
+      <div class="brand-name">Las Acacias</div>
+      <div class="brand-sub">Monitor de producción</div>
+    </div>
+  </div>
+  <nav class="tabs"><a href="/">Planta</a><a href="/agentes">Agentes</a><a href="/metricas" class="on">Métricas</a></nav>
+  <div class="now" id="now"></div>
+  <div class="status">
+    <button type="button" id="follow" class="ghost small">Seguir en vivo</button>
+    <span class="live" id="live"><span class="dot"></span><span id="live-text">Conectando</span></span>
+  </div>
+</header>
+
+<div class="banners" id="banners"></div>
+
+<section class="kpis five" id="mkpis"></section>
+
+<main class="metrics" id="metrics">
+  <div class="charts" id="charts"></div>
+  <section class="panel" id="noise"></section>
+  <section class="panel" id="accuracy"></section>
+  <section class="panel" id="runs"></section>
+</main>
+</body>
+</html>

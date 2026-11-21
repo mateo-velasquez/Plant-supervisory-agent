@@ -102,6 +102,33 @@ def test_e37a_an_exact_match_returns_zero_prints_the_table_and_writes_one_summar
     assert result.err == ""
 
 
+def test_e10_run_eval_stores_the_resolved_registry_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """015 E10 (R10; Q-114): a relative '--registry' is stored absolute."""
+    write_e40_registry(tmp_path / "reg.sqlite3")
+    logbooks = tmp_path / "logbooks"
+    logbooks.mkdir()
+    monkeypatch.chdir(tmp_path)
+    run_eval(
+        registry=Path("reg.sqlite3"),
+        golden_dir=_golden_dir(tmp_path),
+        shifts_path=FIXTURE_PLANT / "turnos.csv",
+        logbooks_dir=logbooks,
+        first_held_out_shift="T03",
+        held_out_open=False,
+        capabilities=frozenset(),
+        out_dir=tmp_path / "evals",
+        now=NOW,
+        out=io.StringIO(),
+        err=io.StringIO(),
+    )
+    (written,) = (tmp_path / "evals").glob("eval-*.json")
+    assert json.loads(written.read_text(encoding="utf-8"))["registry"] == str(
+        (tmp_path / "reg.sqlite3").resolve()
+    )
+
+
 def test_e37b_a_gated_missing_item_returns_one(tmp_path: Path) -> None:
     result = _run(tmp_path, _golden_dir(tmp_path, extra_news=[_missing_pl_t02()]))
     assert result.code == 1

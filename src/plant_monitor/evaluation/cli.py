@@ -47,7 +47,7 @@ def run_eval(
         golden,
         shifts,
         capabilities=capabilities,
-        registry=str(registry),
+        registry=str(registry.resolve()),
         golden_dir=str(golden_dir),
         logbooks=texts,
     )

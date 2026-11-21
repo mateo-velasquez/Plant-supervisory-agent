@@ -1,9 +1,8 @@
 """Evaluation summary: gating errors, the metrics table, the JSON file and the exit code (005, Q-35)."""
 
-import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 
 from plant_monitor.domain.models import Shift
@@ -13,9 +12,7 @@ from plant_monitor.evaluation.noise import NoiseScore, count_noise
 from plant_monitor.evaluation.output import RunOutput
 from plant_monitor.evaluation.results import ALERT_ERRORS, CAUSE_ERRORS, NEWS_ERRORS, Result, errors, tally
 from plant_monitor.evaluation.scoring import score_alerts, score_news
-
-_JSON_NAME = "eval-{stamp:%Y%m%dT%H%M%SZ}.json"
-_JSON_INDENT = 2
+from plant_monitor.evaluation.summary_file import write_summary_json
 
 
 @dataclass(frozen=True)
@@ -30,6 +27,7 @@ class EvalSummary:
     news: tuple[Result, ...]
     noise: NoiseScore
     causes: tuple[Result, ...] = ()
+    deliverables: int | None = None
 
     @property
     def gating_errors(self) -> int:
@@ -63,6 +61,7 @@ class EvalSummary:
             },
             "gating_errors": self.gating_errors,
             "exit_code": exit_code(self),
+            "deliverables": self.deliverables,
         }
 
 
@@ -86,6 +85,7 @@ def evaluate(
         news=score_news(run, golden, capabilities),
         noise=count_noise(run),
         causes=score_causes(run, golden, shifts, logbooks or {}, capabilities),
+        deliverables=len(run.alerts) + len(run.reports),
     )
 
 
@@ -124,14 +124,7 @@ def render_table(summary: EvalSummary) -> str:
 
 def write_summary(summary: EvalSummary, directory: Path, at: datetime) -> Path:
     """Write 'eval-<UTC stamp>.json' under 'directory' (created if missing); 'at' must be aware."""
-    if at.utcoffset() is None:
-        raise ValueError("the summary time must be timezone-aware")
-    stamp = at.astimezone(UTC)
-    directory.mkdir(parents=True, exist_ok=True)
-    path = directory / _JSON_NAME.format(stamp=stamp)
-    text = json.dumps(summary.to_json(), ensure_ascii=False, indent=_JSON_INDENT) + "\n"
-    path.write_bytes(text.encode("utf-8"))
-    return path
+    return write_summary_json(summary.to_json(), directory, at)
 
 
 def _section_json(results: tuple[Result, ...]) -> dict[str, object]:
