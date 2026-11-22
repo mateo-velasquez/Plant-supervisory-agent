@@ -1,4 +1,6 @@
 # Install once: uv run pre-commit install · Run on everything: uv run pre-commit run --all-files
+# The dataset is kept byte for byte (ADR-0024), so no fixer touches it.
+exclude: ^data/(snapshots|planta|reglas|bitacoras)/
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0

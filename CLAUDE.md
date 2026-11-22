@@ -32,7 +32,7 @@ All checks must pass before a task is considered done. CI (`.github/workflows/ci
 ```
 src/plant_monitor/   # main package
 tests/               # tests; synthetic fixtures in tests/fixtures/
-data/                # real data, NOT versioned (see data/README.md)
+data/                # course dataset, versioned (ADR-0024; see data/README.md)
 z_helps/             # local support material, NOT versioned; Claude may read and write here
 ```
 Module-level detail lives in `docs/STRUCTURE.md`.
@@ -53,7 +53,7 @@ Module-level detail lives in `docs/STRUCTURE.md`.
 - `.env` is never committed or printed. The API key is a `SecretStr`.
 
 ## Data
-- `data/` is not versioned. Tests and CI use only `tests/fixtures/`.
+- `data/` is versioned (ADR-0024), but tests and CI use only `tests/fixtures/`.
 - **Days 8 to 10 are held out:** never use them to tune or debug the system before week 5. If a task needs them, ask first.
 
 ## Git

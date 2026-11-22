@@ -7,7 +7,7 @@ One file per significant decision: `NNNN-short-title.md`, numbered in order, nev
 | [0001](0001-use-uv.md) | Use uv for environment and dependencies | Accepted |
 | [0002](0002-code-computes-model-judges.md) | Code computes and enforces; the model judges and writes | Accepted |
 | [0003](0003-single-writer-sqlite-registry.md) | Case registry in SQLite with a single writer | Accepted |
-| [0004](0004-data-not-versioned.md) | Real data not versioned; synthetic fixtures for tests | Accepted |
+| [0004](0004-data-not-versioned.md) | Real data not versioned; synthetic fixtures for tests | Superseded by 0024 |
 | [0005](0005-english-code-spanish-data-contract.md) | English code; Spanish data-contract values | Accepted |
 | [0006](0006-claude-code-dev-workflow.md) | Claude Code workflow: scoped subagents, skills and guard hooks | Accepted |
 | [0007](0007-own-agent-loop-with-mcp-client.md) | Own agent loop on the Anthropic SDK, connected to our MCP server | Accepted (revised by 0013) |
@@ -27,5 +27,6 @@ One file per significant decision: `NNNN-short-title.md`, numbered in order, nev
 | [0021](0021-local-read-only-live-dashboard.md) | Local read-only live dashboard with replay: stdlib server on 127.0.0.1, stateless `at`, text-node JS, CSP, held-out omission | Accepted |
 | [0022](0022-dashboard-metrics-window-reads-stored-evals.md) | Dashboard metrics window: reads stored evaluations and run reports, live noise through `evaluation`, as of the replay position | Accepted |
 | [0023](0023-early-warning-code-only-gap-forecast-in-dashboard.md) | Early warning as a code-only gap forecast (release rate vs known plan), stored in registry v5 and shown in the Pronóstico window | Accepted |
+| [0024](0024-version-course-dataset.md) | Version the course dataset in `data/`; tests and CI still use fixtures, held-out guards unchanged | Accepted |
 
 Template: [template.md](template.md)

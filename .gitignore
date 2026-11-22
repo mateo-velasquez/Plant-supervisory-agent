@@ -1,9 +1,7 @@
 # --- Local support material (brief, guides) ---
 /z_helps/
 
-# --- Data and outputs (not versioned; see data/README.md) ---
-/data/*
-!/data/README.md
+# --- Run outputs (data/ is versioned, ADR-0024) ---
 /outputs/
 
 # --- Environment and secrets ---

@@ -27,7 +27,7 @@ One line per decision and why; the full reasoning is in each record. Smaller rul
 | uv with a versioned lockfile | Reproducible on Windows and Linux with one-command runs | [ADR-0001](docs/adr/0001-use-uv.md) |
 | Code computes and enforces; the model judges and writes | Thresholds must be deterministic; only the logbooks need judgment | [ADR-0002](docs/adr/0002-code-computes-model-judges.md) |
 | Case registry in SQLite with a single writer | Registry outside the model, atomic per snapshot, resumable | [ADR-0003](docs/adr/0003-single-writer-sqlite-registry.md) |
-| Real data not versioned; synthetic fixtures for tests | Course material stays out of git, and held-out days cannot leak into tuning | [ADR-0004](docs/adr/0004-data-not-versioned.md) |
+| Course dataset versioned; synthetic fixtures for tests | Anyone can clone and run the series, while CI stays offline and independent of the data | [ADR-0024](docs/adr/0024-version-course-dataset.md) |
 | English code; Spanish data-contract values | Idiomatic code with output that matches the brief exactly | [ADR-0005](docs/adr/0005-english-code-spanish-data-contract.md) |
 | Claude Code workflow with scoped subagents and guard hooks | Costly rules (held-out data, secrets, merges) enforced in code, not prose | [ADR-0006](docs/adr/0006-claude-code-dev-workflow.md) |
 | Own agent loop on the Anthropic SDK with our MCP server (proposed) | Full control over hooks, allowlists and cost; testable with a fake model | [ADR-0007](docs/adr/0007-own-agent-loop-with-mcp-client.md) |
@@ -44,7 +44,7 @@ uv sync                          # create the environment
 uv run pre-commit install        # enable git hooks
 Copy-Item .env.example .env      # then set ANTHROPIC_API_KEY (agent mode only)
 ```
-Place the course dataset in `data/` (see [data/README.md](data/README.md)).
+The course dataset ships in `data/` (see [data/README.md](data/README.md)).
 
 ## Development
 ```powershell

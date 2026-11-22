@@ -60,7 +60,7 @@ Target layout. Modules are created when their spec is implemented; this file is 
 │   ├── STRUCTURE.md          # this file
 │   ├── adr/                  # architecture decision records
 │   └── diagrams/             # Mermaid diagrams
-├── data/                     # real data, NOT versioned (only README)
+├── data/                     # course dataset, versioned (ADR-0024)
 └── z_helps/                  # local support material, NOT versioned
 ```
 

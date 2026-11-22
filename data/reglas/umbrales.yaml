@@ -1,0 +1,21 @@
+# Severidad mínima de un desvío. La calcula el código; el agente puede subirla, nunca bajarla.
+
+gap:
+  # El gap es la diferencia entre las unidades liberadas de calidad y las del plan, acumuladas
+  # desde el inicio de la serie. Se expresa como % del plan diario de la combinación modelo × mercado.
+  minimo_unidades: 3        # por debajo de 3 unidades de atraso no hay desvío, sea cual sea el %
+  media: 10
+  alta: 20
+  critica: 35
+
+retraso_dias:
+  # Días entre la salida del embarque asignado y la del primero que la unidad puede alcanzar.
+  Local:  {media: 1, alta: 2, critica: 3}
+  Brasil: {alta: 1, critica: 3}
+  Europa: {alta: 1, critica: 3}
+
+demora:
+  tolerancia_minutos: 60    # una unidad está demorada en una etapa si lleva más que el estándar más esto
+
+resolucion:
+  snapshots_sin_desvio: 2   # snapshots consecutivos sin desvío para dar un caso por resuelto

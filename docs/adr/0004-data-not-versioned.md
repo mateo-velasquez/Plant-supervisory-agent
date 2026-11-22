@@ -1,6 +1,6 @@
 # 0004 · Real data not versioned; synthetic fixtures for tests
 
-- **Status:** Accepted
+- **Status:** Superseded by [0024](0024-version-course-dataset.md)
 - **Date:** 2026-10-18
 - **Requirements:** NFR-07, FR-40
 
