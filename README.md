@@ -63,7 +63,10 @@ uv run plant-monitor run                                 # agent mode (needs ANT
 uv run plant-monitor run --thresholds-only               # code only, no model, no key
 uv run plant-monitor run --until S020                    # stop after the first arrival of S020
 uv run plant-monitor run --speed 5                       # pause 5 s after each committed snapshot (live demo)
+uv run plant-monitor run --dashboard --speed 5           # all in one: fresh folder, series and live dashboard
 ```
+
+- **All in one (`--dashboard`).** Each launch creates `OUTPUT_DIR/run-<UTC timestamp>/`, serves the [live dashboard](#live-dashboard) on it while the series runs, prints the summary and keeps serving until Ctrl-C. It combines with every other `run` option. It never reuses an older registry, so the forecast window always has data. To trace a notice or resume an aborted run later, set `OUTPUT_DIR` to the printed folder. The exit code is the run's.
 
 - **One directory, one run.** `OUTPUT_DIR` (default `outputs`) holds the registry, the traces, the notices and the summaries. Running again with the same directory resumes at the first snapshot not yet committed. For a fresh run, use a new `OUTPUT_DIR`.
 - **Do not mix modes in one directory.** A threshold-only run followed by an agent run in the same directory skips every snapshot already processed, and the summary shows 0 processed. The opposite order is refused: a directory that holds agent traces must resume in agent mode, because threshold-only mode would drop the agent's severity raises in force.
@@ -117,7 +120,7 @@ A fourth window, *Pronóstico* (the "Pronóstico ↗" link, or `http://127.0.0.1
 
 - **How it projects:** code takes each combination's release rate over the last `EARLY_WARNING_WINDOW_SNAPSHOTS` snapshots (default 12, so the first two days have no forecast) against the known production plan, and looks `EARLY_WARNING_HORIZON_SNAPSHOTS` snapshots ahead (default 3, 12 h). A warning names the snapshot and scheduled time of the crossing, e.g. `S024 · 12:00 (en 8 h)`.
 - **What it shows:** active warnings ordered by hours to crossing, with their basis on hover (rate, plan, window, threshold); a model × market grid of the gap, the dashed projection and the thresholds in units; and **Anticipación**, which scores past warnings as fulfilled, not fulfilled, pending, or crossings with no warning. Planta marks cells with an active warning with a small ⚠.
-- **A forecast, never a decision:** it never changes a severity, a case, a notice, a shift report, the evaluation or what the agents see. Every run stores it in the registry (schema v5), and a forecast error is logged as a WARNING without stopping the run. A registry from before this version reads "Esta corrida no tiene pronósticos".
+- **A forecast, never a decision:** it never changes a severity, a case, a notice, a shift report, the evaluation or what the agents see. Every run stores it in the registry (schema v5), and a forecast error is logged as a WARNING without stopping the run. A registry from before this version, or one upgraded after its series had already run (a rerun skips every processed snapshot), reads "Esta corrida no tiene pronósticos": run the series again with `run --dashboard`.
 - **Held-out days:** with `HELDOUT_OPEN=false` the forecast stops at the last open snapshot, and rows that name a held-out snapshot are left out and counted.
 
 ## How to run evals

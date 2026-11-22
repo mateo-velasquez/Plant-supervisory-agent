@@ -43,3 +43,14 @@ Ordered, test-first. Each task is one commit, committed before the next one star
   - in a threshold-only run, `cases`, `case_history` and `notices` match a threshold-only run made before this spec.
 
   Log any problem before changing anything; window and horizon are tuned only on days 1–7 — refs: R1, R3, R4, R9, R13, R14, R16, FR-40
+
+## Amendment 2026-11-21: empty table and `run --dashboard`
+
+Same conventions as above. New test basename: `test_run_dashboard_cli.py` (check it is unique). T12 can run after T15 with `run --dashboard`.
+
+- [x] T13 · Test E25 (`tests/unit/dashboard/test_dashboard_forecast.py` and `tests/integration/test_dashboard_forecast_http.py`, new tests) → `build_forecast`'s `available` rule; the hint text under the `unavailable` banner in `forecast.js` (text node only, E23 re-run) — refs: R12, E25, Q-139, X8 · plan: Amendment: empty table
+- [x] T14 · Test E28 (`tests/integration/test_dashboard_forecast_http.py` or the 014 HTTP test file, new test, port 0) → `RunningDashboard`, `start_dashboard` in `dashboard/server.py`; `serve_dashboard` unchanged — refs: R20, I14, E28 · plan: Amendment: `start_dashboard`
+- [x] T15 · Tests E26, E27 (`tests/integration/test_run_dashboard_cli.py`, synthetic fixtures, fake `start_dashboard` and `wait`, fixed `now`) → `--dashboard` in `parse_args`, `RunOptions.dashboard`, `CliDeps.start_dashboard` and `wait`, `_run_with_dashboard`, optional `started` in `_run`. Every existing 012 / 014 CLI test passes unchanged — refs: R20, I12–I14, E26, E27, Q-137, Q-138, X9 · plan: Amendment: `run --dashboard`
+- [x] T17 · Test E29 (`tests/unit/dashboard/test_dashboard_forecast.py`) → `build_forecast(..., history_window)`, `DashboardApp` passes `early_warning_window_snapshots` — refs: R13, E29, Q-140
+- [ ] T16 · **Main session:** docs (README "Running", `docs/demo.md` steps 2 and 4, STRUCTURE rows; Q-137–Q-139 are already in `docs/requirements.md`), `/verify-criteria specs/016-early-warning`, `reviewer` on the diff, `/check` — refs: Acceptance · plan: Docs rows
+  - 2026-11-21: docs and `/check` done (2011 passed, coverage 98%); `/verify-criteria` and `reviewer` pending.
