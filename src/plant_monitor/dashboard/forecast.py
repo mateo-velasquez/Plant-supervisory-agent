@@ -93,9 +93,12 @@ def _warning_view(row: ForecastRow) -> WarningView:
     )
 
 
-def _combination(modelo: str, mercado: str, rows: Sequence[ForecastRow], at: int) -> ForecastCombination:
-    """History of every row up to 'at' and the projection of the row at 'at'."""
+def _combination(
+    modelo: str, mercado: str, rows: Sequence[ForecastRow], at: int, history_window: int | None
+) -> ForecastCombination:
+    """History of the last 'history_window' positions up to 'at' (all if None) and the projection at 'at'."""
     current = next((r for r in rows if r.seq == at), None)
+    shown = rows if history_window is None else [r for r in rows if r.seq > at - history_window]
     return ForecastCombination(
         modelo=modelo,
         mercado=mercado,
@@ -105,7 +108,7 @@ def _combination(modelo: str, mercado: str, rows: Sequence[ForecastRow], at: int
         target_level=None if current is None or current.target_level is None else current.target_level.value,
         history=[
             HistoryPoint(seq=r.seq, snapshot_id=r.snapshot_id, gap=r.gap_units, lines=_lines(r.thresholds))
-            for r in rows
+            for r in shown
         ],
         projection=[
             ProjectionPoint(
@@ -124,10 +127,13 @@ def _combination(modelo: str, mercado: str, rows: Sequence[ForecastRow], at: int
     )
 
 
-def build_forecast(view: RunView, calendar: Calendar, at: int) -> ForecastPayload:
+def build_forecast(
+    view: RunView, calendar: Calendar, at: int, history_window: int | None = None
+) -> ForecastPayload:
     """The forecast payload at position 'at' (already resolved by 'RunView.resolve_at')."""
     stored = view.rows.forecasts
-    available = view.registry == "ok" and stored is not None
+    # An empty table after processed snapshots is a registry migrated after its series ran (Q-139).
+    available = view.registry == "ok" and stored is not None and (bool(stored) or not view.positions())
     rows = [r for r in (stored or ()) if r.seq <= at] if available else []
     omitted = view.omitted
     heldout = ForecastHeldOut(
@@ -158,7 +164,11 @@ def build_forecast(view: RunView, calendar: Calendar, at: int) -> ForecastPayloa
         warnings=[_warning_view(r) for r in active_warnings(rows, at)],
         combinations=[
             _combination(
-                str(combo.modelo), str(combo.mercado), [r for r in rows if r.combination == combo], at
+                str(combo.modelo),
+                str(combo.mercado),
+                [r for r in rows if r.combination == combo],
+                at,
+                history_window,
             )
             for combo in calendar.combinations
         ]

@@ -1,8 +1,11 @@
-"""016 T7: the forecast route, its two assets and the read-only guarantee over the HTTP surface (E19, E22)."""
+"""016: the forecast route, its assets, read-only access and the started server (E19, E22, E25, E28)."""
 
 import hashlib
 import json
+import socket
 import sqlite3
+import threading
+import urllib.request
 from contextlib import closing
 from pathlib import Path
 from typing import Any
@@ -153,3 +156,46 @@ def test_e19_v4_and_unreadable_tables_are_unavailable_not_errors(
     assert _without_markers(state) == _without_markers(intact_state)
     assert _sha(settings.registry_path) == registry_before
     assert _tree(settings.output_dir) == paths_before
+
+
+def test_e25_an_emptied_table_is_unavailable_over_http(thresholds_dir: Settings, tmp_path: Path) -> None:
+    """016 E25(a) (R12 amendment; Q-139): a v5 copy with no forecast row is 'unavailable', nothing written."""
+    settings = copied(thresholds_dir, tmp_path)
+    with closing(sqlite3.connect(settings.registry_path, isolation_level=None)) as conn:
+        conn.execute("DELETE FROM gap_forecasts")
+    app = app_of(settings)
+    registry_before = _sha(settings.registry_path)
+    paths_before = _tree(settings.output_dir)
+
+    forecast_status, forecast = _json_of(app, "/api/forecast")
+    state_status, state = _json_of(app, "/api/state")
+
+    assert (forecast_status, state_status) == (200, 200)
+    assert (forecast["registry"], forecast["state"]) == ("ok", "unavailable")
+    assert forecast["warnings"] == forecast["combinations"] == []
+    assert all(cell["forecast"] is None for cell in state["cells"])
+    assert _sha(settings.registry_path) == registry_before
+    assert _tree(settings.output_dir) == paths_before
+
+
+def _get(port: int, path: str) -> tuple[int, dict[str, str], bytes]:
+    with urllib.request.urlopen(f"http://127.0.0.1:{port}{path}", timeout=5) as reply:
+        return int(reply.status), dict(reply.headers), bytes(reply.read())
+
+
+def test_e28_start_dashboard_serves_in_a_thread_until_stopped(th_app: DashboardApp) -> None:
+    """016 E28 (R20; 014 R1, R14): the started server answers over 127.0.0.1, then 'stop' frees the port."""
+    handle = server.start_dashboard(th_app, 0)
+    try:
+        page_status, page_headers, _ = _get(handle.port, "/")
+        api_status, api_headers, body = _get(handle.port, "/api/forecast")
+    finally:
+        handle.stop()
+    handle.stop()
+    assert (page_status, api_status) == (200, 200)
+    assert page_headers["Content-Type"] == "text/html; charset=utf-8"
+    assert json.loads(body)["state"] == "ok"
+    assert all(api_headers.get(name) for name in SECURITY_HEADERS)
+    with pytest.raises(OSError), socket.create_connection(("127.0.0.1", handle.port), timeout=1):
+        pass
+    assert not any(t.name == server.DASHBOARD_THREAD and t.is_alive() for t in threading.enumerate())

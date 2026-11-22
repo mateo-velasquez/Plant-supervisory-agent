@@ -282,3 +282,55 @@ def test_e21_planta_cell_carries_the_marker_only_while_the_warning_is_active(
     assert len(forecasts) == len(forecast_calendar().combinations)
     assert forecasts.pop((str(P.modelo), str(P.mercado))) == marked
     assert all(value is None for value in forecasts.values())
+
+
+def _processed_view(last: int, rows: list[ForecastRow]) -> RunView:
+    """A view with snapshots 1 to 'last' processed and 'rows' stored (possibly none)."""
+    from dashboard_builders import run_view
+
+    from plant_monitor.cases.registry.run_reader import ProcessedRow, RunRows
+
+    processed = tuple(ProcessedRow(snapshot_id=f"S{n:03d}", seq=n) for n in range(1, last + 1))
+    return run_view(RunRows(processed=processed, cases=(), history=(), notices=(), forecasts=tuple(rows)))
+
+
+def _payload(view: RunView, at: int | None) -> dict[str, Any]:
+    parsed: dict[str, Any] = json.loads(
+        json.dumps(build_forecast(view, forecast_calendar(), view.resolve_at(at)))
+    )
+    return parsed
+
+
+def test_e25_an_empty_table_after_processed_snapshots_is_unavailable() -> None:
+    """016 E25(a) (R12 amendment; Q-139): no stored row while positions exist gives 'unavailable'."""
+    payload = _payload(_processed_view(8, []), None)
+    assert (payload["registry"], payload["state"]) == ("ok", "unavailable")
+    assert payload["positions"] == list(range(1, 9))
+    assert payload["warnings"] == payload["combinations"] == payload["accuracy"]["episodes"] == []
+
+
+def test_e25_a_registry_with_no_processed_snapshot_stays_ok() -> None:
+    """016 E25(b) (R12 amendment): a run that just started is 'ok' with no positions."""
+    payload = _payload(_processed_view(0, []), None)
+    assert (payload["registry"], payload["state"], payload["positions"]) == ("ok", "ok", [])
+
+
+@pytest.mark.parametrize("at", [6, 8])
+def test_e25_a_registry_migrated_mid_run_stays_ok_before_its_first_row(at: int) -> None:
+    """016 E25(c) (R12 amendment; I4): rows only at 7-8 keep 'ok', even at a position before them."""
+    rows = [*fc(7, 82, 42, plan=plan_rows(24)), *fc(8, 92, 52, plan=plan_rows(24))]
+    payload = _payload(_processed_view(8, rows), at)
+    assert payload["state"] == "ok"
+    assert len(payload["combinations"]) == len(forecast_calendar().combinations)
+    assert bool(_entry(payload)["history"]) is (at == 8)
+
+
+@pytest.mark.parametrize(("at", "first"), [(8, 5), (4, 1)])
+def test_e29_chart_history_keeps_the_last_window_positions(at: int, first: int) -> None:
+    """016 E29 (R13 amendment; Q-140): window 4 cuts history only; projection and scoring unchanged."""
+    view = forecast_view(_e15_rows())
+    full = json.loads(json.dumps(build_forecast(view, forecast_calendar(), at)))
+    cut = json.loads(json.dumps(build_forecast(view, forecast_calendar(), at, history_window=4)))
+    assert [h["seq"] for h in _entry(cut)["history"]] == list(range(first, at + 1))
+    assert _entry(cut)["projection"] == _entry(full)["projection"]
+    assert cut["accuracy"] == full["accuracy"]

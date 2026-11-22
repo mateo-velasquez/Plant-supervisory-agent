@@ -35,7 +35,7 @@ function renderBanners(p) {
   if (view.busy) list.push(banner("warn", "Registro ocupado, reintentando"));
   if (p) {
     if (p.registry === "missing") list.push(banner("info", "Registro no encontrado: todavía no hay datos"));
-    else if (p.state === "unavailable") list.push(banner("info", "Esta corrida no tiene pronósticos"));
+    else if (p.state === "unavailable") list.push(banner("info", "Esta corrida no tiene pronósticos. Volvé a correr la serie en una carpeta nueva (plant-monitor run --dashboard)"));
     const held = heldText(p.heldout);
     if (held) list.push(banner("info", held));
   }

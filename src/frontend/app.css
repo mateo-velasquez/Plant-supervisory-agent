@@ -452,7 +452,7 @@ table.act td:empty::after { content: "—"; }
 /* ---------- forecast page ---------- */
 /* A forecast is not an official alert: dashed outlines and no tinted fills keep it apart from Planta's alert styling.
    The level colour names the target level only; history is solid white, the projection dashed. */
-.forecast { --fc-hist: #eef1f6; --fc-proj: #c3cbd8; display: flex; flex-direction: column; gap: 16px; }
+.forecast { --fc-hist: #ffffff; --fc-proj: var(--accent); display: flex; flex-direction: column; gap: 16px; }
 .c-hist { --c: var(--fc-hist); }
 .c-proj { --c: var(--fc-proj); }
 .sw.ln.dash { background: repeating-linear-gradient(90deg, var(--c) 0 4px, transparent 4px 7px); }
@@ -483,9 +483,9 @@ table.act td:empty::after { content: "—"; }
   border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2);
 }
 .fccell.warn { border-style: dashed; border-color: var(--lv); }
-.fccell.media { --lv: rgba(242, 157, 56, .6); --fc-proj: var(--s-media); }
-.fccell.alta { --lv: rgba(242, 96, 58, .6); --fc-proj: var(--s-alta); }
-.fccell.critica { --lv: rgba(255, 59, 92, .6); --fc-proj: var(--s-critica); }
+.fccell.media { --lv: rgba(242, 157, 56, .6); }
+.fccell.alta { --lv: rgba(242, 96, 58, .6); }
+.fccell.critica { --lv: rgba(255, 59, 92, .6); }
 .fccell > .empty { padding: 24px 8px; }
 .fcc-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px 10px; min-height: 24px; }
 .fcc-name { font-weight: 650; font-size: 13px; white-space: nowrap; }

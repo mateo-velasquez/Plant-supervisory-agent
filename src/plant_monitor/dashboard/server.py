@@ -2,6 +2,7 @@
 
 import json
 import re
+import threading
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -94,8 +95,10 @@ class DashboardApp:
         evals_dir: Path,
         runs_dir: Path,
         assets: Mapping[str, bytes],
+        history_window: int | None = None,
     ) -> None:
         self._calendar = calendar
+        self._history_window = history_window
         self._logbooks = logbooks
         self._policy = policy
         self._registry_path = registry_path
@@ -124,6 +127,7 @@ class DashboardApp:
             evals_dir=settings.evals_dir,
             runs_dir=settings.runs_dir,
             assets=assets,
+            history_window=settings.early_warning_window_snapshots,
         )
 
     def handle(self, method: str, target: str, host: str | None) -> Response:
@@ -163,7 +167,7 @@ class DashboardApp:
                 runs = load_runs(self._runs_dir, self._traces_dir, self._policy)
                 return _json(200, build_metrics(view, self._calendar, at, accuracy, runs))
             if route == "/api/forecast":
-                return _json(200, build_forecast(view, self._calendar, at))
+                return _json(200, build_forecast(view, self._calendar, at, self._history_window))
             return _json(200, build_agents(view, self._logbooks, at, snapshot))
         except Exception as error:  # last resort: a failed view is a 500, never a stack trace
             return _error(500, f"dashboard: view failed ({type(error).__name__})")
@@ -211,6 +215,38 @@ def make_server(app: DashboardApp, port: int) -> ThreadingHTTPServer:
     server = QuietServer((_LOOPBACK, port), Handler)
     server.daemon_threads = True
     return server
+
+
+DASHBOARD_THREAD: Final = "plant-monitor-dashboard"
+
+
+@dataclass(frozen=True)
+class RunningDashboard:
+    """A server serving in its own thread; 'stop' is idempotent."""
+
+    port: int
+    stop: Callable[[], None]
+
+
+def start_dashboard(app: DashboardApp, port: int) -> RunningDashboard:
+    """Bind on 127.0.0.1 and serve in a daemon thread; 'OSError' when the port cannot be bound (016 R20)."""
+    server = make_server(app, port)
+    thread = threading.Thread(target=server.serve_forever, name=DASHBOARD_THREAD, daemon=True)
+    thread.start()
+    lock = threading.Lock()
+    stopped = False
+
+    def stop() -> None:
+        nonlocal stopped
+        with lock:
+            if stopped:
+                return
+            stopped = True
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+    return RunningDashboard(port=server.server_address[1], stop=stop)
 
 
 def serve_dashboard(app: DashboardApp, port: int, on_ready: Callable[[int], None]) -> None:
