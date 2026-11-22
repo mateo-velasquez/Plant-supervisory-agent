@@ -2,6 +2,7 @@
 
 import json
 import re
+import threading
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -12,6 +13,7 @@ from urllib.parse import parse_qs, urlsplit
 from plant_monitor.cases.registry.run_reader import RegistryBusy
 from plant_monitor.config import Settings
 from plant_monitor.dashboard.agents import build_agents
+from plant_monitor.dashboard.forecast import build_forecast
 from plant_monitor.dashboard.heldout import SNAPSHOT_ID
 from plant_monitor.dashboard.metrics import build_metrics
 from plant_monitor.dashboard.panels import load_accuracy, load_runs
@@ -34,8 +36,11 @@ ASSETS: Final[Mapping[str, tuple[str, str]]] = {
     "/agents.js": ("agents.js", _JS),
     "/metricas": ("metricas.html", _HTML),
     "/metrics.js": ("metrics.js", _JS),
+    "/pronostico": ("pronostico.html", _HTML),
+    "/forecast.js": ("forecast.js", _JS),
 }
-_API_ROUTES: Final = frozenset({"/api/state", "/api/agents", "/api/metrics"})
+_API_ROUTES: Final = frozenset({"/api/state", "/api/agents", "/api/metrics", "/api/forecast"})
+_IGNORES_SNAPSHOT: Final = frozenset({"/api/metrics", "/api/forecast"})
 CSP: Final = (
     "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; "
     "frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
@@ -90,8 +95,10 @@ class DashboardApp:
         evals_dir: Path,
         runs_dir: Path,
         assets: Mapping[str, bytes],
+        history_window: int | None = None,
     ) -> None:
         self._calendar = calendar
+        self._history_window = history_window
         self._logbooks = logbooks
         self._policy = policy
         self._registry_path = registry_path
@@ -120,6 +127,7 @@ class DashboardApp:
             evals_dir=settings.evals_dir,
             runs_dir=settings.runs_dir,
             assets=assets,
+            history_window=settings.early_warning_window_snapshots,
         )
 
     def handle(self, method: str, target: str, host: str | None) -> Response:
@@ -142,7 +150,7 @@ class DashboardApp:
         if raw_at is not None and _AT.fullmatch(raw_at) is None:
             return _error(400, "dashboard: invalid at")
         snapshot = query.get("snapshot", [None])[0]
-        if route != "/api/metrics" and snapshot is not None and _SNAPSHOT.fullmatch(snapshot) is None:
+        if route not in _IGNORES_SNAPSHOT and snapshot is not None and _SNAPSHOT.fullmatch(snapshot) is None:
             return _error(400, "dashboard: invalid snapshot")
         try:
             view = load_view(self._registry_path, self._traces_dir, self._policy)
@@ -158,6 +166,8 @@ class DashboardApp:
                 accuracy = load_accuracy(self._evals_dir, self._registry_path, self._policy)
                 runs = load_runs(self._runs_dir, self._traces_dir, self._policy)
                 return _json(200, build_metrics(view, self._calendar, at, accuracy, runs))
+            if route == "/api/forecast":
+                return _json(200, build_forecast(view, self._calendar, at, self._history_window))
             return _json(200, build_agents(view, self._logbooks, at, snapshot))
         except Exception as error:  # last resort: a failed view is a 500, never a stack trace
             return _error(500, f"dashboard: view failed ({type(error).__name__})")
@@ -205,6 +215,38 @@ def make_server(app: DashboardApp, port: int) -> ThreadingHTTPServer:
     server = QuietServer((_LOOPBACK, port), Handler)
     server.daemon_threads = True
     return server
+
+
+DASHBOARD_THREAD: Final = "plant-monitor-dashboard"
+
+
+@dataclass(frozen=True)
+class RunningDashboard:
+    """A server serving in its own thread; 'stop' is idempotent."""
+
+    port: int
+    stop: Callable[[], None]
+
+
+def start_dashboard(app: DashboardApp, port: int) -> RunningDashboard:
+    """Bind on 127.0.0.1 and serve in a daemon thread; 'OSError' when the port cannot be bound (016 R20)."""
+    server = make_server(app, port)
+    thread = threading.Thread(target=server.serve_forever, name=DASHBOARD_THREAD, daemon=True)
+    thread.start()
+    lock = threading.Lock()
+    stopped = False
+
+    def stop() -> None:
+        nonlocal stopped
+        with lock:
+            if stopped:
+                return
+            stopped = True
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+    return RunningDashboard(port=server.server_address[1], stop=stop)
 
 
 def serve_dashboard(app: DashboardApp, port: int, on_ready: Callable[[int], None]) -> None:

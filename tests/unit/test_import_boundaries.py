@@ -886,6 +886,74 @@ def test_e20_dashboard_imports_only_its_layers_and_only_the_cli_imports_it() -> 
     assert importers == ["runner/cli.py"]
 
 
+FORECAST_LAYERS = {
+    "domain/forecast.py": ("plant_monitor.domain",),
+    "metrics/forecast.py": ("plant_monitor.domain", "plant_monitor.metrics"),
+    "cases/registry/forecasts.py": ("plant_monitor.domain", "plant_monitor.cases.registry"),
+    "runner/forecast_step.py": ("plant_monitor.domain", "plant_monitor.metrics", "plant_monitor.runner"),
+}
+FORECAST_MODULES = (
+    "plant_monitor.metrics.forecast",
+    "plant_monitor.cases.registry.forecasts",
+    "plant_monitor.runner.forecast_step",
+    "plant_monitor.dashboard.forecast",
+    "plant_monitor.dashboard.anticipation",
+)
+FORECAST_FREE = (
+    "agents",
+    "mcp_server",
+    "hooks",
+    "evaluation",
+    "cases/notice_builder.py",
+    "runner/perspectives.py",
+)
+
+
+def _imports_any(path: Path, package: str, modules: tuple[str, ...]) -> bool:
+    names = project_modules(path.read_text(encoding="utf-8"), package)
+    return any(n == m or n.startswith(f"{m}.") for n in names for m in modules)
+
+
+def test_e24_forecast_modules_follow_their_layers_and_have_only_the_expected_importers() -> None:
+    """016 E24 (R1, R19): Risk: a forecast module must not leak into the agents, hooks or scorer."""
+    offenders = {
+        rel: sorted(extra)
+        for rel, allowed in FORECAST_LAYERS.items()
+        if (
+            extra := disallowed_modules(
+                (PACKAGE / rel).read_text(encoding="utf-8"), package_of(PACKAGE / rel), allowed
+            )
+        )
+    }
+    assert offenders == {}
+    smoke = PACKAGE.parents[1] / "evals" / "smoke_days_1_7.py"
+    importers = sorted(
+        path.relative_to(PACKAGE).as_posix()
+        for path in PACKAGE.rglob("*.py")
+        if _imports_any(path, package_of(path), FORECAST_MODULES)
+    )
+    assert importers == [
+        "cases/registry/run_reader.py",
+        "cases/registry/sqlite.py",
+        "dashboard/forecast.py",
+        "dashboard/server.py",
+        "dashboard/state.py",
+        "runner/agent_pipeline.py",
+        "runner/cli.py",
+        "runner/forecast_step.py",
+        "runner/pipeline.py",
+    ]
+    assert _imports_any(smoke, "evals", FORECAST_MODULES)
+    everywhere = (*FORECAST_MODULES, "plant_monitor.domain.forecast")
+    free = [
+        path.relative_to(PACKAGE).as_posix()
+        for part in FORECAST_FREE
+        for path in ([PACKAGE / part] if part.endswith(".py") else (PACKAGE / part).rglob("*.py"))
+        if _imports_any(path, package_of(path), everywhere)
+    ]
+    assert free == []
+
+
 def test_e20_importing_the_dashboard_server_loads_no_scorer_module(tmp_path: Path) -> None:
     """015 E20 (R16; Q-118): Risk: the live dashboard must not load the scorer, golden, causes or summary."""
     loaded = loaded_by_import(tmp_path, "plant_monitor.dashboard.server", (PROJECT,))

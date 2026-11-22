@@ -15,9 +15,11 @@ from plant_monitor.ingestion import DataLoadError
 from plant_monitor.ingestion.arrivals import load_arrivals_until
 from plant_monitor.ingestion.plant import load_plan, load_shifts, load_shipments, load_standards
 from plant_monitor.metrics.engine import PlantContext
+from plant_monitor.metrics.forecast import ForecastConfig
 from plant_monitor.metrics.tables import ShipmentsTable, StandardsTable
 from plant_monitor.metrics.thresholds import load_thresholds
 from plant_monitor.notify.file import FileNotifier
+from plant_monitor.runner.forecast_step import ForecastStep
 from plant_monitor.runner.outbox import OutboxDispatcher
 from plant_monitor.runner.pipeline import ThresholdPipeline
 from plant_monitor.runner.series import RunAborted, run_series
@@ -55,12 +57,16 @@ def main() -> int:
         out = settings.evals_dir / f"smoke-{datetime.now(UTC):%Y%m%dT%H%M%SZ}"
         out.mkdir(parents=True)  # fresh run directory; fails if it already exists
         registry_path = out / _REGISTRY_FILE
+        config = ForecastConfig(
+            window=settings.early_warning_window_snapshots, horizon=settings.early_warning_horizon_snapshots
+        )
         with SqliteRegistry(registry_path) as registry:
+            forecast = ForecastStep.build(config, registry.forecasts, registry.forecasts, ctx, policy)
             summary = run_series(
                 arrivals,
                 shifts,
                 registry,
-                ThresholdPipeline.from_registry(registry, ctx),
+                ThresholdPipeline.from_registry(registry, ctx, forecast=forecast),
                 post_commit=OutboxDispatcher(registry.notices, FileNotifier(out / "notices")),
             )
             pending = registry.notices.pending()

@@ -71,7 +71,9 @@ def at_s010() -> Iterator[tuple[IncidentRun, CountingSteps, SpySink]]:
     with SqliteRegistry(":memory:") as registry:
         ledger = CauseLedger(registry.causes, registry.cases, ctx.shifts)
         sink = SpySink(registry.notices)
-        pipeline = ThresholdPipeline(ctx, registry.releases, registry.cases, registry.cases, sink, ledger)
+        pipeline = ThresholdPipeline(
+            ctx, registry.releases, registry.cases, registry.cases, sink, ledger, forecast=None
+        )
         run = IncidentRun(registry, ledger, pipeline, incident_scenario())
         run.through(9)
         yield run, CountingSteps(pipeline), sink

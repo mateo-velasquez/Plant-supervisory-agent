@@ -15,6 +15,7 @@ from plant_monitor.domain.enums import ShiftPosition
 from plant_monitor.domain.models import Combination, CombinationMetrics, ReleasedUnit, Shift, Snapshot
 from plant_monitor.domain.notices import Notice, ShiftReport
 from plant_monitor.metrics.engine import PlantContext, compute_metrics
+from plant_monitor.runner.forecast_step import ForecastStep
 
 
 class ReleaseLog(Protocol):
@@ -85,7 +86,10 @@ class ThresholdPipeline:
         reader: NoticeCaseReader,
         notices: NoticeSink,
         ledger: CauseLedger | None = None,
+        *,
+        forecast: ForecastStep | None,
     ) -> None:
+        self._forecast = forecast
         self._ctx = ctx
         self._releases = releases
         self._cases = cases
@@ -96,10 +100,23 @@ class ThresholdPipeline:
 
     @classmethod
     def from_registry(
-        cls, registry: SqliteRegistry, ctx: PlantContext, ledger: CauseLedger | None = None
+        cls,
+        registry: SqliteRegistry,
+        ctx: PlantContext,
+        ledger: CauseLedger | None = None,
+        *,
+        forecast: ForecastStep | None,
     ) -> ThresholdPipeline:
         """Wire the pipeline on the registry's shared collaborators."""
-        return cls(ctx, registry.releases, registry.cases, registry.cases, registry.notices, ledger)
+        return cls(
+            ctx,
+            registry.releases,
+            registry.cases,
+            registry.cases,
+            registry.notices,
+            ledger,
+            forecast=forecast,
+        )
 
     def _lifecycle(
         self,
@@ -167,12 +184,17 @@ class ThresholdPipeline:
         return self._notices_for(decision, delta, candidates)
 
     def finish(self, decision: SnapshotDecision) -> None:
-        """Save the notices once, then mark the reported cases."""
+        """Save the notices, mark the reported cases, then run the forecast step (016 R9)."""
         sid = decision.snapshot.snapshot_id
         built = decision.notices
         self._notices.save(sid, built.decisions, built.report)
         for case_id in built.to_mark:
             self._tracker.mark_reported(case_id, sid)
+        if self._forecast is not None:
+            if decision.delta is None:
+                raise ValueError("finish needs a decision from 'decide' to forecast")
+            raised = frozenset(c.combination for c in decision.delta.cases if c.raised)
+            self._forecast.run(sid, decision.metrics, raised)
 
     def process(self, snapshot: Snapshot, shift: Shift, position: ShiftPosition) -> None:
         """Database writes only; delivery is the post-commit dispatcher's job (ADR-0010)."""

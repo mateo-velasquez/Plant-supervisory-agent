@@ -8,10 +8,12 @@ from typing import Final
 
 from plant_monitor.domain.cases import CaseHistoryRow
 from plant_monitor.domain.enums import Market, Model
+from plant_monitor.domain.forecast import ForecastRow
 from plant_monitor.domain.models import Combination
 from plant_monitor.domain.notices import Notice, ShiftReport
 
 from .cases_repo import HISTORY_COLUMNS, history_from_row
+from .forecasts import read_forecasts
 from .readonly import check_columns, open_readonly
 
 _KIND_REPORT: Final = "report"
@@ -66,6 +68,7 @@ class RunRows:
     cases: tuple[CaseRow, ...]
     history: tuple[HistoryAt, ...]
     notices: tuple[NoticeAt, ...]
+    forecasts: tuple[ForecastRow, ...] | None = None  # None: no table or an unreadable payload (016 R12)
 
 
 class RegistryBusy(ValueError):
@@ -108,6 +111,7 @@ def _read(conn: sqlite3.Connection) -> RunRows:
         ),
         history=tuple(HistoryAt(seq=r[-1], row=history_from_row(r[:-1])) for r in history),
         notices=tuple(NoticeAt(seq=s, idx=i, item=_parse(kind, payload)) for s, i, kind, payload in notices),
+        forecasts=read_forecasts(conn),
     )
 
 

@@ -34,6 +34,15 @@ def cumulative_plan(
     return totals
 
 
+def shift_plan(plan: Iterable[PlanRow], shift_id: str) -> dict[Combination, int]:
+    """Plan units of 'shift_id' per combination; all 9 combinations present."""
+    totals = dict.fromkeys(all_combinations(), 0)
+    for row in plan:
+        if row.turno_id == shift_id:
+            totals[Combination(modelo=row.modelo, mercado=row.mercado)] += row.unidades_plan
+    return totals
+
+
 # the gap in % terms
 def gap_pct(gap_units: float, shift_plan: int) -> float | None:
     """Gap as % of the daily plan; None when the daily plan is 0 (Q-16)."""

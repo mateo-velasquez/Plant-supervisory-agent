@@ -41,5 +41,5 @@ A sequential pipeline driven by code, one pass per snapshot:
 - Follow-ups:
   - Spec 010 enforces the agents' tool lists in code and must exclude the 008 judgment tools (`set_cause`, `raise_severity`, `lift_severity_raise`), which stay registered but are offered to no agent. 010 also owns the US-08 injection tests (FR-20).
   - Spec 011 caches both prompt prefixes.
-  - Spec 016 adds `tendencia` to the brief's gap perspective.
+  - ~~Spec 016 adds `tendencia` to the brief's gap perspective.~~ Superseded by [ADR-0023](0023-early-warning-code-only-gap-forecast-in-dashboard.md): the forecast never enters the brief.
   - Renaming `Coordinator` to `AgentLoop` is deferred.

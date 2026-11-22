@@ -41,6 +41,8 @@ ASSET_NAMES = (
     "app.js",
     "agents.js",
     "metrics.js",
+    "pronostico.html",
+    "forecast.js",
 )
 
 
@@ -51,7 +53,7 @@ def th_app(thresholds_dir: Settings) -> DashboardApp:
 
 
 @pytest.mark.parametrize("query", ["at=abc", "at=-1", "at=1234567", "at="])
-@pytest.mark.parametrize("route", ["/api/state", "/api/agents", "/api/metrics"])
+@pytest.mark.parametrize("route", ["/api/state", "/api/agents", "/api/metrics", "/api/forecast"])
 def test_e1_invalid_at_is_400(th_app: DashboardApp, route: str, query: str) -> None:
     """014 E1 (R3): a non-number, negative, oversized or blank 'at' gives 400 with the fixed body."""
     status, body = get_json(th_app, f"{route}?{query}")

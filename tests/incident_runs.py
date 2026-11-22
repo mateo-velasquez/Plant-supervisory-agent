@@ -103,5 +103,7 @@ def incident_run(
     ctx = incident_context()
     with SqliteRegistry(path) as registry:
         ledger = CauseLedger(registry.causes, registry.cases, ctx.shifts)
-        pipeline = ThresholdPipeline.from_registry(registry, ctx, ledger if with_ledger else None)
+        pipeline = ThresholdPipeline.from_registry(
+            registry, ctx, ledger if with_ledger else None, forecast=None
+        )
         yield IncidentRun(registry, ledger, pipeline, scenario or incident_scenario())

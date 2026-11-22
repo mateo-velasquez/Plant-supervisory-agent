@@ -190,7 +190,7 @@ def baseline(tmp_path: Path, arrivals: list[Arrival]) -> dict[str, tuple[Item, .
     """E41's threshold-only items per snapshot, the templates the agent run must keep."""
     path = tmp_path / "baseline.sqlite3"
     with SqliteRegistry(path) as registry:
-        pipeline = ThresholdPipeline.from_registry(registry, plant_context())
+        pipeline = ThresholdPipeline.from_registry(registry, plant_context(), forecast=None)
         run_series(arrivals, plant_shifts(), registry, pipeline)
     return items_of(path, SERIES)
 

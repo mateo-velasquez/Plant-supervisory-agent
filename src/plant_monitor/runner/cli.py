@@ -1,6 +1,7 @@
-"""The 'plant-monitor run', 'trace' and 'dashboard' commands."""
+"""The 'plant-monitor run' (with or without '--dashboard'), 'trace' and 'dashboard' commands."""
 
 import argparse
+import contextlib
 import logging
 import math
 import sqlite3
@@ -19,7 +20,7 @@ from plant_monitor.cases.registry import SqliteRegistry
 from plant_monitor.cases.registry.notice_reader import read_notice
 from plant_monitor.cases.registry.notices import read_deliverables
 from plant_monitor.config import Settings, get_settings
-from plant_monitor.dashboard.server import DashboardApp, serve_dashboard
+from plant_monitor.dashboard.server import DashboardApp, RunningDashboard, serve_dashboard, start_dashboard
 from plant_monitor.domain.calendar import HeldOutPolicy
 from plant_monitor.domain.models import Shift
 from plant_monitor.domain.notices import ShiftReport
@@ -28,11 +29,13 @@ from plant_monitor.ingestion.arrivals import Arrival, load_arrivals, load_arriva
 from plant_monitor.ingestion.held_out import check_ids
 from plant_monitor.ingestion.plant import load_plan, load_shifts, load_shipments, load_standards
 from plant_monitor.metrics.engine import PlantContext
+from plant_monitor.metrics.forecast import ForecastConfig
 from plant_monitor.metrics.tables import ShipmentsTable, StandardsTable
 from plant_monitor.metrics.thresholds import load_thresholds
 from plant_monitor.notify.console import write_safe
 from plant_monitor.notify.file import FileNotifier
 from plant_monitor.runner.agent_pipeline import build_agent_pipeline
+from plant_monitor.runner.forecast_step import ForecastStep
 from plant_monitor.runner.outbox import OutboxDispatcher
 from plant_monitor.runner.pipeline import ThresholdPipeline
 from plant_monitor.runner.ports import PostCommit, SnapshotPipeline
@@ -64,6 +67,7 @@ _DASHBOARD_COMMAND = "dashboard"
 _UNKNOWN_NOTICE = 1
 _EXIT_CODES = {"ok": 0, "aborted": 2, "interrupted": 130}
 _USAGE_ERROR = 2
+_WAIT_SECONDS = 1.0
 
 
 @dataclass(frozen=True)
@@ -73,6 +77,7 @@ class RunOptions:
     mode: Mode
     until: str | None
     speed: float
+    dashboard: bool = False
 
 
 def _seconds(text: str) -> float:
@@ -99,7 +104,7 @@ class DashboardOptions:
 
 
 def parse_args(argv: Sequence[str] | None) -> RunOptions | TraceOptions | DashboardOptions:
-    """Parse 'run [--thresholds-only] [--until ID] [--speed SECONDS]', 'trace NOTICE_ID' or 'dashboard'."""
+    """Parse 'run [--dashboard] [--thresholds-only] [--until ID] [--speed S]', 'trace ID' or 'dashboard'."""
     parser = argparse.ArgumentParser(prog="plant-monitor")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser(_DASHBOARD_COMMAND, help="serve the local read-only live dashboard")
@@ -111,17 +116,28 @@ def parse_args(argv: Sequence[str] | None) -> RunOptions | TraceOptions | Dashbo
     run.add_argument(
         "--speed", type=_seconds, default=0.0, metavar="SECONDS", help="pause after each snapshot"
     )
+    run.add_argument(
+        "--dashboard",
+        action="store_true",
+        help="fresh run folder with the live dashboard, served until Ctrl+C",
+    )
     args = parser.parse_args(argv)
     if args.command == _TRACE_COMMAND:
         return TraceOptions(notice_id=args.notice_id)
     if args.command == _DASHBOARD_COMMAND:
         return DashboardOptions()
     mode: Mode = "thresholds_only" if args.thresholds_only else "agent"
-    return RunOptions(mode=mode, until=args.until, speed=args.speed)
+    return RunOptions(mode=mode, until=args.until, speed=args.speed, dashboard=args.dashboard)
 
 
 def _utc_now() -> datetime:
     return datetime.now(UTC)
+
+
+def _wait_until_interrupted() -> None:
+    """Block until Ctrl+C raises 'KeyboardInterrupt'."""
+    while True:
+        time.sleep(_WAIT_SECONDS)
 
 
 @dataclass(frozen=True)
@@ -134,6 +150,8 @@ class CliDeps:
     monotonic: Callable[[], float] = time.monotonic
     now: Callable[[], datetime] = field(default=_utc_now)
     serve: Callable[[DashboardApp, int, Callable[[int], None]], None] = serve_dashboard
+    start_dashboard: Callable[[DashboardApp, int], RunningDashboard] = start_dashboard
+    wait: Callable[[], None] = _wait_until_interrupted
 
 
 def select_arrivals(arrivals: Sequence[Arrival], until: str | None, policy: HeldOutPolicy) -> list[Arrival]:
@@ -185,7 +203,13 @@ def _wire_thresholds(
     registry: SqliteRegistry, prepared: Prepared, settings: Settings, deps: CliDeps, opts: RunOptions
 ) -> tuple[SnapshotPipeline, PostCommit]:
     """Threshold-only wiring: no model, no trace."""
-    pipeline = ThresholdPipeline.from_registry(registry, prepared.ctx)
+    config = ForecastConfig(
+        window=settings.early_warning_window_snapshots, horizon=settings.early_warning_horizon_snapshots
+    )
+    forecast = ForecastStep.build(
+        config, registry.forecasts, registry.forecasts, prepared.ctx, prepared.policy
+    )
+    pipeline = ThresholdPipeline.from_registry(registry, prepared.ctx, forecast=forecast)
     outbox = OutboxDispatcher(registry.notices, FileNotifier(settings.notices_dir), deps.now)
     return pipeline, _chain([outbox], deps, opts)
 
@@ -318,10 +342,16 @@ def _dashboard(settings: Settings, deps: CliDeps) -> int:
     return 0
 
 
-def _run(opts: RunOptions, settings: Settings, deps: CliDeps) -> tuple[RunOutcome, datetime]:
-    """Steps 3-8 of 'main': checks, wiring and the run. Raises the setup errors."""
+def _check_key(opts: RunOptions, settings: Settings) -> None:
     if opts.mode == "agent" and settings.anthropic_api_key is None:
         raise ValueError("ANTHROPIC_API_KEY is not set (needed in agent mode; use --thresholds-only)")
+
+
+def _run(
+    opts: RunOptions, settings: Settings, deps: CliDeps, started: datetime | None = None
+) -> tuple[RunOutcome, datetime]:
+    """Steps 3-8 of 'main': checks, wiring and the run. Raises the setup errors."""
+    _check_key(opts, settings)
     # Q-71: a directory with agent-mode traces never gets threshold-only commits.
     if opts.mode == "thresholds_only" and any(settings.traces_dir.glob(TRACE_GLOB)):
         raise ValueError(
@@ -329,7 +359,7 @@ def _run(opts: RunOptions, settings: Settings, deps: CliDeps) -> tuple[RunOutcom
         )
     logging.basicConfig(level=settings.log_level, stream=sys.stderr)
     prepared = _prepare(opts, settings)
-    started = deps.now()
+    started = deps.now() if started is None else started
     for taken in (trace_path(settings.traces_dir, started), report_path(settings.runs_dir, started)):
         if taken.exists():
             raise ValueError(f"{taken} already exists: wait a second and run again")
@@ -353,6 +383,50 @@ def _emit(settings: Settings, opts: RunOptions, started: datetime, outcome: RunO
     print(f"summary: {path}")
 
 
+def _conclude(settings: Settings, opts: RunOptions, started: datetime, outcome: RunOutcome) -> None:
+    """Report an abort, then write and print the summary; a summary failure never changes the exit code."""
+    if outcome.aborted is not None:
+        print(f"run aborted at {outcome.aborted[0]}: {outcome.aborted[1]}", file=sys.stderr)
+    try:
+        _emit(settings, opts, started, outcome)
+    except (OSError, ValueError) as exc:
+        print(f"summary unavailable: {exc}", file=sys.stderr)
+
+
+def _run_with_dashboard(opts: RunOptions, settings: Settings, deps: CliDeps) -> int:
+    """'run --dashboard': a fresh run folder served live, kept serving until Ctrl+C (016 R20)."""
+    started = deps.now()
+    folder = settings.output_dir / f"run-{started:%Y%m%dT%H%M%SZ}"
+    run_settings = settings.model_copy(update={"output_dir": folder})
+    try:
+        if folder.exists():
+            raise ValueError(f"{folder} already exists: wait a second and run again")
+        _check_key(opts, run_settings)
+        app = DashboardApp.from_settings(run_settings)
+    except (DataLoadError, ValueError, OSError) as exc:
+        return _fail(str(exc))
+    port = run_settings.dashboard_port
+    try:
+        handle = deps.start_dashboard(app, port)
+    except OSError as exc:
+        return _fail(f"dashboard: cannot listen on 127.0.0.1:{port} ({type(exc).__name__})")
+    try:
+        print(f"dashboard: http://127.0.0.1:{handle.port}/")
+        print(f"output: {folder}", flush=True)
+        try:
+            outcome, started = _run(opts, run_settings, deps, started)
+        except (DataLoadError, ValueError, OSError, sqlite3.Error) as exc:
+            return _fail(str(exc))
+        _conclude(run_settings, opts, started, outcome)
+        if outcome.status != "interrupted":
+            print(f"dashboard still serving; trace with OUTPUT_DIR={folder} (Ctrl+C to stop)", flush=True)
+            with contextlib.suppress(KeyboardInterrupt):
+                deps.wait()
+        return _EXIT_CODES[outcome.status]
+    finally:
+        handle.stop()
+
+
 def main(argv: Sequence[str] | None = None, *, deps: CliDeps | None = None) -> int:
     """Run 'run', 'trace' or 'dashboard'; 0 ok, 1 unknown notice_id, 2 setup error or abort, 130 Ctrl-C."""
     deps = deps or CliDeps()
@@ -373,16 +447,13 @@ def main(argv: Sequence[str] | None = None, *, deps: CliDeps | None = None) -> i
             return _trace(opts, settings)
         except (DataLoadError, ValueError, OSError, sqlite3.Error) as exc:
             return _fail(str(exc))
+    if opts.dashboard:
+        return _run_with_dashboard(opts, settings, deps)
     try:
         outcome, started = _run(opts, settings, deps)
     except (DataLoadError, ValueError, OSError, sqlite3.Error) as exc:
         return _fail(str(exc))
-    if outcome.aborted is not None:
-        print(f"run aborted at {outcome.aborted[0]}: {outcome.aborted[1]}", file=sys.stderr)
-    try:
-        _emit(settings, opts, started, outcome)
-    except (OSError, ValueError) as exc:
-        print(f"summary unavailable: {exc}", file=sys.stderr)
+    _conclude(settings, opts, started, outcome)
     return _EXIT_CODES[outcome.status]
 
 

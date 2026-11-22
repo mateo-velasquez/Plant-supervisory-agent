@@ -116,11 +116,21 @@ function renderKpis(s) {
     kpiCard("Costo del modelo", costText(k.cost), costHint(k.cost), null));
 }
 
+// Early-warning marker: opens the Pronóstico window; the text comes ready from the server.
+function forecastMark(cell) {
+  const f = cell.forecast;
+  if (!f) return null;
+  const text = `Pronóstico: cruzaría ${sevLabel(f.target_level)} en ${f.label}`;
+  const b = h("button", { type: "button", class: `fcmark ${f.target_level}`, title: text, "aria-label": text }, "⚠");
+  b.addEventListener("click", () => window.open("/pronostico", "pronostico"));
+  return b;
+}
+
 function renderCell(c) {
   const cs = c.case;
   if (!cs || c.status === "calm") {
     return h("div", { class: "cell calm" },
-      h("div", { class: "row1" }, h("span", { class: "chip ok" }, "Sin caso"), h("span", {})),
+      h("div", { class: "row1" }, h("span", { class: "chip ok" }, "Sin caso"), forecastMark(c) || h("span", {})),
       h("div", { class: "big" }, h("span", { class: "u" }, "Bajo umbral")),
       sparkline(c.series),
       h("div", { class: "facts" }, "Sin casos hasta este snapshot"));
@@ -129,7 +139,8 @@ function renderCell(c) {
   return h("div", { class: `cell ${resolved ? "resolved" : "sev-" + cs.severidad}`, title: cs.case_id },
     h("div", { class: "row1" },
       h("span", { class: "chip" + (cs.estado === "escalado" ? " esc" : resolved ? " ok" : "") }, stateLabel(cs.estado)),
-      resolved ? h("span", { class: "muted" }, `en ${cs.resolved_at}`) : h("span", { class: "sevtag" }, sevLabel(cs.severidad))),
+      h("span", { class: "row1r" }, forecastMark(c),
+        resolved ? h("span", { class: "muted" }, `en ${cs.resolved_at}`) : h("span", { class: "sevtag" }, sevLabel(cs.severidad)))),
     h("div", { class: "big" },
       h("span", { class: "u" }, `${signed(cs.gap_unidades)} u`),
       h("span", { class: "p" }, cs.gap_pct === null ? "" : `${signed(cs.gap_pct)} %`)),
