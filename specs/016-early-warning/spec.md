@@ -1,9 +1,9 @@
 # 016 · Early warning: gap trend forecast and the Pronóstico window — Spec
 
-- **Status:** Implemented
+- **Status:** R1–R19 Implemented · **Amendment 2026-11-21 (R12 empty table, R20 `run --dashboard`, R13 chart history window): Draft**
 - **Requirements:** FR-41, FR-40, FR-38, NFR-04, NFR-06, NFR-07, NFR-10
 - **Stories:** —
-- **Decisions:** ADR-0023 "Early warning as a code-only gap forecast shown in the dashboard". Q-119–Q-136 decided by the user; design review applied (B2–B4, C1–C8). Reused unchanged: Q-06, Q-07, Q-16, Q-20, Q-23, Q-27 and 014 R3, R13, R14, R15, 015 I2.
+- **Decisions:** ADR-0023 "Early warning as a code-only gap forecast shown in the dashboard". Q-119–Q-136 decided by the user; design review applied (B2–B4, C1–C8). Amendment: Q-137–Q-140 decided by the user. Reused unchanged: Q-06, Q-07, Q-16, Q-20, Q-23, Q-27, Q-71 and 012 exit codes, 014 R2, R3, R13, R14, R15, 015 I2.
 - **Week:** Stretch · **Priority:** set by the user
 
 ## Goal
@@ -14,8 +14,9 @@ Warn before a combination's gap crosses its next severity level, with the snapsh
   - `domain/forecast.py` (row types); `domain/calendar.py` gains `scheduled_time`, `future_snapshots`; `metrics/plan.py` gains `shift_plan` (moved from `engine`); `metrics/forecast.py` (pure forecast);
   - registry schema v5 (`gap_forecasts`), its store and reader; `runner/forecast_step.py` (`ForecastStep`), called from `ThresholdPipeline.finish`;
   - settings `early_warning_window_snapshots`, `early_warning_horizon_snapshots`;
-  - `dashboard/forecast.py`, `dashboard/anticipation.py`, `/api/forecast`, `/pronostico`, `src/frontend/{pronostico.html, forecast.js}`, the nav tab in the three existing pages, one optional field in Planta's cell.
-- **Out:** projecting the delay (it already is a projection, §1); any change to minimum or effective severity, the lifecycle, notices, the outbox, reports, the evaluator, the golden set or the agents' brief and prompts (Q-119). The 009 `tendencia` extension point is **not used**; ADR-0009's follow-up is superseded by ADR-0023. No backtest command, no new library, no build step, no `umbrales.yaml` key.
+  - `dashboard/forecast.py`, `dashboard/anticipation.py`, `/api/forecast`, `/pronostico`, `src/frontend/{pronostico.html, forecast.js}`, the nav tab in the three existing pages, one optional field in Planta's cell;
+  - **amendment:** `run --dashboard` in `runner/cli.py` (one command: fresh output folder, series and live dashboard together) and `start_dashboard` in `dashboard/server.py`; R12's empty-table case.
+- **Out:** opening a browser automatically; `--dashboard` on `trace` or `dashboard`; resuming an aborted run with `--dashboard` (plain `run` on the printed folder resumes it). Also out: projecting the delay (it already is a projection, §1); any change to minimum or effective severity, the lifecycle, notices, the outbox, reports, the evaluator, the golden set or the agents' brief and prompts (Q-119). The 009 `tendencia` extension point is **not used**; ADR-0009's follow-up is superseded by ADR-0023. No backtest command, no new library, no build step, no `umbrales.yaml` key.
 
 ## Decisions (interface choices of the spec writer; see plan)
 - **I1** The forecast is one pure function in `metrics/forecast.py`; its row types live in `domain/forecast.py`, so the registry and the dashboard read them without importing `metrics`.
@@ -29,6 +30,9 @@ Warn before a combination's gap crosses its next severity level, with the snapsh
 - **I9** Anticipación lives in `dashboard/anticipation.py`: computed in the viewer from stored rows only, with no plant metric and no golden set. ADR-0023 records why this differs from ADR-0022 (where the viewer only reads stored evaluations).
 - **I10** `/api/forecast` ignores `snapshot`, like `/api/metrics` (one `_IGNORES_SNAPSHOT` set).
 - **I11** Formatting: rate and plan per snapshot 2 decimals, thresholds 1 decimal, hours an integer when whole else 1 decimal, mean lead time 1 decimal (`Decimal`, half-even).
+- **I12** `--dashboard` is a flag of `run`, not a new subcommand (Q-137): every `run` option keeps its meaning, and `RunOptions.dashboard` defaults to `False`, so plain `run` is byte-for-byte the 012 command.
+- **I13** The run folder is `settings.model_copy(update={"output_dir": OUTPUT_DIR / "run-<UTC stamp>"})` (Q-138): every derived path (registry, traces, runs, notices, evals) moves with it, and the dashboard and the run get the same `Settings`.
+- **I14** The server runs in a daemon thread started through a `CliDeps.start_dashboard` seam returning a handle with `port` and `stop()`; the wait after the run is a `CliDeps.wait` seam. Tests inject both; no real socket or sleep in unit tests.
 
 ## Behavior
 
@@ -81,10 +85,11 @@ At snapshot N (seq `n`) the forecast uses only: N's metrics (gap, gap severity, 
 ### R12 · Read-only source, older or unreadable tables (Q-128, Q-129; 014 R2)
 - Rows come from the one `load_view` per request (`mode=ro`); nothing is written or created.
 - `state` = `ok` with rows; `unavailable` when the table does not exist (v4 cannot be migrated read-only), the registry is missing, or a stored payload fails `ForecastRow` validation (`forecasts=None`, other tables read as usual). Page: "Esta corrida no tiene pronósticos"; lists empty; never a 500 on any endpoint.
+- **Empty table (amendment, Q-139):** also `unavailable` when the table exists, the shown forecast rows are empty over the whole run (not cut at N) and at least one position is shown. This is a registry migrated to v5 after its series was processed: a rerun skips every snapshot as a repeat (§4), so the step never runs. A registry with no processed snapshot yet stays `ok` (a run that just started). The page adds the hint "Volvé a correr la serie en una carpeta nueva (`plant-monitor run --dashboard`)". Every Planta `forecast` is null, as today.
 
 ### R13 · Active warnings and combination charts (Q-125)
 - **Warnings** = shown rows at position N with status `warning`, ordered by `hours`, then canonical combination order; each with `modelo`, `mercado`, `target_level`, `label` and a hover **basis**: rate, plan per snapshot, window `"S005–S008"`, threshold (the target's units at the crossing snapshot).
-- **Combinations**: those of `calendar.combinations` (as Planta), each with `status`, gap and effective severity, `target_level`, **history** (every shown row ≤ N: seq, `snapshot_id`, gap, threshold lines as gap values ≤ 0), the **projection** of row N (points as gap values with their stepped lines) and the warning or null.
+- **Combinations**: those of `calendar.combinations` (as Planta), each with `status`, gap and effective severity, `target_level`, **history** (amendment, Q-140: the shown rows with seq in (N − W, N], W = `early_warning_window_snapshots`, so the chart shows the forecast's window plus its projection; Anticipación still scores every shown row ≤ N: seq, `snapshot_id`, gap, threshold lines as gap values ≤ 0), the **projection** of row N (points as gap values with their stepped lines) and the warning or null.
 
 ### R14 · Anticipación (Q-127, Q-131, Q-132)
 Over shown rows with seq ≤ N, per combination:
@@ -111,6 +116,15 @@ Each 014 cell gains `forecast`: null, or `{target_level, label}` when the combin
 - `domain/forecast.py` imports only `domain`. `metrics/forecast.py` imports only `domain` and `metrics`. `cases/registry/forecasts.py` imports only `domain` and `cases.registry`. `runner/forecast_step.py` imports only `domain`, `metrics` and `runner` (its `ForecastSource` and `ForecastSink` protocols are its own; `SqliteRegistry` satisfies them structurally).
 - `dashboard` keeps `DASHBOARD_ALLOWED` unchanged (`cases.registry.run_reader`, `cases.registry.notices`, `domain`, …): it gets `ForecastRow` from `domain.forecast`, never imports `cases.registry.forecasts` or `metrics`.
 - No module of `agents`, `mcp_server`, `hooks`, `evaluation`, `cases/notice_builder.py` or `runner/perspectives.py` imports a forecast module.
+
+### R20 · One command: `run --dashboard` (amendment; Q-137, Q-138; 012, 014)
+- **Syntax:** `plant-monitor run --dashboard [--thresholds-only] [--until ID] [--speed SECONDS]`. Without `--dashboard`, `run` is unchanged.
+- **Fresh folder:** the run folder is `OUTPUT_DIR/run-<YYYYMMDDTHHMMSSZ>` (UTC, from `deps.now()`), created by the run. If it already exists → exit 2 `"<folder> already exists: wait a second and run again"`, nothing processed. `OUTPUT_DIR` itself only holds run folders; its own `registry.sqlite3` is never created or opened.
+- **Order:** settings → 012's checks (API key in agent mode) → plant data → `DashboardApp.from_settings(run settings)` → bind on `dashboard_port` (127.0.0.1 only, 014 R1) → print `dashboard: http://127.0.0.1:<port>/` and `output: <folder>` → run the series in the main thread → report and summary as 012 → print `dashboard still serving; trace with OUTPUT_DIR=<folder> (Ctrl+C to stop)` → wait.
+- **Bind failure** → exit 2 `dashboard: cannot listen on 127.0.0.1:<port> (<ErrorClass>)` before the run folder exists. A data error in `from_settings` → exit 2 as 014.
+- **While running**, the dashboard is the 014–016 read-only server on the run folder: a write lock gives 503 `dashboard: registry busy` and the pages keep their last payload (014 R2); before the first commit `registry` is `missing`.
+- **Ctrl+C:** during the series, the run stops as 012 (exit 130, report written), the server stops and there is no wait. During the wait, the server stops and the exit code is the run's (0 ok, 2 aborted). An aborted run still writes its report and then waits, so the state at the abort can be inspected.
+- The server is always stopped (`stop()` exactly once) on every path after a successful bind.
 
 ## Worked examples
 
@@ -146,6 +160,11 @@ Each 014 cell gains `forecast`: null, or `{target_level, label}` when the combin
 | E22 | **HTTP (R17; I10).** GET `/pronostico`, `/forecast.js`; `/pronostico/`, `/forecast.js/`; POST `/api/forecast`; bad Host; write lock held; `at=abc`; `snapshot=../x` | 200 HTML, JS; 404 ×2; 405; 403; 503 `dashboard: registry busy`; 400 `dashboard: invalid at`; `snapshot=../x` → 200, same body as none. 014 R14 headers on all. |
 | E23 | **Risk: frontend assets (R18).** Asset scan; `pronostico.html`; other pages; `app.js` | `pronostico.html` loads only `/app.css`, `/dom.js`, `/forecast.js`; no inline script, `<style>`, `style=`, `on…=`. All four pages contain `href="/pronostico" target="pronostico"`. `app.js`'s new `window.open` takes the literal `"/pronostico"`. |
 | E24 | **Risk: imports (R1, R19).** Boundary scan | `domain/forecast.py`, `metrics/forecast.py`, `cases/registry/forecasts.py`, `runner/forecast_step.py` follow R19. Importers of the non-domain forecast modules (`metrics.forecast`, `cases.registry.forecasts`, `runner.forecast_step`, `dashboard.forecast`, `dashboard.anticipation`) are exactly: `cases/registry/{run_reader,sqlite}.py`, `runner/{pipeline,forecast_step,cli,agent_pipeline}.py`, `dashboard/{forecast,server,state}.py` (`forecast.py` imports `dashboard.anticipation`; `server.py` and `state.py` import `dashboard.forecast`), `evals/smoke_days_1_7.py` (`ForecastConfig`, `ForecastStep`); the excluded layers import none of them nor `domain.forecast`. `DASHBOARD_ALLOWED` unchanged. |
+| E25 | **Empty table (R12 amendment; Q-139).** (a) A v5 copy of TH_DIR with `DELETE FROM gap_forecasts`; (b) a fresh v5 registry with no processed snapshot; (c) E13(b)'s migrated registry at `at=6` and `at=8`. GET `/api/forecast`, `/api/state` | (a) `state` `unavailable`, lists empty, every cell `forecast` null, all 200, bytes unchanged. (b) `registry` `ok`, `state` `ok`, `positions` []. (c) `ok` at both: rows exist for S007–S008, so at 6 the charts are empty but the state is not `unavailable`. |
+| E26 | **`run --dashboard` happy path (R20; I12–I14).** Synthetic data, `--thresholds-only`, `deps.now` = 2026-11-21 20:15:00 UTC, fake `start_dashboard` (records the app, returns port 8765), fake `wait` | Exit 0. `OUTPUT_DIR/run-20261121T201500Z/` holds `registry.sqlite3`, `notices/`, `runs/run-20261121T201500Z.json`; `OUTPUT_DIR/registry.sqlite3` does not exist. The app's registry path is inside the run folder. Stdout, in order: `dashboard: http://127.0.0.1:8765/`, `output: …run-20261121T201500Z`, the 012 summary, `dashboard still serving; trace with OUTPUT_DIR=…`. `start_dashboard` before the first commit, `wait` once, `stop` once, after `wait`. Forecast rows exist (the step ran). `parse_args(["run"])` gives `dashboard=False`. |
+| E27 | **`run --dashboard` failures (R20).** (a) Run folder already exists; (b) `start_dashboard` raises `OSError`; (c) agent mode with no API key; (d) `KeyboardInterrupt` from the pipeline at the 2nd snapshot; (e) `KeyboardInterrupt` from `wait`; (f) a pipeline abort | (a) Exit 2 `… already exists: wait a second and run again`, `start_dashboard` not called, no registry. (b) Exit 2 `dashboard: cannot listen on 127.0.0.1:8765 (OSError)`, no run folder. (c) Exit 2 with 012's message, nothing started. (d) Exit 130, report written, `stop` once, `wait` not called. (e) Exit 0, `stop` once. (f) Exit 2, report written, `wait` called, `stop` once. |
+| E28 | **Risk: the real server (R20; 014 R1, R14).** `start_dashboard(app, 0)` on a synthetic folder; GET `/` and `/api/forecast`; `stop()`; GET again | 200 HTML and JSON from `127.0.0.1:<handle.port>` with 014 R14 headers; after `stop()` the port refuses connections and the thread has ended. |
+| E29 | **Chart history window (R13 amendment; Q-140).** E15's rows with W = 4; FT at 8 and at 4 | P's history seqs 5–8 at 8 and 1–4 at 4; projection and `accuracy` equal to the payload without a window. |
 
 ## Edge cases and assumptions
 - **X1** · (Q-135) A missing snapshot stretches the window; FR-42 is not implemented and days 1–7 have none.
@@ -155,6 +174,8 @@ Each 014 cell gains `forecast`: null, or `{target_level, label}` when the combin
 - **X5** · An episode whose deadline never arrives (series end; with the guard closed, the end of day 7) stays `pending`.
 - **X6** · Float boundaries: the crossing uses `gap_severity`, so a projected gap exactly at a threshold behaves as the official severity (Q-07).
 - **X7** · (Q-136) A snapshot whose forecast failed has no rows: Planta shows no marker, history has a hole, and R14 sees no crossing at the next row.
+- **X8** · (Q-139) A registry where every snapshot's forecast failed (X7 at every snapshot) also reads as `unavailable`; accepted, the run log names each skip.
+- **X9** · (R20) `trace` and `dashboard` keep reading `OUTPUT_DIR` as given; to reuse a `--dashboard` run, set `OUTPUT_DIR` to the printed folder. Old `OUTPUT_DIR`s are never touched or migrated by `--dashboard`.
 
 ## Acceptance
 - [ ] E1–E24 pass on synthetic fixtures; CI never calls the model (NFR-07). Every new test cites its spec id.
@@ -164,7 +185,8 @@ Each 014 cell gains `forecast`: null, or `{target_level, label}` when the combin
   - dashboard: `ASSET_NAMES` and the invalid-`at` parametrization (`tests/integration/test_dashboard_http.py`); the HTML-page and nav checks (`tests/unit/dashboard/test_frontend_assets.py`).
 - [ ] Specs 001–015 tests pass unchanged otherwise.
 - [ ] Docs, `visual-designer` pass, real-run review with the user's permission (T9, T11, T12).
+- [ ] **Amendment:** E25–E28 pass; `run` without `--dashboard` and the `dashboard` command keep every 012 and 014 test unchanged; `docs/demo.md` step 2 uses `run --dashboard` (T13–T16).
 - [ ] `ruff`, `mypy --strict` and `pytest --cov` pass.
 
 ## Size
-About 25 KB, near 015's: the forecast, its storage, its failure containment and its window share one row contract; splitting the window out would ship stored forecasts nobody can see.
+About 25 KB, near 015's: the forecast, its storage, its failure containment and its window share one row contract; splitting the window out would ship stored forecasts nobody can see. The amendment (R20, about 4 KB) lives here by the user's choice: it is the way to see the forecast on a run that has it.

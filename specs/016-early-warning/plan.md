@@ -26,6 +26,10 @@ ADR-0023 "Early warning as a code-only gap forecast shown in the dashboard" reco
 | `src/frontend/pronostico.html`, `forecast.js` | New | The Pronóstico window (R18). |
 | `src/frontend/index.html`, `agentes.html`, `metricas.html`, `app.js`, `app.css` | Changes | Nav tab; Planta ⚠; styles. |
 | `tests/forecast_builders.py` | New | `SYN`, `plan_rows`, `fc`, `fr`, `ft`, `failing_sink`. |
+| `dashboard/forecast.py` | Changes (amendment) | `available` also requires rows or no shown position (R12, Q-139). |
+| `src/frontend/forecast.js` | Changes (amendment) | The "Volvé a correr…" hint under the `unavailable` banner. |
+| `dashboard/server.py` | Adds (amendment) | `RunningDashboard` (`port`, `stop()`), `start_dashboard(app, port)` (R20; I14). |
+| `runner/cli.py` | Changes (amendment) | `run --dashboard`; `RunOptions.dashboard: bool = False`; `CliDeps.start_dashboard`, `CliDeps.wait`; `_run_with_dashboard` (R20; I12–I14). |
 
 ## Types and interfaces
 
@@ -168,6 +172,39 @@ def build_forecast(view: RunView, calendar: Calendar, at: int) -> ForecastPayloa
 - `ASSETS` adds `/pronostico` and `/forecast.js`; `_API_ROUTES` adds `/api/forecast`; `_IGNORES_SNAPSHOT: Final = frozenset({"/api/metrics", "/api/forecast"})` replaces the single-route test.
 - `Cell` gains `forecast: CellForecast | None` (`{target_level, label}`). `/api/state` and `/api/agents` keep 014's `HeldOut`.
 
+### Amendment: empty table (R12, Q-139)
+- `build_forecast`: `available = view.registry == "ok" and stored is not None and (bool(stored) or not view.positions())`, where `stored` is the shown rows of the whole run (before the `seq ≤ at` cut). Nothing else changes; `/api/state` already gives null markers with no rows.
+
+### Amendment: `start_dashboard` and `run --dashboard` (R20; I12–I14)
+```python
+# dashboard/server.py
+@dataclass(frozen=True)
+class RunningDashboard:
+    port: int
+    stop: Callable[[], None]          # shutdown(), server_close(), join the thread; idempotent
+def start_dashboard(app: DashboardApp, port: int) -> RunningDashboard: ...   # make_server, then serve_forever in a daemon thread
+
+# runner/cli.py
+@dataclass(frozen=True)
+class RunOptions:
+    mode: Mode
+    until: str | None
+    speed: float
+    dashboard: bool = False
+class CliDeps:                         # gains two seams
+    start_dashboard: Callable[[DashboardApp, int], RunningDashboard] = start_dashboard
+    wait: Callable[[], None] = _wait_until_interrupted   # sleeps in a loop until KeyboardInterrupt
+```
+- `main`: `if opts.dashboard: return _run_with_dashboard(opts, settings, deps)`; plain `run` keeps its path untouched.
+- `_run_with_dashboard`:
+  1. `started = deps.now()`; `folder = settings.output_dir / f"run-{started:%Y%m%dT%H%M%SZ}"`; exists → `ValueError` (exit 2).
+  2. `run_settings = settings.model_copy(update={"output_dir": folder})` (I13).
+  3. API-key check (shared helper with `_run`), `DashboardApp.from_settings(run_settings)`, `deps.start_dashboard(app, run_settings.dashboard_port)` (`OSError` → exit 2 message; the folder is not yet created).
+  4. Print the URL and folder; then, inside one `try … finally: handle.stop()`: `_run(opts, run_settings, deps, started=started)` and `_emit` as `main` does; unless the outcome is `interrupted`, print the "still serving" line and call `deps.wait()`, catching `KeyboardInterrupt`.
+  5. Return `_EXIT_CODES[outcome.status]`; a setup error raised by `_run` after the bind still stops the server (the `finally`) and exits 2.
+- `_run` gains an optional `started` so the folder stamp, the trace and the report share one instant; its existing behavior with `started=None` is unchanged.
+- No new layer edge: `runner.cli` already imports `dashboard.server` (014).
+
 ## API
 `GET /api/forecast?at=N` (shape; the examples are normative):
 ```json
@@ -214,6 +251,9 @@ client: BroadcastChannel {mode, at} → fetch ?at=N | "Seguir en vivo" → poll 
 - **`tendencia` in the 009 brief.** It would put a forecast before the model that decides raises (Q-119).
 - **Read-time redaction of held-out ids** (the first Q-133). It needs point- and warning-level filtering and an extra count; replaced by write-time truncation.
 - **A backtest CLI.** Anticipación computes the same numbers as of any N.
+- **A `demo` subcommand** (amendment). Duplicates `run`'s options and defaults; the user chose a flag (Q-137).
+- **Refuse a used `OUTPUT_DIR` instead of a fresh subfolder.** Still needs a manual folder per run; the user chose the automatic subfolder (Q-138).
+- **Migrating forecasts for already processed snapshots** (backfill on open). It would write rows the run never computed at their time and break R2's "as of N"; Q-139 shows `unavailable` instead.
 
 ## Constraints (non-negotiable)
 - R19 layer rules. No model, no network, no new library. The dashboard writes nothing and never creates the table.
@@ -224,6 +264,11 @@ client: BroadcastChannel {mode, at} → fetch ?at=N | "Seguir en vivo" → poll 
 - **STRUCTURE add:** `domain/forecast.py`, the `domain/calendar.py` and `metrics/plan.py` additions, `metrics/forecast.py`, `cases/registry/forecasts.py`, `runner/forecast_step.py`, the `schema.py` (v5), `run_reader.py`, `pipeline.py` rows; `dashboard/forecast.py`, `dashboard/anticipation.py`; `src/frontend/{pronostico.html, forecast.js}`. The `domain/perspectives.py` row: "not extended by 016 (Q-119)".
 - **Dependency lines:** R19's rules.
 - **README:** a "Forecast window" section under "Live dashboard" and the ADR-0023 decision line.
+- **Amendment (T16):** README "Running" gains `run --dashboard` as the one-command way; `docs/demo.md` step 2 becomes `uv run plant-monitor run --dashboard --speed <s>` (fresh folder by construction, so the "fresh `OUTPUT_DIR`" note goes) and step 4 uses the printed folder; STRUCTURE rows for `runner/cli.py` and `dashboard/server.py`.
+
+## Risks (amendment)
+- **Two threads, one SQLite file.** The writer and the read-only server already coexist across processes (014 R2); in one process each request opens its own `mode=ro` connection, so no connection is shared across threads.
+- **Ctrl+C in a thread.** Python delivers `KeyboardInterrupt` to the main thread only; the series and the wait run there, the server thread is a daemon and is stopped explicitly.
 
 ## Risks
 - **Schema bump.** Every registry opened by the writer migrates to v5; older code fails on a v5 file with the existing version error. Pinned-4 tests change (spec Acceptance).
