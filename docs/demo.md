@@ -14,15 +14,15 @@ The slot length is not fixed yet; times below are placeholders to adjust in the 
 | # | Step | Command | Time (placeholder) |
 |---|---|---|---|
 | 1 | Context: the plant, the brief and the rules (`criterio.md`, `umbrales.yaml`) | — | 1 min |
-| 2 | Live run, paced so the audience can follow | `uv run plant-monitor run --speed <s>` | TBD (61 arrivals × (`<s>` + processing)) |
+| 2 | Live run with the dashboard, paced so the audience can follow | `uv run plant-monitor run --dashboard --speed <s>` | TBD (61 arrivals × (`<s>` + processing)) |
 | 3 | Summary: tokens, cache, USD, duration, alerts, reports | printed by step 2 | 1 min |
 | 4 | Trace of the chosen alert | `uv run plant-monitor trace <notice_id>` | 2 min |
 | 5 | Questions | — | rest |
 
 Notes:
-- Step 2 runs in a fresh `OUTPUT_DIR`. If the slot is too short for the whole series at a readable pace, run `--until <snapshot>` live and switch to the recorded directory for the rest (see Fallback).
+- Step 2 creates its own fresh folder, `OUTPUT_DIR/run-<UTC>/`, and prints it with the dashboard URL (`http://127.0.0.1:8765/`); the dashboard keeps serving after the summary until Ctrl-C. If the slot is too short for the whole series at a readable pace, run `--until <snapshot>` live and switch to the recorded directory for the rest (see Fallback).
 - `--speed` only pauses after each committed snapshot; it never changes what the system decides.
-- Step 4 is read-only: it can run against the live directory after step 2 finishes, or against the recorded copy.
+- Step 4 is read-only: in a second terminal, set `OUTPUT_DIR` to the folder printed by step 2 (or to the recorded copy) and run the trace.
 
 ## Candidate alerts
 

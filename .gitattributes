@@ -3,3 +3,5 @@
 *.png binary
 *.jpg binary
 *.pdf binary
+# The dataset keeps its exact bytes (CRLF): snapshot content hashes and logbook quotes depend on them (ADR-0024).
+/data/*/** -text

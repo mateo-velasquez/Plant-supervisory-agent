@@ -1,0 +1,13 @@
+﻿modelo,etapa,minutos_estandar,minutos_retrabajo
+Sedán,carroceria,360,
+Sedán,pintura,480,360
+Sedán,montaje,600,
+Sedán,calidad,180,
+SUV,carroceria,360,
+SUV,pintura,480,360
+SUV,montaje,660,
+SUV,calidad,180,
+Pickup,carroceria,360,
+Pickup,pintura,480,360
+Pickup,montaje,540,
+Pickup,calidad,180,
